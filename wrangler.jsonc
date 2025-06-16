@@ -2,7 +2,7 @@
   "name": "perfin",
   "compatibility_date": "2025-04-03",
   "assets": {
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
   },
-  "main": "./server/index.ts"
+  "main": "./server/index.ts",
 }
