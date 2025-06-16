@@ -1,4 +1,4 @@
-@import 'tailwindcss' source('../app');
+@import 'tailwindcss' source('.');
 @plugin "daisyui";
 @plugin "daisyui/theme" {
   name: 'dark';
