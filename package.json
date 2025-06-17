@@ -10,6 +10,7 @@
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts"
   },
   "dependencies": {
+    "drizzle-orm": "^0.44.2",
     "react": "^19.1.0",
     "react-dom": "^19.1.0"
   },
@@ -21,6 +22,7 @@
     "@types/react-dom": "^19.1.2",
     "@vitejs/plugin-react": "^4.4.1",
     "daisyui": "^5.0.43",
+    "drizzle-kit": "^0.31.1",
     "eslint": "^9.25.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.19",
