@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "preview": "vite preview",
-    "cftypes": "wrangler types server/cloudflare.d.ts"
+    "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts"
   },
   "dependencies": {
     "react": "^19.1.0",
