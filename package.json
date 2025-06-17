@@ -10,9 +10,12 @@
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts"
   },
   "dependencies": {
+    "@trpc/client": "^11.4.1",
+    "@trpc/server": "^11.4.1",
     "drizzle-orm": "^0.44.2",
     "react": "^19.1.0",
-    "react-dom": "^19.1.0"
+    "react-dom": "^19.1.0",
+    "zod": "^3.25.67"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.6.0",
