@@ -2,8 +2,9 @@ import { initTRPC } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
 import * as schema from '../db/schema';
+import type { CookieHeaders } from './lib';
 
-export function createContextFactory(env: Env, ctx: ExecutionContext) {
+export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
     logger: import.meta.env.DEV,
     casing: 'snake_case',
@@ -15,6 +16,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext) {
       req,
       env, // Cloudflare workers enviroment
       wctx: ctx, // Cloudflare workers context
+      resHeaders,
     };
   };
 }
