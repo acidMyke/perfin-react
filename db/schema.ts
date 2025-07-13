@@ -3,8 +3,9 @@ import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid(8);
+const nullableIdColumn = () => text({ length: 8 });
 const idColumn = () =>
-  text({ length: 8 })
+  nullableIdColumn()
     .notNull()
     .$defaultFn(() => nanoid(8));
 const versionColumn = (colName = `version`) =>
@@ -32,10 +33,23 @@ export const usersTable = sqliteTable('users', {
   requireNewPassword: integer({ mode: 'boolean' }).default(true),
 });
 
+export const usersRelations = relations(usersTable, ({ many }) => ({
+  accounts: many(accountsTable),
+}));
+
 export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
-  belongsToId: idColumn(), //.references(() => users.id),
+  belongsToId: idColumn().references(() => usersTable.id),
 });
+
+export const accountsRelations = relations(accountsTable, ({ one, many }) => ({
+  belongsTo: one(usersTable, {
+    fields: [accountsTable.belongsToId],
+    references: [usersTable.id],
+  }),
+  ledgers: many(ledgersTable),
+  transactions: many(transactionsTable),
+}));
 
 export const LEDGER_TYPES = {
   YEAR: 'year',
@@ -49,7 +63,7 @@ export const ledgersTable = sqliteTable('ledgers', {
   creditCents: centsColumn(),
   debitCents: centsColumn(),
   type: text({ enum: [LEDGER_TYPES.YEAR, LEDGER_TYPES.MONTH, LEDGER_TYPES.WEEK] }),
-  accountId: idColumn().references(() => accountsTable.id),
+  accountId: nullableIdColumn().references(() => accountsTable.id),
 });
 
 export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
