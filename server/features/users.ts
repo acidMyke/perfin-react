@@ -75,7 +75,50 @@ const signInProcedure = publicProcedure
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Password mismatch' });
       }
 
-      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Login success but method not implemented :(' });
+      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign in success but method not implemented :(' });
+    } catch (error: unknown) {
+      // if error, execution must be at least 5 seconds
+      await sleep(5000 - (Date.now() - timeStart));
+      throw error;
+    }
+  });
+
+const signUpProcedure = publicProcedure
+  .input(
+    z.object({
+      username: z.string().min(4),
+      password: z
+        .string()
+        .min(12)
+        .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
+    }),
+  )
+  .mutation(async ({ input: { username, password }, ctx: { db } }) => {
+    const timeStart = Date.now();
+    const user = await db.query.usersTable.findFirst({
+      where: eq(usersTable.name, username),
+      columns: {
+        id: true,
+        name: true,
+        passSalt: true,
+        passKey: true,
+      },
+    });
+
+    try {
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+      }
+
+      if (user.passKey || user.passSalt) {
+        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Username in-used' });
+      }
+
+      const salt = generateSalt();
+      const hash = await hashPassword(password, salt);
+
+      await db.update(usersTable).set({ passSalt: salt, passKey: hash });
+      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign up success but method not implemented :(' });
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
@@ -86,5 +129,6 @@ const signInProcedure = publicProcedure
 export const usersProcedures = {
   session: {
     signIn: signInProcedure,
+    signUp: signUpProcedure,
   },
 } as const;
