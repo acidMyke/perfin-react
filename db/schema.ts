@@ -1,24 +1,74 @@
-import { sql } from 'drizzle-orm';
-import { blob, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { sql, relations } from 'drizzle-orm';
+import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
-const generateId = () => nanoid(8);
-const idCol = () =>
+export const generateId = () => nanoid(8);
+const idColumn = () =>
   text({ length: 8 })
     .notNull()
-    .$defaultFn(() => generateId());
+    .$defaultFn(() => nanoid(8));
+const versionColumn = (colName = `version`) =>
+  integer(colName)
+    .notNull()
+    .default(sql`1`)
+    .$onUpdate(() => sql`${colName} + 1`);
+const dateColumn = () => integer({ mode: 'timestamp' }).notNull();
+const createdAtColumn = () => dateColumn().default(sql`(CURRENT_TIMESTAMP)`);
+const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
+const centsColumn = () => integer().notNull().default(0);
+
+const baseColumns = () => ({
+  id: idColumn(),
+  version: versionColumn(),
+  createdAt: createdAtColumn(),
+  updatedAt: updatedAtColumn(),
+});
 
 export const usersTable = sqliteTable('users', {
-  id: idCol().primaryKey(),
+  ...baseColumns(),
   name: text(),
   passSalt: blob({ mode: 'buffer' }),
   passKey: blob({ mode: 'buffer' }),
   requireNewPassword: integer({ mode: 'boolean' }).default(true),
-  createdAt: integer({ mode: 'timestamp' }).default(sql`(current_timestamp)`),
-  updateAt: integer({ mode: 'timestamp' })
-    .default(sql`(current_timestamp)`)
-    .$onUpdate(() => new Date()),
-  version: integer()
-    .default(1)
-    .$onUpdateFn(() => sql`version + 1`),
 });
+
+export const accountsTable = sqliteTable('accounts', {
+  ...baseColumns(),
+  belongsToId: idColumn(), //.references(() => users.id),
+});
+
+export const LEDGER_TYPES = {
+  YEAR: 'year',
+  MONTH: 'month',
+  WEEK: 'week',
+} as const;
+
+export const ledgersTable = sqliteTable('ledgers', {
+  ...baseColumns(),
+  totalCents: centsColumn(),
+  creditCents: centsColumn(),
+  debitCents: centsColumn(),
+  type: text({ enum: [LEDGER_TYPES.YEAR, LEDGER_TYPES.MONTH, LEDGER_TYPES.WEEK] }),
+  accountId: idColumn().references(() => accountsTable.id),
+});
+
+export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
+  account: one(accountsTable, {
+    fields: [ledgersTable.accountId],
+    references: [accountsTable.id],
+  }),
+}));
+
+export const transactionsTable = sqliteTable('transactions', {
+  ...baseColumns(),
+  amountCents: centsColumn(),
+  effectiveAt: dateColumn(),
+  accountId: idColumn().references(() => accountsTable.id),
+});
+
+export const transactionsRelations = relations(transactionsTable, ({ one }) => ({
+  account: one(accountsTable, {
+    fields: [transactionsTable.accountId],
+    references: [accountsTable.id],
+  }),
+}));
