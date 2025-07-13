@@ -1,4 +1,10 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
+import { z } from 'zod';
+import { publicProcedure } from '../trpc';
+import { eq } from 'drizzle-orm';
+import { usersTable } from '../../db/schema';
+import { TRPCError } from '@trpc/server';
+import { sleep } from '../lib';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -40,3 +46,45 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
     });
   });
 }
+
+const signInProcedure = publicProcedure
+  .input(
+    z.object({
+      username: z.string(),
+      password: z.string(),
+    }),
+  )
+  .mutation(async ({ input: { username, password }, ctx: { db } }) => {
+    const timeStart = Date.now();
+    const user = await db.query.usersTable.findFirst({
+      where: eq(usersTable.name, username),
+      columns: {
+        id: true,
+        name: true,
+        passSalt: true,
+        passKey: true,
+      },
+    });
+
+    try {
+      if (!user) {
+        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+      }
+
+      if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
+        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Password mismatch' });
+      }
+
+      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Login success but method not implemented :(' });
+    } catch (error: unknown) {
+      // if error, execution must be at least 5 seconds
+      await sleep(5000 - (Date.now() - timeStart));
+      throw error;
+    }
+  });
+
+export const usersProcedures = {
+  session: {
+    signIn: signInProcedure,
+  },
+} as const;
