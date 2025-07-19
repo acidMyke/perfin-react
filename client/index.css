@@ -8,16 +8,16 @@
   --color-content: hsl(226, 64%, 88%);
 
   --color-base-100: hsl(240, 21%, 15%);
-  --color-base-200: hsl(240, 21%, 12%);
-  --color-base-300: hsl(240, 23%, 9%);
-  --color-base-content: oklch(20% 0.05 240);
+  --color-base-200: hsl(240, 21%, 22%);
+  --color-base-300: hsl(240, 21%, 29%);
+  --color-base-content: var(--color-content);
   --color-primary: var(--color-blue-400);
   --color-primary-content: var(--color-content);
   --color-secondary: var(--color-fuchsia-400);
   --color-secondary-content: var(--color-content);
   --color-accent: oklch(--color-sky-300);
   --color-accent-content: var(--color-content);
-  --color-neutral: var(--color-slate-500);
+  --color-neutral: var(--color-slate-600);
   --color-neutral-content: var(--color-content);
   --color-info: oklch(74% 0.16 232.661);
   --color-info-content: var(--color-content);
