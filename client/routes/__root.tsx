@@ -6,7 +6,7 @@ const options = linkOptions([
     label: 'Home',
   },
   {
-    to: '/',
+    to: '/test',
     label: 'Test',
   },
 ]);
@@ -19,10 +19,10 @@ function Navbar() {
       </div>
       <div className='navbar-center hidden lg:flex'>
         <ul className='menu menu-horizontal px-1'>
-          {options.map((options, index) => {
+          {options.map(options => {
             return (
-              <li key={index}>
-                <Link className='btn btn-ghost drawer-button' activeProps={{ className: 'btn-active' }} {...options}>
+              <li key={options.to}>
+                <Link activeProps={{ className: 'menu-active' }} {...options}>
                   {options.label}
                 </Link>
               </li>
