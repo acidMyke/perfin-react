@@ -17,10 +17,10 @@ const options = linkOptions([
 function NavDock() {
   return (
     <div className='dock dock-lg'>
-      {options.map(options => {
+      {options.map(({ Icon, ...options }) => {
         return (
           <Link key={options.to} activeProps={{ className: 'dock-active' }} {...options}>
-            <options.Icon size='1.2em' />
+            <Icon size='1.2em' />
             <span className='dock-label'>{options.label}</span>
           </Link>
         );
