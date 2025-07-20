@@ -2,9 +2,10 @@ import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:c
 import { z } from 'zod';
 import { publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
-import { usersTable } from '../../db/schema';
+import { sessionsTable, usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib';
+import { addDays } from 'date-fns';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -47,6 +48,14 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
   });
 }
 
+function generateTokenParam() {
+  return {
+    maxAge: 7 * 24 * 60 * 60,
+    expiresAt: addDays(new Date(), 7),
+    token: randomBytes(12).toString('hex').substring(0, 16),
+  };
+}
+
 const signInProcedure = publicProcedure
   .input(
     z.object({
@@ -54,7 +63,7 @@ const signInProcedure = publicProcedure
       password: z.string(),
     }),
   )
-  .mutation(async ({ input: { username, password }, ctx: { db } }) => {
+  .mutation(async ({ input: { username, password }, ctx: { db, resHeaders, env } }) => {
     const timeStart = Date.now();
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.name, username),
@@ -75,6 +84,23 @@ const signInProcedure = publicProcedure
         throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Password mismatch' });
       }
 
+      // Create session
+      const { token, expiresAt, maxAge } = generateTokenParam();
+      await db.insert(sessionsTable).values({
+        token,
+        expiresAt,
+        userId: user.id,
+        lastUsedAt: new Date(),
+      });
+
+      resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: !import.meta.env.DEV,
+        path: '/',
+        expires: expiresAt,
+        maxAge,
+      });
+
       throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign in success but method not implemented :(' });
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
@@ -93,7 +119,7 @@ const signUpProcedure = publicProcedure
         .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
     }),
   )
-  .mutation(async ({ input: { username, password }, ctx: { db } }) => {
+  .mutation(async ({ input: { username, password }, ctx: { db, resHeaders, env } }) => {
     const timeStart = Date.now();
     const user = await db.query.usersTable.findFirst({
       where: eq(usersTable.name, username),
@@ -118,6 +144,23 @@ const signUpProcedure = publicProcedure
       const hash = await hashPassword(password, salt);
 
       await db.update(usersTable).set({ passSalt: salt, passKey: hash });
+
+      // Create session
+      const { token, expiresAt, maxAge } = generateTokenParam();
+      await db.insert(sessionsTable).values({
+        token,
+        expiresAt,
+        userId: user.id,
+        lastUsedAt: new Date(),
+      });
+
+      resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
+        httpOnly: true,
+        secure: !import.meta.env.DEV,
+        path: '/',
+        maxAge,
+      });
+
       throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign up success but method not implemented :(' });
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds

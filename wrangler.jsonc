@@ -15,6 +15,9 @@
       "migrations_dir": "./db/migrations",
     },
   ],
+  "vars": {
+    "TOKEN_COOKIE_NAME": "token"
+  },
   "env": {
     "production": {
       "d1_databases": [
@@ -26,6 +29,9 @@
           "migrations_dir": "./db/migrations",
         },
       ],
+      "vars": {
+        "TOKEN_COOKIE_NAME": "__Host-token"
+      }
     },
   },
 }

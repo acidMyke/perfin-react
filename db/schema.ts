@@ -35,6 +35,22 @@ export const usersTable = sqliteTable('users', {
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
   accounts: many(accountsTable),
+  sessions: many(sessionsTable),
+}));
+
+export const sessionsTable = sqliteTable('sessions', {
+  ...baseColumns(),
+  token: text({ length: 16 }).notNull(),
+  userId: idColumn().references(() => usersTable.id),
+  lastUsedAt: dateColumn(),
+  expiresAt: dateColumn(),
+});
+
+export const sessionRelations = relations(sessionsTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [sessionsTable.userId],
+    references: [usersTable.id],
+  }),
 }));
 
 export const accountsTable = sqliteTable('accounts', {
