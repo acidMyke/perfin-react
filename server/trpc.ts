@@ -93,7 +93,7 @@ export const protectedProcedure = publicProcedure.use(async opts => {
     });
 
     if (session) {
-      opts.next({
+      return opts.next({
         ctx: {
           user: session.user,
           session,

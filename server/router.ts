@@ -1,5 +1,5 @@
 import z from 'zod';
-import { publicProcedure, router } from './trpc';
+import { protectedProcedure, publicProcedure, router } from './trpc';
 import { usersProcedures } from './features/users';
 
 export const appRouter = router({
@@ -7,6 +7,7 @@ export const appRouter = router({
   testapi: publicProcedure
     .input(z.object({ name: z.string().optional() }).optional())
     .query(({ input }) => (input?.name ? `Hello, ${input.name}` : 'Hello world')),
+  testauthapi: protectedProcedure.mutation(({ ctx: { user } }) => `Hello, ${user.name}`),
 });
 
 // For client to import just the types
