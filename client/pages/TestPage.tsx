@@ -1,10 +1,19 @@
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { trpc } from '../trpc';
+import { useEffect } from 'react';
 
 function TestPage() {
-  const testQuery = useQuery(trpc.testapi.queryOptions({ name: 'Dolphin' }));
+  const { mutate: signUp } = useMutation(trpc.session.signUp.mutationOptions());
+  const { mutate: signIn } = useMutation(trpc.session.signIn.mutationOptions());
 
-  return <div>{testQuery.data}</div>;
+  useEffect(() => {
+    // @ts-ignore
+    window.signUp = signUp;
+    // @ts-ignore
+    window.signIn = signIn;
+  }, [signUp, signIn]);
+
+  return <div></div>;
 }
 
 export default TestPage;
