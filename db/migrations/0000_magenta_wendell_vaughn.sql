@@ -1,5 +1,5 @@
 CREATE TABLE `accounts` (
-	`id` text(8) NOT NULL,
+	`id` text(8) PRIMARY KEY NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -8,7 +8,7 @@ CREATE TABLE `accounts` (
 );
 --> statement-breakpoint
 CREATE TABLE `ledgers` (
-	`id` text(8) NOT NULL,
+	`id` text(8) PRIMARY KEY NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -20,8 +20,20 @@ CREATE TABLE `ledgers` (
 	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
+CREATE TABLE `sessions` (
+	`id` text(8) PRIMARY KEY NOT NULL,
+	`version` integer DEFAULT 1 NOT NULL,
+	`created_at` integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
+	`updated_at` integer NOT NULL,
+	`token` text(16) NOT NULL,
+	`user_id` text(8) NOT NULL,
+	`last_used_at` integer NOT NULL,
+	`expires_at` integer NOT NULL,
+	FOREIGN KEY (`user_id`) REFERENCES `users`(`id`) ON UPDATE no action ON DELETE no action
+);
+--> statement-breakpoint
 CREATE TABLE `transactions` (
-	`id` text(8) NOT NULL,
+	`id` text(8) PRIMARY KEY NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -31,9 +43,8 @@ CREATE TABLE `transactions` (
 	FOREIGN KEY (`account_id`) REFERENCES `accounts`(`id`) ON UPDATE no action ON DELETE no action
 );
 --> statement-breakpoint
-PRAGMA foreign_keys=OFF;--> statement-breakpoint
-CREATE TABLE `__new_users` (
-	`id` text(8) NOT NULL,
+CREATE TABLE `users` (
+	`id` text(8) PRIMARY KEY NOT NULL,
 	`version` integer DEFAULT 1 NOT NULL,
 	`created_at` integer DEFAULT (CURRENT_TIMESTAMP) NOT NULL,
 	`updated_at` integer NOT NULL,
@@ -42,8 +53,3 @@ CREATE TABLE `__new_users` (
 	`pass_key` blob,
 	`require_new_password` integer DEFAULT true
 );
---> statement-breakpoint
-INSERT INTO `__new_users`("id", "version", "created_at", "updated_at", "name", "pass_salt", "pass_key", "require_new_password") SELECT "id", "version", "created_at", "updated_at", "name", "pass_salt", "pass_key", "require_new_password" FROM `users`;--> statement-breakpoint
-DROP TABLE `users`;--> statement-breakpoint
-ALTER TABLE `__new_users` RENAME TO `users`;--> statement-breakpoint
-PRAGMA foreign_keys=ON;

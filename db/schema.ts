@@ -19,7 +19,7 @@ const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
 
 const baseColumns = () => ({
-  id: idColumn(),
+  id: idColumn().primaryKey(),
   version: versionColumn(),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
