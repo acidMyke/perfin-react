@@ -3,7 +3,10 @@ import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
-import type { CookieHeaders } from './lib';
+import { generateTokenParam, type CookieHeaders } from './lib';
+import { differenceInDays } from 'date-fns/differenceInDays';
+import { addMinutes } from 'date-fns/addMinutes';
+import { eq } from 'drizzle-orm';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
@@ -86,19 +89,58 @@ export const protectedProcedure = publicProcedure.use(async opts => {
   if (token) {
     const session = await db.query.sessionsTable.findFirst({
       where: (session, { eq, gt, and }) => and(eq(session.token, token), gt(session.expiresAt, new Date())),
-      columns: { createdAt: true, expiresAt: true, lastUsedAt: true },
+      columns: { id: true, createdAt: true, expiresAt: true, lastUsedAt: true },
       with: {
         user: { columns: { id: true, name: true } },
       },
     });
 
     if (session) {
-      return opts.next({
+      let promises: Promise<any>[] = [];
+      const sessionUpdatePr = db
+        .update(schema.sessionsTable)
+        .set({ lastUsedAt: new Date() })
+        .where(eq(schema.sessionsTable.id, session.id));
+      promises.push(sessionUpdatePr);
+
+      // Refresh token if its created more than 2 days ago.
+      if (differenceInDays(new Date(), session.createdAt) > 2) {
+        const { token, expiresAt, maxAge } = generateTokenParam();
+        const newTokenPr = db
+          .insert(schema.sessionsTable)
+          .values({
+            token,
+            expiresAt,
+            userId: session.user.id,
+            lastUsedAt: new Date(),
+          })
+          .then(() => {
+            opts.ctx.resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
+              httpOnly: true,
+              secure: !import.meta.env.DEV,
+              path: '/',
+              expires: expiresAt,
+              maxAge,
+            });
+            opts.ctx.wctx.waitUntil(
+              db
+                .update(schema.sessionsTable)
+                .set({ expiresAt: addMinutes(new Date(), 2) })
+                .where(eq(schema.sessionsTable.id, session.id)),
+            );
+          });
+        promises.push(newTokenPr);
+      }
+
+      const response = opts.next({
         ctx: {
           user: session.user,
           session,
         },
       });
+
+      await Promise.allSettled(promises);
+      return response;
     } else {
       failureReason = 'Unable to find token';
     }

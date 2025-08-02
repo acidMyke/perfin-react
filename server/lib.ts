@@ -1,4 +1,15 @@
+import { addDays } from 'date-fns/addDays';
+import { randomBytes } from 'node:crypto';
+
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
+export function generateTokenParam() {
+  return {
+    maxAge: 7 * 24 * 60 * 60,
+    expiresAt: addDays(new Date(), 7),
+    token: randomBytes(12).toString('hex').substring(0, 16),
+  };
+}
 
 export class CookieHeaders extends Headers {
   constructor(init?: HeadersInit) {

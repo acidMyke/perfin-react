@@ -12,14 +12,14 @@ const versionColumn = (colName = `version`) =>
   integer(colName)
     .notNull()
     .default(sql`1`)
-    .$onUpdate(() => sql`${colName} + 1`);
+    .$onUpdate(() => sql.raw(`${colName} + 1`));
 const dateColumn = () => integer({ mode: 'timestamp' }).notNull();
 const createdAtColumn = () => dateColumn().default(sql`(CURRENT_TIMESTAMP)`);
 const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
 
 const baseColumns = () => ({
-  id: idColumn().primaryKey(),
+  id: idColumn(),
   version: versionColumn(),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),

@@ -4,8 +4,7 @@ import { publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { sessionsTable, usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
-import { sleep } from '../lib';
-import { addDays } from 'date-fns';
+import { generateTokenParam, sleep } from '../lib';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -46,14 +45,6 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
       resolve(timingSafeEqual(storedHash, derivedKey));
     });
   });
-}
-
-function generateTokenParam() {
-  return {
-    maxAge: 7 * 24 * 60 * 60,
-    expiresAt: addDays(new Date(), 7),
-    token: randomBytes(12).toString('hex').substring(0, 16),
-  };
 }
 
 const signInProcedure = publicProcedure
@@ -141,7 +132,7 @@ const signUpProcedure = publicProcedure
       const salt = generateSalt();
       const hash = await hashPassword(password, salt);
 
-      await db.update(usersTable).set({ passSalt: salt, passKey: hash });
+      await db.update(usersTable).set({ passSalt: salt, passKey: hash }).where(eq(usersTable.id, user.id));
 
       // Create session
       const { token, expiresAt, maxAge } = generateTokenParam();
