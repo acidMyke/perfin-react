@@ -100,8 +100,6 @@ const signInProcedure = publicProcedure
         expires: expiresAt,
         maxAge,
       });
-
-      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign in success but method not implemented :(' });
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
@@ -160,8 +158,6 @@ const signUpProcedure = publicProcedure
         path: '/',
         maxAge,
       });
-
-      throw new TRPCError({ code: 'NOT_IMPLEMENTED', message: 'Sign up success but method not implemented :(' });
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
