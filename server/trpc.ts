@@ -1,6 +1,7 @@
 import { initTRPC, TRPCError } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
+import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
 import type { CookieHeaders } from './lib';
 
@@ -31,12 +32,33 @@ export const publicProcedure = t.procedure.use(async opts => {
     const start = Date.now();
     const result = await opts.next();
     const durationMs = Date.now() - start;
-    const meta = { path: opts.path, type: opts.type, durationMs };
-    result.ok ? console.log('OK request timing:', meta) : console.error('Non-OK request timing', meta);
+    const meta: Record<string, any> = { path: opts.path, type: opts.type, durationMs };
+    if (!result.ok) {
+      // result.error is TRPCError
+      const { cause: innerCause, code } = result.error;
+      if (code == 'INTERNAL_SERVER_ERROR') {
+        // innerCause can be DrizzleQueryError
+        if (innerCause instanceof DrizzleQueryError) {
+          // Which has error that is throw by D1
+          // https://developers.cloudflare.com/d1/observability/debug-d1/
+          const d1Error = innerCause.cause as Error;
+          // Which has error that is throw internally
+          const dbError = d1Error.cause as Error;
+          meta.innerCause = 'DB Error: ' + dbError.message;
+          return {
+            ok: false,
+            error: new TRPCError({ code: 'INTERNAL_SERVER_ERROR', cause: dbError }),
+            marker: result.marker,
+          };
+        }
+      }
+      console.error('Non-OK request:', meta);
+    } else {
+      console.log('OK request:', meta);
+    }
     return result;
-  } else {
-    return opts.next();
   }
+  return opts.next();
 });
 
 export const protectedProcedure = publicProcedure.use(async opts => {
