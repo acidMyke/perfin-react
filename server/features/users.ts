@@ -13,7 +13,7 @@ function generateSalt(length = 16) {
 
 const scriptKeylen = 32;
 const scryptOptions: ScryptOptions = {
-  N: 2 ** 14,
+  N: 2 ** 13,
   r: 16,
   p: 1,
 } as const;
