@@ -1,36 +1,30 @@
 import { createRootRoute, Link, linkOptions, Outlet } from '@tanstack/react-router';
+import { ChartLine, ScrollText } from 'lucide-react';
 
 const options = linkOptions([
   {
-    to: '/',
-    label: 'Home',
+    to: '/dashboard',
+    label: 'Dashboard',
+    Icon: ChartLine,
   },
   {
-    to: '/test',
-    label: 'Test',
+    to: '/expenses/list',
+    label: 'Expenses',
+    Icon: ScrollText,
   },
 ]);
 
-function Navbar() {
+function NavDock() {
   return (
-    <div className='navbar bg-base-100 shadow-sm'>
-      <div className='navbar-start'>
-        <a className='btn btn-ghost text-xl'>Perfin</a>
-      </div>
-      <div className='navbar-center hidden lg:flex'>
-        <ul className='menu menu-horizontal px-1'>
-          {options.map(options => {
-            return (
-              <li key={options.to}>
-                <Link activeProps={{ className: 'menu-active' }} {...options}>
-                  {options.label}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </div>
-      <div className='navbar-end'></div>
+    <div className='dock dock-lg'>
+      {options.map(({ Icon, ...options }) => {
+        return (
+          <Link key={options.to} activeProps={{ className: 'dock-active' }} {...options}>
+            <Icon size='1.2em' />
+            <span className='dock-label'>{options.label}</span>
+          </Link>
+        );
+      })}
     </div>
   );
 }
@@ -38,8 +32,8 @@ function Navbar() {
 function Root() {
   return (
     <>
-      <Navbar />
       <Outlet />
+      <NavDock />
     </>
   );
 }

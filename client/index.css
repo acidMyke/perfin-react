@@ -63,3 +63,14 @@ html {
   color: var(--color-content);
   /* background-color: var(--color-base-100); */
 }
+
+/* Slight modification to daisy styling */
+.dock > * {
+  max-width: calc(0.5rem * 32);
+}
+
+.dock-active {
+  &:after {
+    width: calc(0.5rem * 10);
+  }
+}
