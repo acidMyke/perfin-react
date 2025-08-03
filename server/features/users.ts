@@ -2,9 +2,10 @@ import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:c
 import { z } from 'zod';
 import { publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
-import { sessionsTable, usersTable } from '../../db/schema';
+import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
-import { generateTokenParam, sleep } from '../lib';
+import { sleep } from '../lib';
+import sessions from '../sessions';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -54,9 +55,9 @@ const signInProcedure = publicProcedure
       password: z.string(),
     }),
   )
-  .mutation(async ({ input: { username, password }, ctx: { db, resHeaders, env } }) => {
+  .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
-    const user = await db.query.usersTable.findFirst({
+    const user = await ctx.db.query.usersTable.findFirst({
       where: eq(usersTable.name, username),
       columns: {
         id: true,
@@ -76,21 +77,7 @@ const signInProcedure = publicProcedure
       }
 
       // Create session
-      const { token, expiresAt, maxAge } = generateTokenParam();
-      await db.insert(sessionsTable).values({
-        token,
-        expiresAt,
-        userId: user.id,
-        lastUsedAt: new Date(),
-      });
-
-      resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: !import.meta.env.DEV,
-        path: '/',
-        expires: expiresAt,
-        maxAge,
-      });
+      await sessions.create(ctx, user.id);
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
@@ -108,9 +95,9 @@ const signUpProcedure = publicProcedure
         .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
     }),
   )
-  .mutation(async ({ input: { username, password }, ctx: { db, resHeaders, env } }) => {
+  .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
-    const user = await db.query.usersTable.findFirst({
+    const user = await ctx.db.query.usersTable.findFirst({
       where: eq(usersTable.name, username),
       columns: {
         id: true,
@@ -132,29 +119,16 @@ const signUpProcedure = publicProcedure
       const salt = generateSalt();
       const hash = await hashPassword(password, salt);
 
-      await db.update(usersTable).set({ passSalt: salt, passKey: hash }).where(eq(usersTable.id, user.id));
+      await ctx.db.update(usersTable).set({ passSalt: salt, passKey: hash }).where(eq(usersTable.id, user.id));
 
       // Create session
-      const { token, expiresAt, maxAge } = generateTokenParam();
-      await db.insert(sessionsTable).values({
-        token,
-        expiresAt,
-        userId: user.id,
-        lastUsedAt: new Date(),
-      });
-
-      resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
-        httpOnly: true,
-        secure: !import.meta.env.DEV,
-        path: '/',
-        maxAge,
-      });
+      await sessions.create(ctx, user.id);
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
       throw error;
     }
-  });
+});
 
 export const usersProcedures = {
   session: {

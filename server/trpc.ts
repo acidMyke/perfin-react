@@ -3,10 +3,8 @@ import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
-import { generateTokenParam, type CookieHeaders } from './lib';
-import { differenceInDays } from 'date-fns/differenceInDays';
-import { addMinutes } from 'date-fns/addMinutes';
-import { eq } from 'drizzle-orm';
+import { type CookieHeaders } from './lib';
+import sessions from './sessions';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
@@ -65,91 +63,18 @@ export const publicProcedure = t.procedure.use(async opts => {
 });
 
 export const protectedProcedure = publicProcedure.use(async opts => {
-  const { req, env, db } = opts.ctx;
-  let token: undefined | string;
-  let failureReason = '';
-  const cookieHeader = req.headers.get('Cookie');
-  if (cookieHeader) {
-    const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
+  const { user, session, promises } = await sessions.resolve(opts.ctx);
+  // resolve will throw if unauthenticated
+  const res = opts.next({
+    ctx: {
+      user: user!,
+      session: session!,
+    },
+  });
 
-    if (cookies.length === 0) {
-      failureReason = 'Empty cookie header';
-    }
-
-    for (const cookie of cookies) {
-      const [name, ...rest] = cookie.split('=');
-      if (name === env.TOKEN_COOKIE_NAME) {
-        token = decodeURIComponent(rest.join('='));
-      }
-    }
-  } else {
-    failureReason = 'Missing cookie header';
+  if (promises?.length) {
+    await Promise.all(promises);
   }
 
-  if (token) {
-    const session = await db.query.sessionsTable.findFirst({
-      where: (session, { eq, gt, and }) => and(eq(session.token, token), gt(session.expiresAt, new Date())),
-      columns: { id: true, createdAt: true, expiresAt: true, lastUsedAt: true },
-      with: {
-        user: { columns: { id: true, name: true } },
-      },
-    });
-
-    if (session) {
-      let promises: Promise<any>[] = [];
-      const sessionUpdatePr = db
-        .update(schema.sessionsTable)
-        .set({ lastUsedAt: new Date() })
-        .where(eq(schema.sessionsTable.id, session.id));
-      promises.push(sessionUpdatePr);
-
-      // Refresh token if its created more than 2 days ago.
-      if (differenceInDays(new Date(), session.createdAt) > 2) {
-        const { token, expiresAt, maxAge } = generateTokenParam();
-        const newTokenPr = db
-          .insert(schema.sessionsTable)
-          .values({
-            token,
-            expiresAt,
-            userId: session.user.id,
-            lastUsedAt: new Date(),
-          })
-          .then(() => {
-            opts.ctx.resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
-              httpOnly: true,
-              secure: !import.meta.env.DEV,
-              path: '/',
-              expires: expiresAt,
-              maxAge,
-            });
-            opts.ctx.wctx.waitUntil(
-              db
-                .update(schema.sessionsTable)
-                .set({ expiresAt: addMinutes(new Date(), 2) })
-                .where(eq(schema.sessionsTable.id, session.id)),
-            );
-          });
-        promises.push(newTokenPr);
-      }
-
-      const response = opts.next({
-        ctx: {
-          user: session.user,
-          session,
-        },
-      });
-
-      await Promise.allSettled(promises);
-      return response;
-    } else {
-      failureReason = 'Unable to find token';
-    }
-  } else {
-    failureReason = 'Missing token';
-  }
-
-  if (import.meta.env.DEV) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: failureReason });
-  }
-  throw new TRPCError({ code: 'UNAUTHORIZED' });
+  return res;
 });
