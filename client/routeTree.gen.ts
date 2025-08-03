@@ -9,16 +9,10 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as TestRouteImport } from './routes/test'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as ExpensesListRouteImport } from './routes/expenses/list'
 
-const TestRoute = TestRouteImport.update({
-  id: '/test',
-  path: '/test',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DashboardRoute = DashboardRouteImport.update({
   id: '/dashboard',
   path: '/dashboard',
@@ -38,46 +32,35 @@ const ExpensesListRoute = ExpensesListRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
-  '/test': typeof TestRoute
   '/expenses/list': typeof ExpensesListRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
-  '/test': typeof TestRoute
   '/expenses/list': typeof ExpensesListRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/dashboard': typeof DashboardRoute
-  '/test': typeof TestRoute
   '/expenses/list': typeof ExpensesListRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/dashboard' | '/test' | '/expenses/list'
+  fullPaths: '/' | '/dashboard' | '/expenses/list'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/dashboard' | '/test' | '/expenses/list'
-  id: '__root__' | '/' | '/dashboard' | '/test' | '/expenses/list'
+  to: '/' | '/dashboard' | '/expenses/list'
+  id: '__root__' | '/' | '/dashboard' | '/expenses/list'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   DashboardRoute: typeof DashboardRoute
-  TestRoute: typeof TestRoute
   ExpensesListRoute: typeof ExpensesListRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/test': {
-      id: '/test'
-      path: '/test'
-      fullPath: '/test'
-      preLoaderRoute: typeof TestRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/dashboard': {
       id: '/dashboard'
       path: '/dashboard'
@@ -105,7 +88,6 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   DashboardRoute: DashboardRoute,
-  TestRoute: TestRoute,
   ExpensesListRoute: ExpensesListRoute,
 }
 export const routeTree = rootRouteImport
