@@ -14,12 +14,8 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
 });
 
 // Exposing trpc client to be used in console
-type WindowWithTrpcClient = typeof window & {
-  trpcClient: typeof trpcClient;
-};
-
 if (import.meta.env.DEV) {
   if (window) {
-    (window as WindowWithTrpcClient).trpcClient = trpcClient;
+Object.assign(window, { trpc, trpcClient });
   }
 }

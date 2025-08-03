@@ -128,9 +128,25 @@ const signUpProcedure = publicProcedure
       await sleep(5000 - (Date.now() - timeStart));
       throw error;
     }
+  });
+
+const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
+  const { isAuthenticated, user, session, promises } = await sessions.resolve(ctx, /*allowUnauthicated:*/ true);
+  if (promises) {
+    await Promise.allSettled(promises);
+  }
+
+  return {
+    isAuthenticated,
+    userName: user?.name,
+    userId: user?.id,
+    sessionExpiresAt: session?.expiresAt,
+    sessionCreatedAt: session?.createdAt,
+  };
 });
 
 export const usersProcedures = {
+  whoami: whoamiProcedure,
   session: {
     signIn: signInProcedure,
     signUp: signUpProcedure,

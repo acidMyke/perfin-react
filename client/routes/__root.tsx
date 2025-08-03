@@ -1,7 +1,6 @@
 import { createRootRoute, Link, linkOptions, Outlet } from '@tanstack/react-router';
 import { ChartLine, ScrollText } from 'lucide-react';
-import { useEffect } from 'react';
-import { trpc } from '../trpc';
+import { useWhoamiQuery } from '../hooks';
 
 const options = linkOptions([
   {
@@ -32,10 +31,11 @@ function NavDock() {
 }
 
 function Root() {
+  const { isAuthenticated } = useWhoamiQuery();
   return (
     <>
       <Outlet />
-      <NavDock />
+      {isAuthenticated && <NavDock />}
     </>
   );
 }
