@@ -1,5 +1,7 @@
 import { createRootRoute, Link, linkOptions, Outlet } from '@tanstack/react-router';
 import { ChartLine, ScrollText } from 'lucide-react';
+import { useEffect } from 'react';
+import { trpc } from '../trpc';
 
 const options = linkOptions([
   {
