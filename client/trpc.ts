@@ -1,5 +1,5 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createTRPCClient, httpBatchLink, type TRPCLink } from '@trpc/client';
+import { createTRPCClient, httpBatchLink, loggerLink, type TRPCLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../server/router';
 import { observable } from '@trpc/server/observable';
@@ -19,9 +19,12 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
           if (err.data) {
             const { code } = err.data;
             if (code === 'UNAUTHORIZED') {
-              queryClient.invalidateQueries({
-                queryKey: trpc.whoami.queryKey(),
-              });
+              const whoamiData = queryClient.getQueryData(trpc.whoami.queryKey());
+              if (whoamiData?.isAuthenticated) {
+                queryClient.invalidateQueries({
+                  queryKey: trpc.whoami.queryKey(),
+                });
+              }
             }
           }
         },
@@ -38,7 +41,7 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
 };
 
 const trpcClient = createTRPCClient<AppRouter>({
-  links: [errorHandlingLink, httpBatchLink({ url: '/trpc' })],
+  links: [loggerLink({ enabled: () => import.meta.env.DEV }), errorHandlingLink, httpBatchLink({ url: '/trpc' })],
 });
 
 export const trpc = createTRPCOptionsProxy<AppRouter>({
