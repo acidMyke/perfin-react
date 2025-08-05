@@ -6,7 +6,7 @@ export const Route = createFileRoute('/signin')({
 });
 
 function RouteComponent() {
-  const { Field: SignInFormField } = useForm({
+  const { Field, Subscribe } = useForm({
     defaultValues: {
       username: '',
       password: '',
@@ -19,7 +19,7 @@ function RouteComponent() {
   return (
     <div className='mx-auto max-w-md'>
       <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
-      <SignInFormField
+      <Field
         name='username'
         validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
       >
@@ -42,9 +42,9 @@ function RouteComponent() {
             </p>
           </>
         )}
-      </SignInFormField>
+      </Field>
 
-      <SignInFormField
+      <Field
         name='password'
         validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
       >
@@ -67,11 +67,20 @@ function RouteComponent() {
             </p>
           </>
         )}
-      </SignInFormField>
+      </Field>
 
-      <button type='button' className='btn btn-primary btn-lg mt-12 w-full'>
-        Sign In
-      </button>
+      <Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
+        {([isPristine, canSubmit, isSubmitting]) => (
+          <button
+            type='button'
+            className='btn btn-primary btn-lg btn-block mt-12'
+            disabled={isPristine || !canSubmit || isSubmitting}
+          >
+            {isSubmitting && <span className='loading loading-dots loading-md'></span>}
+            {isSubmitting ? 'Signing In...' : 'Sign In'}
+          </button>
+        )}
+      </Subscribe>
     </div>
   );
 }
