@@ -1,11 +1,27 @@
 import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
-import { createFileRoute, useRouter } from '@tanstack/react-router';
-import { trpc } from '../trpc';
+import { createFileRoute, useRouter, redirect } from '@tanstack/react-router';
+import { whoamiQueryOptions } from '../queryOptions';
+import { trpc, queryClient } from '../trpc';
 import { sleep } from '../../server/lib';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
+  validateSearch(search) {
+    return {
+      redirect: search.redirect,
+    };
+  },
+  async beforeLoad({ search }) {
+    const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
+    if (!isAuthenticated) {
+      return;
+    }
+    if (search.redirect)
+      throw redirect({
+        to: '/dashboard',
+      });
+  },
 });
 
 function RouteComponent() {

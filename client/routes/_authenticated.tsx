@@ -7,7 +7,7 @@ import { whoamiQueryOptions } from '../queryOptions';
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
   async beforeLoad({ location }) {
-    const { isAuthenticated } = await queryClient.fetchQuery(whoamiQueryOptions);
+    const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
     if (!isAuthenticated) {
       throw redirect({
         to: '/signin',
