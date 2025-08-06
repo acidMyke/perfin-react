@@ -78,6 +78,11 @@ const signInProcedure = publicProcedure
 
       // Create session
       await sessions.create(ctx, user.id);
+
+      return {
+        userName: user?.name,
+        userId: user?.id,
+      };
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));
@@ -123,6 +128,11 @@ const signUpProcedure = publicProcedure
 
       // Create session
       await sessions.create(ctx, user.id);
+
+      return {
+        userName: user?.name,
+        userId: user?.id,
+      };
     } catch (error: unknown) {
       // if error, execution must be at least 5 seconds
       await sleep(5000 - (Date.now() - timeStart));

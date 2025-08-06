@@ -1,25 +1,44 @@
 import { useForm } from '@tanstack/react-form';
-import { createFileRoute } from '@tanstack/react-router';
+import { useMutation } from '@tanstack/react-query';
+import { createFileRoute, useRouter } from '@tanstack/react-router';
+import { trpc } from '../trpc';
+import { sleep } from '../../server/lib';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
 });
 
 function RouteComponent() {
-  const { Field, Subscribe } = useForm({
+  const router = useRouter();
+  const signInMutation = useMutation(
+    trpc.session.signIn.mutationOptions({
+      onSuccess: () => {
+        Promise.allSettled([router.preloadRoute({ to: '/dashboard', from: '/signin' }), sleep(2500)]).then(() =>
+          router.navigate({ to: '/dashboard', from: '/signin' }),
+        );
+      },
+    }),
+  );
+  const signInForm = useForm({
     defaultValues: {
       username: '',
       password: '',
     },
     onSubmit: ({ value }) => {
-      console.log('Form submitted', value);
+      return signInMutation.mutateAsync(value);
     },
   });
 
   return (
-    <div className='mx-auto max-w-md'>
+    <form
+      className='mx-auto max-w-md'
+      onSubmit={e => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
       <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
-      <Field
+      <signInForm.Field
         name='username'
         validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
       >
@@ -42,9 +61,9 @@ function RouteComponent() {
             </p>
           </>
         )}
-      </Field>
+      </signInForm.Field>
 
-      <Field
+      <signInForm.Field
         name='password'
         validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
       >
@@ -67,20 +86,25 @@ function RouteComponent() {
             </p>
           </>
         )}
-      </Field>
+      </signInForm.Field>
 
-      <Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
+      <signInForm.Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
         {([isPristine, canSubmit, isSubmitting]) => (
           <button
             type='button'
             className='btn btn-primary btn-lg btn-block mt-12'
             disabled={isPristine || !canSubmit || isSubmitting}
+            onClick={() => signInForm.handleSubmit()}
           >
             {isSubmitting && <span className='loading loading-dots loading-md'></span>}
-            {isSubmitting ? 'Signing In...' : 'Sign In'}
+            {isSubmitting
+              ? 'Signing In...'
+              : signInMutation.isSuccess
+                ? `Welcome back, ${signInMutation.data.userName}`
+                : 'Sign In'}
           </button>
         )}
-      </Subscribe>
-    </div>
+      </signInForm.Subscribe>
+    </form>
   );
 }
