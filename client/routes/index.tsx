@@ -12,7 +12,9 @@ export const Route = createFileRoute('/')({
     } else {
       throw redirect({
         to: '/signin',
-        search: { redirect: '' },
+        search: {
+          redirect: undefined,
+        },
       });
     }
   },

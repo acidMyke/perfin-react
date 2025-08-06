@@ -9,7 +9,7 @@ export const Route = createFileRoute('/signin')({
   component: RouteComponent,
   validateSearch(search) {
     return {
-      redirect: search.redirect,
+      redirect: search.redirect as string | undefined,
     };
   },
   async beforeLoad({ search }) {
@@ -17,21 +17,27 @@ export const Route = createFileRoute('/signin')({
     if (!isAuthenticated) {
       return;
     }
-    if (search.redirect)
-      throw redirect({
-        to: '/dashboard',
-      });
+    if (search.redirect) {
+      throw redirect({ href: search.redirect });
+    } else {
+      throw redirect({ to: '/dashboard' });
+    }
   },
 });
 
 function RouteComponent() {
+  const search = Route.useSearch();
   const router = useRouter();
   const signInMutation = useMutation(
     trpc.session.signIn.mutationOptions({
-      onSuccess: () => {
-        Promise.allSettled([router.preloadRoute({ to: '/dashboard', from: '/signin' }), sleep(2500)]).then(() =>
-          router.navigate({ to: '/dashboard', from: '/signin' }),
-        );
+      onSuccess() {
+        Promise.allSettled([queryClient.refetchQueries(trpc.whoami.pathFilter()), sleep(2000)]).then(async () => {
+          if (search.redirect) {
+            await router.navigate({ href: search.redirect });
+          } else {
+            await router.navigate({ to: '/dashboard', from: '/signin' });
+          }
+        });
       },
     }),
   );
@@ -40,7 +46,7 @@ function RouteComponent() {
       username: '',
       password: '',
     },
-    onSubmit: ({ value }) => {
+    onSubmit: async ({ value }) => {
       return signInMutation.mutateAsync(value);
     },
   });
