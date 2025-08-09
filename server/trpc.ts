@@ -5,6 +5,9 @@ import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
 import { type CookieHeaders } from './lib';
 import sessions from './sessions';
+import { $ZodError } from 'zod/v4/core';
+import z from 'zod';
+import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
@@ -25,7 +28,29 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
 
 export type Context = Awaited<ReturnType<ReturnType<typeof createContextFactory>>>;
 
-const t = initTRPC.context<Context>().create();
+export type AppErrorShapeData = DefaultErrorShape['data'] & {
+  fieldErrors?: Record<string, string[]>;
+  formErrors?: string[];
+};
+
+const t = initTRPC.context<Context>().create({
+  isDev: import.meta.env.DEV,
+  errorFormatter(opts) {
+    const { error, shape } = opts;
+    const newShapeData: AppErrorShapeData = {
+      ...shape.data,
+    };
+
+    if (error.cause instanceof $ZodError) {
+      Object.assign(newShapeData, z.flattenError(error.cause));
+    }
+
+    return {
+      ...shape,
+      data: newShapeData,
+    };
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure.use(async opts => {

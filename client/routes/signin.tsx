@@ -2,8 +2,10 @@ import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
-import { trpc, queryClient } from '../trpc';
+import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
 import { sleep } from '../../server/lib';
+import { signInValidator } from '../../server/validators';
+import { FieldError } from '../components/FieldError';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
@@ -46,8 +48,12 @@ function RouteComponent() {
       username: '',
       password: '',
     },
-    onSubmit: async ({ value }) => {
-      return signInMutation.mutateAsync(value);
+    validators: {
+      onChange: signInValidator,
+      onSubmitAsync: ({ value, signal }) => {
+        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
+        return handleFormMutateAsync(signInMutation.mutateAsync(value));
+      },
     },
   });
 
@@ -60,10 +66,7 @@ function RouteComponent() {
       }}
     >
       <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
-      <signInForm.Field
-        name='username'
-        validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
-      >
+      <signInForm.Field name='username'>
         {field => (
           <>
             <label htmlFor={field.name} className='floating-label mt-12'>
@@ -78,17 +81,12 @@ function RouteComponent() {
               />
               <span>Username</span>
             </label>
-            <p role='alert' className='text-error h-[1em]'>
-              {field.state.meta.errors.join(', ')}
-            </p>
+            <FieldError field={field} />
           </>
         )}
       </signInForm.Field>
 
-      <signInForm.Field
-        name='password'
-        validators={{ onChange: ({ value }) => (value.length <= 0 ? 'Cannot be empty' : undefined) }}
-      >
+      <signInForm.Field name='password'>
         {field => (
           <>
             <label htmlFor={field.name} className='floating-label mt-12'>
@@ -103,9 +101,7 @@ function RouteComponent() {
               />
               <span>Password</span>
             </label>
-            <p role='alert' className='text-error h-[1em]'>
-              {field.state.meta.errors.join(', ')}
-            </p>
+            <FieldError field={field} />
           </>
         )}
       </signInForm.Field>

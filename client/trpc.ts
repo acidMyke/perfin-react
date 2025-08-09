@@ -1,8 +1,9 @@
 import { QueryClient } from '@tanstack/react-query';
-import { createTRPCClient, httpBatchLink, loggerLink, type TRPCLink } from '@trpc/client';
+import { createTRPCClient, httpBatchLink, isTRPCClientError, loggerLink, type TRPCLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../server/router';
 import { observable } from '@trpc/server/observable';
+import type { AppErrorShapeData } from '../server/trpc';
 
 export const queryClient = new QueryClient();
 
@@ -53,5 +54,24 @@ export const trpc = createTRPCOptionsProxy<AppRouter>({
 if (import.meta.env.DEV) {
   if (window) {
     Object.assign(window, { trpc, trpcClient });
+  }
+}
+
+export async function handleFormMutateAsync(mutatePromise: Promise<unknown>) {
+  try {
+    await mutatePromise;
+  } catch (error: unknown) {
+    if (isTRPCClientError(error)) {
+      if ('data' in error.shape) {
+        const shapeData = error.shape.data as AppErrorShapeData;
+        if (shapeData.fieldErrors) {
+          return {
+            fields: shapeData.fieldErrors,
+          };
+        }
+      }
+    }
+    console.log('Unknown Error', typeof error === 'object' ? { ...error } : error);
+    throw error;
   }
 }

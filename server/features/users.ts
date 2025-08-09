@@ -1,11 +1,11 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { z } from 'zod';
 import { publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib';
 import sessions from '../sessions';
+import { signInValidator, signUpValidator } from '../validators';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -49,12 +49,7 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
 }
 
 const signInProcedure = publicProcedure
-  .input(
-    z.object({
-      username: z.string(),
-      password: z.string(),
-    }),
-  )
+  .input(signInValidator)
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
@@ -91,15 +86,7 @@ const signInProcedure = publicProcedure
   });
 
 const signUpProcedure = publicProcedure
-  .input(
-    z.object({
-      username: z.string().min(4),
-      password: z
-        .string()
-        .min(12)
-        .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
-    }),
-  )
+  .input(signUpValidator)
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
