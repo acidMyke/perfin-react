@@ -1,5 +1,5 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { publicProcedure } from '../trpc';
+import { CustomInputError, publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
@@ -64,11 +64,25 @@ const signInProcedure = publicProcedure
 
     try {
       if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          cause: new CustomInputError({
+            fieldErrors: {
+              username: ['Unable to find username'],
+            },
+          }),
+        });
       }
 
       if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Password mismatch' });
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          cause: new CustomInputError({
+            fieldErrors: {
+              password: ['Password mismatch'],
+            },
+          }),
+        });
       }
 
       // Create session
@@ -79,8 +93,8 @@ const signInProcedure = publicProcedure
         userId: user?.id,
       };
     } catch (error: unknown) {
-      // if error, execution must be at least 5 seconds
-      await sleep(5000 - (Date.now() - timeStart));
+      // if error, execution must be at least 2 seconds
+      await sleep(2000 - (Date.now() - timeStart));
       throw error;
     }
   });
@@ -101,11 +115,25 @@ const signUpProcedure = publicProcedure
 
     try {
       if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          cause: new CustomInputError({
+            fieldErrors: {
+              username: ['Unable to find username'],
+            },
+          }),
+        });
       }
 
       if (user.passKey || user.passSalt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Username in-used' });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          cause: new CustomInputError({
+            fieldErrors: {
+              username: ['Username in-used'],
+            },
+          }),
+        });
       }
 
       const salt = generateSalt();
@@ -121,8 +149,8 @@ const signUpProcedure = publicProcedure
         userId: user?.id,
       };
     } catch (error: unknown) {
-      // if error, execution must be at least 5 seconds
-      await sleep(5000 - (Date.now() - timeStart));
+      // if error, execution must be at least 2 seconds
+      await sleep(2000 - (Date.now() - timeStart));
       throw error;
     }
   });
