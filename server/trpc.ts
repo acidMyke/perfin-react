@@ -33,6 +33,27 @@ export type AppErrorShapeData = DefaultErrorShape['data'] & {
   formErrors?: string[];
 };
 
+export class CustomInputError extends Error {
+  public readonly _type = 'CustomInputError';
+  fieldErrors?: Record<string, string[]>;
+  formErrors?: string[];
+  constructor(opts: {
+    fieldErrors?: Record<string, string[]>;
+    formErrors?: string[];
+    message?: string;
+    cause?: Error;
+  }) {
+    const { message, cause, fieldErrors, formErrors } = opts;
+    super(message, { cause });
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
+  }
+}
+
+function isCustomInputError(cause: any): cause is CustomInputError {
+  return typeof cause == 'object' && '_type' in cause && cause['_type'] === 'CustomInputError';
+}
+
 const t = initTRPC.context<Context>().create({
   isDev: import.meta.env.DEV,
   errorFormatter(opts) {
@@ -41,8 +62,16 @@ const t = initTRPC.context<Context>().create({
       ...shape.data,
     };
 
+    if (isCustomInputError(error.cause)) {
+      const { fieldErrors, formErrors } = error.cause;
+      newShapeData.fieldErrors = fieldErrors;
+      newShapeData.formErrors = formErrors;
+    }
+
     if (error.cause instanceof $ZodError) {
-      Object.assign(newShapeData, z.flattenError(error.cause));
+      const { fieldErrors, formErrors } = z.flattenError(error.cause);
+      newShapeData.fieldErrors = fieldErrors;
+      newShapeData.formErrors = formErrors;
     }
 
     return {
