@@ -8,18 +8,18 @@ const idColumn = () =>
   nullableIdColumn()
     .notNull()
     .$defaultFn(() => nanoid(8));
-const versionColumn = (colName = `version`) =>
-  integer(colName)
+const versionColumn = () =>
+  integer()
     .notNull()
     .default(sql`1`)
-    .$onUpdate(() => sql.raw(`${colName} + 1`));
+    .$onUpdate(() => sql`version + 1`);
 const dateColumn = () => integer({ mode: 'timestamp' }).notNull();
-const createdAtColumn = () => dateColumn().default(sql`(CURRENT_TIMESTAMP)`);
+const createdAtColumn = () => dateColumn().$default(() => new Date());
 const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
 
 const baseColumns = () => ({
-  id: idColumn(),
+  id: idColumn().primaryKey(),
   version: versionColumn(),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
@@ -34,7 +34,7 @@ export const usersTable = sqliteTable('users', {
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
-  accounts: many(accountsTable),
+  subjects: many(subjectsTable),
   sessions: many(sessionsTable),
 }));
 
@@ -53,21 +53,31 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   }),
 }));
 
-export const accountsTable = sqliteTable('accounts', {
+export const SUBJECT_TYPE = {
+  ACCOUNT: 'account',
+  CATEGORY: 'category',
+} as const;
+
+export const subjectsTable = sqliteTable('ledger_subjects', {
   ...baseColumns(),
+  type: text({ enum: [SUBJECT_TYPE.ACCOUNT, SUBJECT_TYPE.CATEGORY] }).notNull(),
   belongsToId: idColumn().references(() => usersTable.id),
+  name: text().notNull(),
+  description: text(),
+  sequence: integer(),
 });
 
-export const accountsRelations = relations(accountsTable, ({ one, many }) => ({
+export const subjectsRelations = relations(subjectsTable, ({ one, many }) => ({
   belongsTo: one(usersTable, {
-    fields: [accountsTable.belongsToId],
+    fields: [subjectsTable.belongsToId],
     references: [usersTable.id],
   }),
   ledgers: many(ledgersTable),
-  transactions: many(transactionsTable),
+  expenses: many(expensesTable),
 }));
 
 export const LEDGER_TYPES = {
+  FULL: 'full',
   YEAR: 'year',
   MONTH: 'month',
   WEEK: 'week',
@@ -78,27 +88,44 @@ export const ledgersTable = sqliteTable('ledgers', {
   totalCents: centsColumn(),
   creditCents: centsColumn(),
   debitCents: centsColumn(),
-  type: text({ enum: [LEDGER_TYPES.YEAR, LEDGER_TYPES.MONTH, LEDGER_TYPES.WEEK] }),
-  accountId: nullableIdColumn().references(() => accountsTable.id),
+  type: text({ enum: [LEDGER_TYPES.FULL, LEDGER_TYPES.YEAR, LEDGER_TYPES.MONTH, LEDGER_TYPES.WEEK] }).notNull(),
+  /** For ALL but FULL type ledgers */
+  year: integer(),
+  /** For MONTH type ledgers*/
+  month: integer(),
+  /** For WEEK type ledgers */
+  week: integer(),
+  forSubjectId: idColumn(),
 });
 
 export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
-  account: one(accountsTable, {
-    fields: [ledgersTable.accountId],
-    references: [accountsTable.id],
+  subject: one(subjectsTable, {
+    fields: [ledgersTable.forSubjectId],
+    references: [subjectsTable.id],
   }),
 }));
 
-export const transactionsTable = sqliteTable('transactions', {
+export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
+  description: text(),
   amountCents: centsColumn(),
-  effectiveAt: dateColumn(),
-  accountId: idColumn().references(() => accountsTable.id),
+  billedAt: dateColumn(),
+  belongsToId: idColumn().references(() => usersTable.id),
+  accountId: nullableIdColumn().references(() => subjectsTable.id),
+  categoryId: nullableIdColumn().references(() => subjectsTable.id),
 });
 
-export const transactionsRelations = relations(transactionsTable, ({ one }) => ({
-  account: one(accountsTable, {
-    fields: [transactionsTable.accountId],
-    references: [accountsTable.id],
+export const expenses = relations(expensesTable, ({ one }) => ({
+  belongsTo: one(usersTable, {
+    fields: [expensesTable.belongsToId],
+    references: [usersTable.id],
+  }),
+  account: one(subjectsTable, {
+    fields: [expensesTable.accountId],
+    references: [subjectsTable.id],
+  }),
+  category: one(subjectsTable, {
+    fields: [expensesTable.categoryId],
+    references: [subjectsTable.id],
   }),
 }));

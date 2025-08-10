@@ -1,11 +1,11 @@
 {
   "version": "6",
   "dialect": "sqlite",
-  "id": "9df9cb8b-04d4-4374-b479-6a3fb686b8a2",
+  "id": "b447e896-f6ad-4588-b247-2731f015ddcb",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "tables": {
-    "accounts": {
-      "name": "accounts",
+    "expenses": {
+      "name": "expenses",
       "columns": {
         "id": {
           "name": "id",
@@ -27,11 +27,32 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP)"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "amount_cents": {
+          "name": "amount_cents",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false,
+          "default": 0
+        },
+        "billed_at": {
+          "name": "billed_at",
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
@@ -43,16 +64,56 @@
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
+        },
+        "account_id": {
+          "name": "account_id",
+          "type": "text(8)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "category_id": {
+          "name": "category_id",
+          "type": "text(8)",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "accounts_belongs_to_id_users_id_fk": {
-          "name": "accounts_belongs_to_id_users_id_fk",
-          "tableFrom": "accounts",
+        "expenses_belongs_to_id_users_id_fk": {
+          "name": "expenses_belongs_to_id_users_id_fk",
+          "tableFrom": "expenses",
           "tableTo": "users",
           "columnsFrom": [
             "belongs_to_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_account_id_ledger_subjects_id_fk": {
+          "name": "expenses_account_id_ledger_subjects_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "ledger_subjects",
+          "columnsFrom": [
+            "account_id"
+          ],
+          "columnsTo": [
+            "id"
+          ],
+          "onDelete": "no action",
+          "onUpdate": "no action"
+        },
+        "expenses_category_id_ledger_subjects_id_fk": {
+          "name": "expenses_category_id_ledger_subjects_id_fk",
+          "tableFrom": "expenses",
+          "tableTo": "ledger_subjects",
+          "columnsFrom": [
+            "category_id"
           ],
           "columnsTo": [
             "id"
@@ -88,8 +149,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP)"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -126,33 +186,40 @@
           "name": "type",
           "type": "text",
           "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "year": {
+          "name": "year",
+          "type": "integer",
+          "primaryKey": false,
           "notNull": false,
           "autoincrement": false
         },
-        "account_id": {
-          "name": "account_id",
-          "type": "text(8)",
+        "month": {
+          "name": "month",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false,
+          "autoincrement": false
+        },
+        "week": {
+          "name": "week",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "for_subject_id": {
+          "name": "for_subject_id",
+          "type": "text(8)",
+          "primaryKey": false,
+          "notNull": true,
           "autoincrement": false
         }
       },
       "indexes": {},
-      "foreignKeys": {
-        "ledgers_account_id_accounts_id_fk": {
-          "name": "ledgers_account_id_accounts_id_fk",
-          "tableFrom": "ledgers",
-          "tableTo": "accounts",
-          "columnsFrom": [
-            "account_id"
-          ],
-          "columnsTo": [
-            "id"
-          ],
-          "onDelete": "no action",
-          "onUpdate": "no action"
-        }
-      },
+      "foreignKeys": {},
       "compositePrimaryKeys": {},
       "uniqueConstraints": {},
       "checkConstraints": {}
@@ -180,8 +247,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP)"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -239,8 +305,8 @@
       "uniqueConstraints": {},
       "checkConstraints": {}
     },
-    "transactions": {
-      "name": "transactions",
+    "ledger_subjects": {
+      "name": "ledger_subjects",
       "columns": {
         "id": {
           "name": "id",
@@ -262,8 +328,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP)"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
@@ -272,37 +337,50 @@
           "notNull": true,
           "autoincrement": false
         },
-        "amount_cents": {
-          "name": "amount_cents",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": true,
-          "autoincrement": false,
-          "default": 0
-        },
-        "effective_at": {
-          "name": "effective_at",
-          "type": "integer",
+        "type": {
+          "name": "type",
+          "type": "text",
           "primaryKey": false,
           "notNull": true,
           "autoincrement": false
         },
-        "account_id": {
-          "name": "account_id",
+        "belongs_to_id": {
+          "name": "belongs_to_id",
           "type": "text(8)",
           "primaryKey": false,
           "notNull": true,
+          "autoincrement": false
+        },
+        "name": {
+          "name": "name",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": true,
+          "autoincrement": false
+        },
+        "description": {
+          "name": "description",
+          "type": "text",
+          "primaryKey": false,
+          "notNull": false,
+          "autoincrement": false
+        },
+        "sequence": {
+          "name": "sequence",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false,
           "autoincrement": false
         }
       },
       "indexes": {},
       "foreignKeys": {
-        "transactions_account_id_accounts_id_fk": {
-          "name": "transactions_account_id_accounts_id_fk",
-          "tableFrom": "transactions",
-          "tableTo": "accounts",
+        "ledger_subjects_belongs_to_id_users_id_fk": {
+          "name": "ledger_subjects_belongs_to_id_users_id_fk",
+          "tableFrom": "ledger_subjects",
+          "tableTo": "users",
           "columnsFrom": [
-            "account_id"
+            "belongs_to_id"
           ],
           "columnsTo": [
             "id"
@@ -338,8 +416,7 @@
           "type": "integer",
           "primaryKey": false,
           "notNull": true,
-          "autoincrement": false,
-          "default": "(CURRENT_TIMESTAMP)"
+          "autoincrement": false
         },
         "updated_at": {
           "name": "updated_at",
