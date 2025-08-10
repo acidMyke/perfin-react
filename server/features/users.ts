@@ -1,11 +1,11 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { z } from 'zod';
-import { publicProcedure } from '../trpc';
+import { FormInputError, publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib';
 import sessions from '../sessions';
+import { signInValidator, signUpValidator } from '../validators';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -49,12 +49,7 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
 }
 
 const signInProcedure = publicProcedure
-  .input(
-    z.object({
-      username: z.string(),
-      password: z.string(),
-    }),
-  )
+  .input(signInValidator)
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
@@ -69,32 +64,43 @@ const signInProcedure = publicProcedure
 
     try {
       if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          cause: new FormInputError({
+            fieldErrors: {
+              username: ['Unable to find username'],
+            },
+          }),
+        });
       }
 
       if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
-        throw new TRPCError({ code: 'UNAUTHORIZED', message: 'Password mismatch' });
+        throw new TRPCError({
+          code: 'UNAUTHORIZED',
+          cause: new FormInputError({
+            fieldErrors: {
+              password: ['Password mismatch'],
+            },
+          }),
+        });
       }
 
       // Create session
       await sessions.create(ctx, user.id);
+
+      return {
+        userName: user?.name,
+        userId: user?.id,
+      };
     } catch (error: unknown) {
-      // if error, execution must be at least 5 seconds
-      await sleep(5000 - (Date.now() - timeStart));
+      // if error, execution must be at least 2 seconds
+      await sleep(2000 - (Date.now() - timeStart));
       throw error;
     }
   });
 
 const signUpProcedure = publicProcedure
-  .input(
-    z.object({
-      username: z.string().min(4),
-      password: z
-        .string()
-        .min(12)
-        .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
-    }),
-  )
+  .input(signUpValidator)
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
@@ -109,11 +115,25 @@ const signUpProcedure = publicProcedure
 
     try {
       if (!user) {
-        throw new TRPCError({ code: 'NOT_FOUND', message: 'Unable to find username' });
+        throw new TRPCError({
+          code: 'NOT_FOUND',
+          cause: new FormInputError({
+            fieldErrors: {
+              username: ['Unable to find username'],
+            },
+          }),
+        });
       }
 
       if (user.passKey || user.passSalt) {
-        throw new TRPCError({ code: 'BAD_REQUEST', message: 'Username in-used' });
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          cause: new FormInputError({
+            fieldErrors: {
+              username: ['Username in-used'],
+            },
+          }),
+        });
       }
 
       const salt = generateSalt();
@@ -123,9 +143,14 @@ const signUpProcedure = publicProcedure
 
       // Create session
       await sessions.create(ctx, user.id);
+
+      return {
+        userName: user?.name,
+        userId: user?.id,
+      };
     } catch (error: unknown) {
-      // if error, execution must be at least 5 seconds
-      await sleep(5000 - (Date.now() - timeStart));
+      // if error, execution must be at least 2 seconds
+      await sleep(2000 - (Date.now() - timeStart));
       throw error;
     }
   });

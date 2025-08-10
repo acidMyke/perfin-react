@@ -5,6 +5,9 @@ import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
 import { type CookieHeaders } from './lib';
 import sessions from './sessions';
+import { $ZodError } from 'zod/v4/core';
+import z from 'zod';
+import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
@@ -25,7 +28,59 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
 
 export type Context = Awaited<ReturnType<ReturnType<typeof createContextFactory>>>;
 
-const t = initTRPC.context<Context>().create();
+export type AppErrorShapeData = DefaultErrorShape['data'] & {
+  fieldErrors?: Record<string, string[]>;
+  formErrors?: string[];
+};
+
+export class FormInputError extends Error {
+  static readonly NAME = 'FormInputError';
+  readonly _type = FormInputError.NAME;
+  fieldErrors?: Record<string, string[]>;
+  formErrors?: string[];
+  constructor(opts: {
+    fieldErrors?: Record<string, string[]>;
+    formErrors?: string[];
+    message?: string;
+    cause?: Error;
+  }) {
+    const { message, cause, fieldErrors, formErrors } = opts;
+    super(message, { cause });
+    this.fieldErrors = fieldErrors;
+    this.formErrors = formErrors;
+  }
+}
+
+function isFormInputError(cause: any): cause is FormInputError {
+  return typeof cause == 'object' && '_type' in cause && cause['_type'] === FormInputError.NAME;
+}
+
+const t = initTRPC.context<Context>().create({
+  isDev: import.meta.env.DEV,
+  errorFormatter(opts) {
+    const { error, shape } = opts;
+    const newShapeData: AppErrorShapeData = {
+      ...shape.data,
+    };
+
+    if (isFormInputError(error.cause)) {
+      const { fieldErrors, formErrors } = error.cause;
+      newShapeData.fieldErrors = fieldErrors;
+      newShapeData.formErrors = formErrors;
+    }
+
+    if (error.cause instanceof $ZodError) {
+      const { fieldErrors, formErrors } = z.flattenError(error.cause);
+      newShapeData.fieldErrors = fieldErrors;
+      newShapeData.formErrors = formErrors;
+    }
+
+    return {
+      ...shape,
+      data: newShapeData,
+    };
+  },
+});
 
 export const router = t.router;
 export const publicProcedure = t.procedure.use(async opts => {
