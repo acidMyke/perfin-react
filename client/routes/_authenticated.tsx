@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { Link, linkOptions, Outlet } from '@tanstack/react-router';
-import { ChartLine, ScrollText } from 'lucide-react';
+import { ChartLine, Plus, ScrollText } from 'lucide-react';
 import { queryClient } from '../trpc';
 import { whoamiQueryOptions } from '../queryOptions';
 
@@ -24,9 +24,10 @@ const options = linkOptions([
     Icon: ChartLine,
   },
   {
-    to: '/expenses/list',
+    to: '/expenses',
     label: 'Expenses',
     Icon: ScrollText,
+    activeOptions: {},
   },
 ]);
 
@@ -45,10 +46,23 @@ function NavDock() {
   );
 }
 
+function FloatingButton() {
+  return (
+    <Link
+      to='/expenses/create'
+      className='btn btn-circle btn-xl btn-primary pointer-events-auto fixed right-8 bottom-24'
+      activeProps={{ className: 'hidden' }}
+    >
+      <Plus size='1.6em' />
+    </Link>
+  );
+}
+
 function RouteComponent() {
   return (
     <>
       <Outlet />
+      <FloatingButton />
       <NavDock />
     </>
   );
