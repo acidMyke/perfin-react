@@ -69,7 +69,7 @@ function RouteComponent() {
       <signInForm.Field name='username'>
         {field => (
           <>
-            <label htmlFor={field.name} className='floating-label mt-12'>
+            <label htmlFor={field.name} className='floating-label mt-8'>
               <input
                 type='text'
                 id={field.name}
@@ -89,7 +89,7 @@ function RouteComponent() {
       <signInForm.Field name='password'>
         {field => (
           <>
-            <label htmlFor={field.name} className='floating-label mt-12'>
+            <label htmlFor={field.name} className='floating-label mt-8'>
               <input
                 type='password'
                 id={field.name}
@@ -106,11 +106,19 @@ function RouteComponent() {
         )}
       </signInForm.Field>
 
+      <signInForm.Subscribe selector={state => [state.errorMap]}>
+        {([{ onSubmit }]) => (
+          <p role='alert' className='text-error h-[1em]'>
+            {onSubmit && Array.isArray(onSubmit) ? onSubmit.join(', ') : undefined}
+          </p>
+        )}
+      </signInForm.Subscribe>
+
       <signInForm.Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
         {([isPristine, canSubmit, isSubmitting]) => (
           <button
             type='button'
-            className='btn btn-primary btn-lg btn-block mt-12'
+            className='btn btn-primary btn-lg btn-block mt-8'
             disabled={isPristine || !canSubmit || isSubmitting}
             onClick={() => signInForm.handleSubmit()}
           >

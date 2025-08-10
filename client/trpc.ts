@@ -64,8 +64,9 @@ export async function handleFormMutateAsync(mutatePromise: Promise<unknown>) {
     if (isTRPCClientError(error)) {
       if ('data' in error.shape) {
         const shapeData = error.shape.data as AppErrorShapeData;
-        if (shapeData.fieldErrors) {
+        if (shapeData.fieldErrors || shapeData.formErrors) {
           return {
+            form: shapeData.formErrors,
             fields: shapeData.fieldErrors,
           };
         }
