@@ -8,6 +8,7 @@ import sessions from './sessions';
 import { $ZodError } from 'zod/v4/core';
 import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
+import { format } from 'date-fns/format';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = drizzle(env.db, {
@@ -86,6 +87,7 @@ export const router = t.router;
 export const publicProcedure = t.procedure.use(async opts => {
   if (import.meta.env.DEV) {
     const start = Date.now();
+    console.log(format(start, 'yyyy-MM-dd HH:mm:ss'), opts.path, opts.input);
     const result = await opts.next();
     const durationMs = Date.now() - start;
     const meta: Record<string, any> = { path: opts.path, type: opts.type, durationMs };
@@ -110,7 +112,7 @@ export const publicProcedure = t.procedure.use(async opts => {
       }
       console.error('Non-OK request:', meta);
     } else {
-      console.log('OK request:', meta);
+      console.info('OK request:', meta);
     }
     return result;
   }
