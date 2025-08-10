@@ -1,8 +1,37 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import { createExpenseValidator } from '../validators';
 import * as schema from '../../db/schema';
-import { and, eq, or } from 'drizzle-orm';
+import { and, asc, eq, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
+
+type Option = {
+  name: string;
+  id: string;
+};
+
+const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
+  const subjects = await db.query.subjectsTable.findMany({
+    where: eq(schema.subjectsTable.belongsToId, user.id),
+    orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
+    columns: { name: true, id: true, type: true },
+  });
+
+  const accountOptions: Option[] = [];
+  const categoryOptions: Option[] = [];
+
+  for (const { type, ...option } of subjects) {
+    if (type === schema.SUBJECT_TYPE.ACCOUNT) {
+      accountOptions.push(option);
+    } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
+      categoryOptions.push(option);
+    }
+  }
+
+  return {
+    accountOptions,
+    categoryOptions,
+  };
+});
 
 const createExpenseProcedure = protectedProcedure.input(createExpenseValidator).mutation(async ({ input, ctx }) => {
   const { user, db } = ctx;
@@ -65,5 +94,6 @@ const createExpenseProcedure = protectedProcedure.input(createExpenseValidator).
 });
 
 export const expenseProcedures = {
+  loadCreate: loadCreateExpenseProcedure,
   create: createExpenseProcedure,
 };
