@@ -4,10 +4,7 @@ import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid(8);
 const nullableIdColumn = () => text({ length: 8 });
-const idColumn = () =>
-  nullableIdColumn()
-    .notNull()
-    .$defaultFn(() => nanoid(8));
+const idColumn = () => nullableIdColumn().notNull();
 const versionColumn = () =>
   integer()
     .notNull()
@@ -19,7 +16,9 @@ const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
 
 const baseColumns = () => ({
-  id: idColumn().primaryKey(),
+  id: idColumn()
+    .primaryKey()
+    .$defaultFn(() => nanoid(8)),
   version: versionColumn(),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
