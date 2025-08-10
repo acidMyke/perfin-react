@@ -33,8 +33,9 @@ export type AppErrorShapeData = DefaultErrorShape['data'] & {
   formErrors?: string[];
 };
 
-export class CustomInputError extends Error {
-  public readonly _type = 'CustomInputError';
+export class FormInputError extends Error {
+  static readonly NAME = 'FormInputError';
+  readonly _type = FormInputError.NAME;
   fieldErrors?: Record<string, string[]>;
   formErrors?: string[];
   constructor(opts: {
@@ -50,8 +51,8 @@ export class CustomInputError extends Error {
   }
 }
 
-function isCustomInputError(cause: any): cause is CustomInputError {
-  return typeof cause == 'object' && '_type' in cause && cause['_type'] === 'CustomInputError';
+function isFormInputError(cause: any): cause is FormInputError {
+  return typeof cause == 'object' && '_type' in cause && cause['_type'] === FormInputError.NAME;
 }
 
 const t = initTRPC.context<Context>().create({
@@ -62,7 +63,7 @@ const t = initTRPC.context<Context>().create({
       ...shape.data,
     };
 
-    if (isCustomInputError(error.cause)) {
+    if (isFormInputError(error.cause)) {
       const { fieldErrors, formErrors } = error.cause;
       newShapeData.fieldErrors = fieldErrors;
       newShapeData.formErrors = formErrors;

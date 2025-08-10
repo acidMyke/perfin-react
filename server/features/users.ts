@@ -1,5 +1,5 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { CustomInputError, publicProcedure } from '../trpc';
+import { FormInputError, publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
@@ -66,7 +66,7 @@ const signInProcedure = publicProcedure
       if (!user) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          cause: new CustomInputError({
+          cause: new FormInputError({
             fieldErrors: {
               username: ['Unable to find username'],
             },
@@ -77,7 +77,7 @@ const signInProcedure = publicProcedure
       if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
         throw new TRPCError({
           code: 'UNAUTHORIZED',
-          cause: new CustomInputError({
+          cause: new FormInputError({
             fieldErrors: {
               password: ['Password mismatch'],
             },
@@ -117,7 +117,7 @@ const signUpProcedure = publicProcedure
       if (!user) {
         throw new TRPCError({
           code: 'NOT_FOUND',
-          cause: new CustomInputError({
+          cause: new FormInputError({
             fieldErrors: {
               username: ['Unable to find username'],
             },
@@ -128,7 +128,7 @@ const signUpProcedure = publicProcedure
       if (user.passKey || user.passSalt) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
-          cause: new CustomInputError({
+          cause: new FormInputError({
             fieldErrors: {
               username: ['Username in-used'],
             },
