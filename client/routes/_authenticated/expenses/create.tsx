@@ -37,80 +37,74 @@ function RouteComponent() {
       <h1 className='text-center text-3xl font-black'>Create expense</h1>
       <form.Field name='amountCents'>
         {field => (
-          <>
-            <label htmlFor={field.name} className='floating-label mt-8'>
-              <label className='input input-primary input-lg w-full'>
-                <DollarSign size='1em' />
-                <input
-                  autoFocus
-                  type='number'
-                  id={field.name}
-                  name={field.name}
-                  placeholder='Amount'
-                  value={(field.state.value / 100).toFixed(2).padStart(5, '0')}
-                  onChange={e =>
-                    !isNaN(e.target.valueAsNumber) &&
-                    field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
-                  }
-                  onKeyDown={e => {
-                    if (e.key === 'Backspace') field.handleChange(v => v / 10);
-                    else if (e.key === '.') field.handleChange(v => v * 100);
-                    else return;
-                    e.preventDefault();
-                  }}
-                />
-              </label>
-              <span>Amount</span>
+          <label htmlFor={field.name} className='floating-label mt-8'>
+            <span>Amount</span>
+            <label className='input input-primary input-lg w-full'>
+              <DollarSign size='1em' />
+              <input
+                autoFocus
+                type='number'
+                id={field.name}
+                name={field.name}
+                placeholder='Amount'
+                value={(field.state.value / 100).toFixed(2).padStart(5, '0')}
+                onChange={e =>
+                  !isNaN(e.target.valueAsNumber) &&
+                  field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
+                }
+                onKeyDown={e => {
+                  if (e.key === 'Backspace') field.handleChange(v => v / 10);
+                  else if (e.key === '.') field.handleChange(v => v * 100);
+                  else return;
+                  e.preventDefault();
+                }}
+              />
             </label>
             <FieldError field={field} />
-          </>
+          </label>
         )}
       </form.Field>
       <form.Field name='description'>
         {field => (
-          <>
-            <label htmlFor={field.name} className='floating-label mt-4'>
-              <input
-                type='text'
-                id={field.name}
-                name={field.name}
-                placeholder='Description'
-                className='input input-primary input-lg w-full'
-                value={field.state.value}
-                onChange={e => field.handleChange(e.target.value)}
-              />
-              <span>Description</span>
-            </label>
+          <label htmlFor={field.name} className='floating-label mt-4'>
+            <span>Description</span>
+            <input
+              type='text'
+              id={field.name}
+              name={field.name}
+              placeholder='Description'
+              className='input input-primary input-lg w-full'
+              value={field.state.value}
+              onChange={e => field.handleChange(e.target.value)}
+            />
             <FieldError field={field} />
-          </>
+          </label>
         )}
       </form.Field>
       <form.Field name='billedAt'>
         {field => (
-          <>
-            <label htmlFor={field.name} className='floating-label mt-4'>
-              <input
-                type='datetime-local'
-                id={field.name}
-                name={field.name}
-                placeholder='Date'
-                className='input input-primary input-lg w-full'
-                value={format(field.state.value, "yyyy-MM-dd'T'HH:mm")}
-                onChange={e => {
-                  if (e.target.value === '') {
-                    field.handleChange(new Date());
-                  } else {
-                    const parsedDate = parse(e.target.value, "yyyy-MM-dd'T'HH:mm", new Date());
-                    if (!isNaN(parsedDate.getTime())) {
-                      field.handleChange(parsedDate);
-                    }
+          <label htmlFor={field.name} className='floating-label mt-4'>
+            <span>Date</span>
+            <input
+              type='datetime-local'
+              id={field.name}
+              name={field.name}
+              placeholder='Date'
+              className='input input-primary input-lg w-full'
+              value={format(field.state.value, "yyyy-MM-dd'T'HH:mm")}
+              onChange={e => {
+                if (e.target.value === '') {
+                  field.handleChange(new Date());
+                } else {
+                  const parsedDate = parse(e.target.value, "yyyy-MM-dd'T'HH:mm", new Date());
+                  if (!isNaN(parsedDate.getTime())) {
+                    field.handleChange(parsedDate);
                   }
-                }}
-              />
-              <span>Date</span>
-            </label>
+                }
+              }}
+            />
             <FieldError field={field} />
-          </>
+          </label>
         )}
       </form.Field>
       <form.Field name='categoryId'>

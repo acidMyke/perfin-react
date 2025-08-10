@@ -71,41 +71,37 @@ function RouteComponent() {
       <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
       <signInForm.Field name='username'>
         {field => (
-          <>
-            <label htmlFor={field.name} className='floating-label mt-8'>
-              <input
-                type='text'
-                id={field.name}
-                name={field.name}
-                placeholder='Username'
-                className='input input-primary input-xl w-full'
-                value={field.state.value}
-                onChange={e => field.handleChange(e.target.value)}
-              />
-              <span>Username</span>
-            </label>
+          <label htmlFor={field.name} className='floating-label mt-8'>
+            <span>Username</span>
+            <input
+              type='text'
+              id={field.name}
+              name={field.name}
+              placeholder='Username'
+              className='input input-primary input-xl w-full'
+              value={field.state.value}
+              onChange={e => field.handleChange(e.target.value)}
+            />
             <FieldError field={field} />
-          </>
+          </label>
         )}
       </signInForm.Field>
 
       <signInForm.Field name='password'>
         {field => (
-          <>
-            <label htmlFor={field.name} className='floating-label mt-8'>
-              <input
-                type='password'
-                id={field.name}
-                name={field.name}
-                placeholder='Password'
-                className='input input-primary input-xl w-full'
-                value={field.state.value}
-                onChange={e => field.handleChange(e.target.value)}
-              />
-              <span>Password</span>
-            </label>
+          <label htmlFor={field.name} className='floating-label mt-8'>
+            <span>Password</span>
+            <input
+              type='password'
+              id={field.name}
+              name={field.name}
+              placeholder='Password'
+              className='input input-primary input-xl w-full'
+              value={field.state.value}
+              onChange={e => field.handleChange(e.target.value)}
+            />
             <FieldError field={field} />
-          </>
+          </label>
         )}
       </signInForm.Field>
 
