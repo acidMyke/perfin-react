@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../../trpc';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { useForm } from '@tanstack/react-form';
 import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
@@ -16,6 +16,9 @@ function RouteComponent() {
   const {
     data: { accountOptions, categoryOptions },
   } = useSuspenseQuery(trpc.expense.loadCreate.queryOptions());
+  const createExpenseMutation = useMutation(
+    trpc.expense.create.mutationOptions({ onSuccess: () => void form.reset() }),
+  );
   const form = useForm({
     defaultValues: {
       description: undefined as string | undefined,
@@ -24,8 +27,16 @@ function RouteComponent() {
       accountId: undefined as string | undefined,
       categoryId: undefined as string | undefined,
     },
-    validators: {},
+    validators: {
+      onSubmitAsync: async ({ value, signal }) => {
+        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
+        return handleFormMutateAsync(
+          createExpenseMutation.mutateAsync({ ...value, billedAt: value.billedAt.toISOString() }),
+        );
+      },
+    },
   });
+
   return (
     <form
       className='mx-auto max-w-md'
@@ -74,8 +85,10 @@ function RouteComponent() {
               name={field.name}
               placeholder='Description'
               className='input input-primary input-lg w-full'
-              value={field.state.value}
-              onChange={e => field.handleChange(e.target.value)}
+              value={field.state.value ?? ''}
+              onChange={e =>
+                field.state.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value)
+              }
             />
             <FieldError field={field} />
           </label>
@@ -159,6 +172,7 @@ function RouteComponent() {
             type='button'
             className='btn btn-primary btn-lg btn-block mt-8'
             disabled={isPristine || !canSubmit || isSubmitting}
+            onClick={() => form.handleSubmit()}
           >
             {isSubmitting && <span className='loading loading-dots loading-md'></span>}
             {isSubmitting ? 'Submitting...' : 'Submit'}
