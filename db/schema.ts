@@ -114,7 +114,7 @@ export const expensesTable = sqliteTable('expenses', {
   categoryId: nullableIdColumn().references(() => subjectsTable.id),
 });
 
-export const expenses = relations(expensesTable, ({ one }) => ({
+export const expensesRelations = relations(expensesTable, ({ one }) => ({
   belongsTo: one(usersTable, {
     fields: [expensesTable.belongsToId],
     references: [usersTable.id],
