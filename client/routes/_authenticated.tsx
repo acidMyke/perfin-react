@@ -61,7 +61,7 @@ function FloatingButton() {
 function RouteComponent() {
   return (
     <>
-      <div className='h-20'></div>
+      <div className='h-8'></div>
       <Outlet />
       <FloatingButton />
       <NavDock />
