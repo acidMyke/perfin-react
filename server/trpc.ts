@@ -30,17 +30,17 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
 export type Context = Awaited<ReturnType<ReturnType<typeof createContextFactory>>>;
 
 export type AppErrorShapeData = DefaultErrorShape['data'] & {
-  fieldErrors?: Record<string, string[]>;
+  fieldErrors?: Record<string, string[] | undefined>;
   formErrors?: string[];
 };
 
 export class FormInputError extends Error {
   static readonly NAME = 'FormInputError';
   readonly _type = FormInputError.NAME;
-  fieldErrors?: Record<string, string[]>;
+  fieldErrors?: Record<string, string[] | undefined>;
   formErrors?: string[];
   constructor(opts: {
-    fieldErrors?: Record<string, string[]>;
+    fieldErrors?: Record<string, string[] | undefined>;
     formErrors?: string[];
     message?: string;
     cause?: Error;
