@@ -108,19 +108,10 @@ const createExpenseProcedure = protectedProcedure
 
 const listExpenseProcedure = protectedProcedure
   .input(
-    z
-      .object({
-        month: z
-          .number()
-          .min(0)
-          .max(11)
-          .default(() => new Date().getMonth()),
-        year: z
-          .number()
-          .min(2020)
-          .default(() => new Date().getFullYear()),
-      })
-      .prefault({}),
+    z.object({
+      month: z.number().min(0).max(11),
+      year: z.number().min(2020),
+    }),
   )
   .query(async ({ input, ctx }) => {
     const { db } = ctx;

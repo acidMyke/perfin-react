@@ -4,7 +4,10 @@ import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../server/router';
 import { observable } from '@trpc/server/observable';
 import type { AppErrorShapeData } from '../server/trpc';
+import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 
+export type RouterInputs = inferRouterInputs<AppRouter>;
+export type RouterOutputs = inferRouterOutputs<AppRouter>;
 export const queryClient = new QueryClient();
 
 const errorHandlingLink: TRPCLink<AppRouter> = () => {
