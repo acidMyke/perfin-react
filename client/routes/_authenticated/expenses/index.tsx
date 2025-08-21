@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
 import { queryClient, trpc, type RouterInputs } from '../../../trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { format, isBefore, isSameDay, startOfMonth, subMonths } from 'date-fns';
+import { format, isBefore, isSameDay, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 
@@ -20,7 +20,7 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
       month: now.getMonth(),
       year: now.getFullYear(),
     };
-    if (search && 'month' in search && 'year' in search) {
+    if (search && typeof search['month'] === 'number' && typeof search['year'] === 'number') {
       deps.month = search['month'] as number;
       deps.year = search['year'] as number;
     }
@@ -86,6 +86,7 @@ function RouteComponent() {
         </details>
         {Array.from({ length: 3 }).map((_, i) => {
           const date = subMonths(new Date(), 2 - i);
+          const isSelected = isSameMonth(selectedDate, date);
           return (
             <Link
               key={i}
@@ -94,10 +95,9 @@ function RouteComponent() {
                 month: date.getMonth(),
                 year: date.getFullYear(),
               }}
-              className='btn btn-sm'
-              activeProps={{ className: 'btn-primary' }}
+              className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
             >
-              {format(date, 'MMM yy')}{' '}
+              {format(date, 'MMM yy')}
             </Link>
           );
         })}
