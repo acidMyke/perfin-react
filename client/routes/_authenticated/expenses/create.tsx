@@ -6,6 +6,7 @@ import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
+import { PageHeader } from '../../../components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated/expenses/create')({
   component: RouteComponent,
@@ -45,7 +46,7 @@ function RouteComponent() {
         e.stopPropagation();
       }}
     >
-      <h1 className='text-center text-3xl font-black'>Create expense</h1>
+      <PageHeader title='Create expense' showBackButton />
       <form.Field name='amountCents'>
         {field => (
           <label htmlFor={field.name} className='floating-label mt-8'>

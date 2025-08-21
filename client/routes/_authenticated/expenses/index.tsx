@@ -5,6 +5,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameDay, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
+import { PageHeader } from '../../../components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   component: RouteComponent,
@@ -41,7 +42,7 @@ function RouteComponent() {
 
   return (
     <div className='mx-auto max-w-lg px-2'>
-      <h1 className='mb-2 text-center text-3xl font-black'>Expenses</h1>
+      <PageHeader title='Expenses' />
       <div className='flex flex-row gap-4'>
         <details className='dropdown'>
           {isBefore(selectedDate, startOfMonth(subMonths(new Date(), 3))) ? (
@@ -102,7 +103,7 @@ function RouteComponent() {
           );
         })}
       </div>
-      <div className='flex w-full flex-col'>
+      <div className='flex w-full flex-col gap-1'>
         {expenses.map((expense, idx) => {
           const prev = idx != 0 ? expenses[idx - 1] : undefined;
           const showDate = !prev || !isSameDay(prev.billedAt, expense.billedAt);
@@ -110,7 +111,11 @@ function RouteComponent() {
           return (
             <Fragment key={expense.id}>
               {showDate && <div className='divider divider-start'>{format(expense.billedAt, 'dd MMM yyyy')}</div>}
-              <div className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto border-b'>
+              <Link
+                to='/expenses/$expenseId'
+                params={{ expenseId: expense.id }}
+                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
+              >
                 <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
                 <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
                   Account: {expense.account?.name ?? 'Unspecified'}
@@ -122,7 +127,7 @@ function RouteComponent() {
                 <p className='col-span-1 col-start-3 row-span-2 row-start-2 text-right text-2xl'>
                   ${expense.amount.toFixed(2)}
                 </p>
-              </div>
+              </Link>
             </Fragment>
           );
         })}
