@@ -14,7 +14,6 @@ import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
-import { Route as AuthenticatedExpensesCreateRouteImport } from './routes/_authenticated/expenses/create'
 import { Route as AuthenticatedExpensesExpenseIdRouteImport } from './routes/_authenticated/expenses/$expenseId'
 
 const SigninRoute = SigninRouteImport.update({
@@ -42,12 +41,6 @@ const AuthenticatedExpensesIndexRoute =
     path: '/expenses/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedExpensesCreateRoute =
-  AuthenticatedExpensesCreateRouteImport.update({
-    id: '/expenses/create',
-    path: '/expenses/create',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
 const AuthenticatedExpensesExpenseIdRoute =
   AuthenticatedExpensesExpenseIdRouteImport.update({
     id: '/expenses/$expenseId',
@@ -60,7 +53,6 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
-  '/expenses/create': typeof AuthenticatedExpensesCreateRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
 }
 export interface FileRoutesByTo {
@@ -68,7 +60,6 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
-  '/expenses/create': typeof AuthenticatedExpensesCreateRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
 }
 export interface FileRoutesById {
@@ -78,7 +69,6 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
-  '/_authenticated/expenses/create': typeof AuthenticatedExpensesCreateRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
 }
 export interface FileRouteTypes {
@@ -88,16 +78,9 @@ export interface FileRouteTypes {
     | '/signin'
     | '/dashboard'
     | '/expenses/$expenseId'
-    | '/expenses/create'
     | '/expenses'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/signin'
-    | '/dashboard'
-    | '/expenses/$expenseId'
-    | '/expenses/create'
-    | '/expenses'
+  to: '/' | '/signin' | '/dashboard' | '/expenses/$expenseId' | '/expenses'
   id:
     | '__root__'
     | '/'
@@ -105,7 +88,6 @@ export interface FileRouteTypes {
     | '/signin'
     | '/_authenticated/dashboard'
     | '/_authenticated/expenses/$expenseId'
-    | '/_authenticated/expenses/create'
     | '/_authenticated/expenses/'
   fileRoutesById: FileRoutesById
 }
@@ -152,13 +134,6 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/expenses/create': {
-      id: '/_authenticated/expenses/create'
-      path: '/expenses/create'
-      fullPath: '/expenses/create'
-      preLoaderRoute: typeof AuthenticatedExpensesCreateRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
     '/_authenticated/expenses/$expenseId': {
       id: '/_authenticated/expenses/$expenseId'
       path: '/expenses/$expenseId'
@@ -172,14 +147,12 @@ declare module '@tanstack/react-router' {
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedExpensesExpenseIdRoute: typeof AuthenticatedExpensesExpenseIdRoute
-  AuthenticatedExpensesCreateRoute: typeof AuthenticatedExpensesCreateRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedExpensesExpenseIdRoute: AuthenticatedExpensesExpenseIdRoute,
-  AuthenticatedExpensesCreateRoute: AuthenticatedExpensesCreateRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
 }
 
