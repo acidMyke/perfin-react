@@ -36,6 +36,23 @@ const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db,
   };
 });
 
+const loadExpenseDetailProcedure = protectedProcedure
+  .input(z.object({ expenseId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    const { user, db } = ctx;
+    const userId = user.id;
+    return db.query.expensesTable.findFirst({
+      where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+      columns: {
+        description: true,
+        amountCents: true,
+        billedAt: true,
+        accountId: true,
+        categoryId: true,
+      },
+    });
+  });
+
 const createExpenseProcedure = protectedProcedure
   .input(
     z.object({
@@ -168,6 +185,7 @@ const listExpenseProcedure = protectedProcedure
 
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
+  loadDetail: loadExpenseDetailProcedure,
   create: createExpenseProcedure,
   list: listExpenseProcedure,
 };

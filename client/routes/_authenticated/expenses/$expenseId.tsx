@@ -1,18 +1,22 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { useForm } from '@tanstack/react-form';
 import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
+import { useEffect } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
     return Promise.all([
+      isCreate
+        ? undefined
+        : queryClient.ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: params.expenseId })),
       queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
       // load existing detail if not create
     ]);
@@ -25,16 +29,17 @@ function RouteComponent() {
   const {
     data: { accountOptions, categoryOptions },
   } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const { data, isSuccess } = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(
     trpc.expense.create.mutationOptions({ onSuccess: () => void form.reset() }),
   );
   const form = useForm({
     defaultValues: {
-      description: undefined as string | undefined,
+      description: undefined as string | undefined | null,
       amountCents: 0.0,
       billedAt: new Date(),
-      accountId: undefined as string | undefined,
-      categoryId: undefined as string | undefined,
+      accountId: undefined as string | undefined | null,
+      categoryId: undefined as string | undefined | null,
     },
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
@@ -45,6 +50,19 @@ function RouteComponent() {
       },
     },
   });
+
+  useEffect(() => {
+    if (isSuccess && data) {
+      const { billedAt, ...rest } = data;
+      form.reset(
+        {
+          billedAt: new Date(billedAt),
+          ...rest,
+        },
+        { keepDefaultValues: true },
+      );
+    }
+  }, [isSuccess]);
 
   return (
     <form
@@ -135,7 +153,7 @@ function RouteComponent() {
             <span>Category</span>
             <select
               name={field.name}
-              value={field.state.value}
+              value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
               onSelect={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
@@ -158,7 +176,7 @@ function RouteComponent() {
             <span>Account</span>
             <select
               name={field.name}
-              value={field.state.value}
+              value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
               onSelect={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
