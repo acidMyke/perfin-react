@@ -12,7 +12,7 @@ type Option = {
   id: string;
 };
 
-const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
+const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const subjects = await db.query.subjectsTable.findMany({
     where: eq(schema.subjectsTable.belongsToId, user.id),
     orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
@@ -167,7 +167,7 @@ const listExpenseProcedure = protectedProcedure
   });
 
 export const expenseProcedures = {
-  loadCreate: loadCreateExpenseProcedure,
+  loadOptions: loadExpenseOptionsProcedure,
   create: createExpenseProcedure,
   list: listExpenseProcedure,
 };

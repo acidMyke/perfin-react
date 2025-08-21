@@ -13,7 +13,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
     return Promise.all([
-      queryClient.ensureQueryData(trpc.expense.loadCreate.queryOptions()),
+      queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
       // load existing detail if not create
     ]);
   },
@@ -24,7 +24,7 @@ function RouteComponent() {
   const isCreate = expenseId === 'create';
   const {
     data: { accountOptions, categoryOptions },
-  } = useSuspenseQuery(trpc.expense.loadCreate.queryOptions());
+  } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const createExpenseMutation = useMutation(
     trpc.expense.create.mutationOptions({ onSuccess: () => void form.reset() }),
   );
