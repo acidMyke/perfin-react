@@ -43,6 +43,8 @@
   /* effects */
   --depth: 1;
   --noise: 0;
+
+  --divider-m: 0.5rem 0px;
 }
 
 @utility container {
