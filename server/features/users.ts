@@ -6,6 +6,7 @@ import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib';
 import sessions from '../sessions';
 import { signInValidator, signUpValidator } from '../validators';
+import { addSeconds, isAfter, isBefore } from 'date-fns';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -59,6 +60,8 @@ const signInProcedure = publicProcedure
         name: true,
         passSalt: true,
         passKey: true,
+        failedAttempts: true,
+        releasedAfter: true,
       },
     });
 
@@ -74,7 +77,27 @@ const signInProcedure = publicProcedure
         });
       }
 
+      if (user.releasedAfter && isBefore(user.releasedAfter, new Date())) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          cause: new FormInputError({
+            fieldErrors: {
+              username: ['Account is locked'],
+            },
+          }),
+        });
+      }
+
       if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
+        const failedAttempts = (user.failedAttempts ?? 0) + 1;
+        let releasedAfter: Date | null = null;
+        if (failedAttempts >= 3) {
+          const duration = Math.pow(1.8, failedAttempts - 2) * 30;
+          releasedAfter = addSeconds(new Date(), duration);
+        }
+
+        await ctx.db.update(usersTable).set({ releasedAfter, failedAttempts }).where(eq(usersTable.id, user.id));
+
         throw new TRPCError({
           code: 'UNAUTHORIZED',
           cause: new FormInputError({

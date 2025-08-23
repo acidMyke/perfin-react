@@ -30,6 +30,8 @@ export const usersTable = sqliteTable('users', {
   passSalt: blob({ mode: 'buffer' }),
   passKey: blob({ mode: 'buffer' }),
   requireNewPassword: integer({ mode: 'boolean' }).default(true),
+  failedAttempts: integer(),
+  releasedAfter: integer({ mode: 'timestamp' }),
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
