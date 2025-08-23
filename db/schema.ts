@@ -1,4 +1,4 @@
-import { sql, relations, Table, type InferSelectModel } from 'drizzle-orm';
+import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
@@ -25,6 +25,19 @@ const baseColumns = () => ({
 });
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
+
+export const historiesTable = sqliteTable('histories', {
+  id: text({ length: 16 })
+    .primaryKey()
+    .$defaultFn(() => nanoid(16)),
+  tableName: text().notNull(),
+  rowId: idColumn(),
+  // Values extracted from source
+  valuesWere: text({ mode: 'json' }).notNull(),
+  versionWas: integer().notNull(),
+  wasUpdatedAt: dateColumn(),
+  wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
+});
 
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
@@ -106,20 +119,6 @@ export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
   }),
 }));
 
-type HistoryColumns = 'history' | 'updatedBy';
-
-type History = {
-  at: Date;
-  by: string;
-  values: Record<Exclude<string, BaseColumns | HistoryColumns>, any>;
-};
-
-export type TypedHistory<DataSelect> = Omit<History, 'values'> & {
-  values: {
-    [Key in Exclude<keyof DataSelect, BaseColumns | HistoryColumns>]?: DataSelect[Key];
-  };
-};
-
 export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
   description: text(),
@@ -129,7 +128,6 @@ export const expensesTable = sqliteTable('expenses', {
   accountId: nullableIdColumn().references(() => subjectsTable.id),
   categoryId: nullableIdColumn().references(() => subjectsTable.id),
   updatedBy: idColumn().references(() => usersTable.id),
-  history: text({ mode: 'json' }).notNull().default({}).$type<History[]>(),
 });
 
 export const expensesRelations = relations(expensesTable, ({ one }) => ({
@@ -146,26 +144,3 @@ export const expensesRelations = relations(expensesTable, ({ one }) => ({
     references: [subjectsTable.id],
   }),
 }));
-
-export type InferUpdateSetFromData<TData extends Record<string, any>> = Partial<
-  Omit<TData, BaseColumns | HistoryColumns>
->;
-
-export type InferUpdateSetModel<TTable extends Table> = InferUpdateSetFromData<InferSelectModel<TTable>>;
-
-export function updateHistory<
-  TData extends {
-    updatedBy: string;
-    updatedAt: Date;
-    history: History[];
-    [key: Exclude<string, BaseColumns | HistoryColumns>]: any;
-  },
->(existing: TData, setObject: InferUpdateSetFromData<TData>): TypedHistory<TData>[] {
-  const historyItem: TypedHistory<TData> = {
-    at: existing.updatedAt,
-    by: existing.updatedBy,
-    values: setObject,
-  };
-
-  return [historyItem, ...(existing.history as TypedHistory<TData>[])];
-}

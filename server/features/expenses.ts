@@ -1,12 +1,10 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import * as schema from '../../db/schema';
-import type { TypedHistory } from '../../db/schema';
 import { and, asc, desc, eq, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { parseISO } from 'date-fns/parseISO';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { endOfMonth } from 'date-fns';
+import { endOfMonth, parseISO } from 'date-fns';
 
 type Option = {
   name: string;
@@ -50,7 +48,6 @@ const loadExpenseDetailProcedure = protectedProcedure
         billedAt: true,
         accountId: true,
         categoryId: true,
-        history: true,
       },
     });
 
@@ -58,10 +55,7 @@ const loadExpenseDetailProcedure = protectedProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return {
-      ...expense,
-      history: expense.history as TypedHistory<typeof schema.expensesTable.$inferSelect>[],
-    };
+    return expense;
   });
 
 const saveExpenseProcedure = protectedProcedure
@@ -135,16 +129,18 @@ const saveExpenseProcedure = protectedProcedure
     }
 
     const isCreate = input.expenseId === 'create';
+    const values = {
+      description: input.description,
+      amountCents: input.amountCents,
+      accountId: input.accountId,
+      categoryId: input.categoryId,
+      billedAt: input.billedAt,
+      belongsToId: userId,
+      updatedBy: userId,
+    } satisfies typeof schema.expensesTable.$inferInsert;
+
     if (isCreate) {
-      await db.insert(schema.expensesTable).values({
-        description: input.description,
-        amountCents: input.amountCents,
-        accountId: input.accountId,
-        categoryId: input.categoryId,
-        billedAt: input.billedAt,
-        belongsToId: userId,
-        updatedBy: userId,
-      });
+      await db.insert(schema.expensesTable).values(values);
     } else {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
@@ -154,18 +150,29 @@ const saveExpenseProcedure = protectedProcedure
         throw new TRPCError({ code: 'NOT_FOUND' });
       }
 
-      const setObject: schema.InferUpdateSetModel<typeof schema.expensesTable> = {};
-      if (existing.description !== input.description) setObject['description'] = input.description;
-      if (existing.amountCents !== input.amountCents) setObject['amountCents'] = input.amountCents;
-      if (existing.accountId !== input.accountId) setObject['accountId'] = input.accountId;
-      if (existing.categoryId !== input.categoryId) setObject['categoryId'] = input.categoryId;
-      if (existing.billedAt !== input.billedAt) setObject['billedAt'] = input.billedAt;
+      const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
+      const valuesWere: Partial<typeof schema.expensesTable.$inferInsert> = {};
+      for (const key in values) {
+        // @ts-ignore
+        valuesWere[key] = existing[key];
+      }
 
-      const history = schema.updateHistory(existing, setObject);
-      await db
-        .update(schema.expensesTable)
-        .set({ ...setObject, history, updatedBy: userId })
-        .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)));
+      await db.transaction(tx =>
+        Promise.all([
+          tx
+            .update(schema.expensesTable)
+            .set(values)
+            .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId))),
+          tx.insert(schema.historiesTable).values({
+            tableName: schema.expensesTable._.name,
+            rowId,
+            valuesWere,
+            versionWas,
+            wasUpdatedAt,
+            wasUpdatedBy,
+          }),
+        ]),
+      );
     }
   });
 
