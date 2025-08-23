@@ -6,7 +6,7 @@ import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib';
 import sessions from '../sessions';
 import { signInValidator, signUpValidator } from '../validators';
-import { addSeconds, isAfter, isBefore } from 'date-fns';
+import { addSeconds, isBefore } from 'date-fns';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -89,7 +89,7 @@ const signInProcedure = publicProcedure
       }
 
       if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
-        const failedAttempts = (user.failedAttempts ?? 0) + 1;
+        const failedAttempts = user.failedAttempts;
         let releasedAfter: Date | null = null;
         if (failedAttempts >= 3) {
           const duration = Math.pow(1.8, failedAttempts - 2) * 30;
@@ -107,6 +107,10 @@ const signInProcedure = publicProcedure
           }),
         });
       }
+
+      ctx.wctx.waitUntil(
+        ctx.db.update(usersTable).set({ failedAttempts: 0, releasedAfter: null }).where(eq(usersTable.id, user.id)),
+      );
 
       // Create session
       await sessions.create(ctx, user.id);

@@ -30,7 +30,7 @@ export const usersTable = sqliteTable('users', {
   passSalt: blob({ mode: 'buffer' }),
   passKey: blob({ mode: 'buffer' }),
   requireNewPassword: integer({ mode: 'boolean' }).default(true),
-  failedAttempts: integer(),
+  failedAttempts: integer().notNull().default(0),
   releasedAfter: integer({ mode: 'timestamp' }),
 });
 
