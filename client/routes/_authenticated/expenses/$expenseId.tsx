@@ -30,9 +30,7 @@ function RouteComponent() {
     data: { accountOptions, categoryOptions },
   } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { data, isSuccess } = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
-  const createExpenseMutation = useMutation(
-    trpc.expense.create.mutationOptions({ onSuccess: () => void form.reset() }),
-  );
+  const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useForm({
     defaultValues: {
       description: undefined as string | undefined | null,
@@ -45,7 +43,7 @@ function RouteComponent() {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
         return handleFormMutateAsync(
-          createExpenseMutation.mutateAsync({ ...value, billedAt: value.billedAt.toISOString() }),
+          createExpenseMutation.mutateAsync({ expenseId, ...value, billedAt: value.billedAt.toISOString() }),
         );
       },
     },

@@ -1,5 +1,6 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import * as schema from '../../db/schema';
+import type { TypedHistory } from '../../db/schema';
 import { and, asc, desc, eq, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -41,7 +42,7 @@ const loadExpenseDetailProcedure = protectedProcedure
   .query(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
-    return db.query.expensesTable.findFirst({
+    const expense = await db.query.expensesTable.findFirst({
       where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
       columns: {
         description: true,
@@ -49,18 +50,38 @@ const loadExpenseDetailProcedure = protectedProcedure
         billedAt: true,
         accountId: true,
         categoryId: true,
+        history: true,
       },
     });
+
+    if (!expense) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    return {
+      ...expense,
+      history: expense.history as TypedHistory<typeof schema.expensesTable.$inferSelect>[],
+    };
   });
 
-const createExpenseProcedure = protectedProcedure
+const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
-      description: z.string().nullish(),
+      expenseId: z.string(),
+      description: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-      accountId: z.string().nullish(),
-      categoryId: z.string().nullish(),
+      accountId: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
+      categoryId: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
     }),
   )
   .mutation(async ({ input, ctx }) => {
@@ -113,14 +134,39 @@ const createExpenseProcedure = protectedProcedure
       }
     }
 
-    await db.insert(schema.expensesTable).values({
-      description: input.description,
-      amountCents: input.amountCents,
-      accountId: input.accountId,
-      categoryId: input.categoryId,
-      billedAt: input.billedAt,
-      belongsToId: userId,
-    });
+    const isCreate = input.expenseId === 'create';
+    if (isCreate) {
+      await db.insert(schema.expensesTable).values({
+        description: input.description,
+        amountCents: input.amountCents,
+        accountId: input.accountId,
+        categoryId: input.categoryId,
+        billedAt: input.billedAt,
+        belongsToId: userId,
+        updatedBy: userId,
+      });
+    } else {
+      const existing = await db.query.expensesTable.findFirst({
+        where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+      });
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      const setObject: schema.InferUpdateSetModel<typeof schema.expensesTable> = {};
+      if (existing.description !== input.description) setObject['description'] = input.description;
+      if (existing.amountCents !== input.amountCents) setObject['amountCents'] = input.amountCents;
+      if (existing.accountId !== input.accountId) setObject['accountId'] = input.accountId;
+      if (existing.categoryId !== input.categoryId) setObject['categoryId'] = input.categoryId;
+      if (existing.billedAt !== input.billedAt) setObject['billedAt'] = input.billedAt;
+
+      const history = schema.updateHistory(existing, setObject);
+      await db
+        .update(schema.expensesTable)
+        .set({ ...setObject, history, updatedBy: userId })
+        .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)));
+    }
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -186,6 +232,6 @@ const listExpenseProcedure = protectedProcedure
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
-  create: createExpenseProcedure,
+  save: saveExpenseProcedure,
   list: listExpenseProcedure,
 };
