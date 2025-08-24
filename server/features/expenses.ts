@@ -1,6 +1,6 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import * as schema from '../../db/schema';
-import { and, asc, desc, eq, gte, lt, or, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -157,22 +157,20 @@ const saveExpenseProcedure = protectedProcedure
         valuesWere[key] = existing[key];
       }
 
-      await db.transaction(tx =>
-        Promise.all([
-          tx
-            .update(schema.expensesTable)
-            .set(values)
-            .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId))),
-          tx.insert(schema.historiesTable).values({
-            tableName: schema.expensesTable._.name,
-            rowId,
-            valuesWere,
-            versionWas,
-            wasUpdatedAt,
-            wasUpdatedBy,
-          }),
-        ]),
-      );
+      await db.batch([
+        db
+          .update(schema.expensesTable)
+          .set(values)
+          .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId))),
+        db.insert(schema.historiesTable).values({
+          tableName: getTableName(schema.expensesTable),
+          rowId,
+          valuesWere,
+          versionWas,
+          wasUpdatedAt,
+          wasUpdatedBy,
+        }),
+      ]);
     }
   });
 
