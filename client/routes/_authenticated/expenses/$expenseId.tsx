@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, trpc, type RouterInputs } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { useForm } from '@tanstack/react-form';
 import { FieldError } from '../../../components/FieldError';
@@ -8,6 +8,10 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
+
+type FormValue = Omit<RouterInputs['expense']['save'], 'billedAt' | 'expenseId'> & {
+  billedAt: Date;
+};
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -34,12 +38,12 @@ function RouteComponent() {
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useForm({
     defaultValues: {
-      description: undefined as string | undefined | null,
+      description: undefined,
       amountCents: 0.0,
       billedAt: new Date(),
-      accountId: undefined as string | undefined | null,
-      categoryId: undefined as string | undefined | null,
-    },
+      accountId: undefined,
+      categoryId: undefined,
+    } as FormValue,
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
@@ -156,7 +160,7 @@ function RouteComponent() {
             <span>Category</span>
             <select
               name={field.name}
-              value={field.state.value ?? ''}
+              value={!field.state.value ? '' : typeof field.state.value === 'object' ? 'create' : field.state.value}
               className='select select-lg select-primary w-full'
               onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
@@ -168,6 +172,9 @@ function RouteComponent() {
                   {name}
                 </option>
               ))}
+              {field.state.value && typeof field.state.value === 'object' && (
+                <option value=''>{field.state.value.name}</option>
+              )}
             </select>
             <FieldError field={field} />
           </label>
@@ -179,7 +186,7 @@ function RouteComponent() {
             <span>Account</span>
             <select
               name={field.name}
-              value={field.state.value ?? ''}
+              value={!field.state.value ? '' : typeof field.state.value === 'object' ? 'create' : field.state.value}
               className='select select-lg select-primary w-full'
               onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
@@ -191,6 +198,9 @@ function RouteComponent() {
                   {name}
                 </option>
               ))}
+              {field.state.value && typeof field.state.value === 'object' && (
+                <option value=''>{field.state.value.name}</option>
+              )}
             </select>
             <FieldError field={field} />
           </label>
