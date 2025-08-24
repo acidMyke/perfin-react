@@ -4,7 +4,7 @@ import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { endOfMonth, isThisWeek, parseISO } from 'date-fns';
+import { endOfMonth, parseISO } from 'date-fns';
 
 type Option = {
   name: string;
@@ -113,11 +113,15 @@ const saveExpenseProcedure = protectedProcedure
       let categoryError = typeof input.categoryId === 'string' ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
         if (type === schema.SUBJECT_TYPE.ACCOUNT) {
-          if (input.accountId === id) accountError = undefined;
-          else accountError = 'Duplicated';
+          if (input.accountId === id) {
+            accountError = undefined;
+            accountId = id;
+          } else accountError = 'Duplicated';
         } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
-          if (input.categoryId === id) categoryError = undefined;
-          else categoryError = 'Duplicated';
+          if (input.categoryId === id) {
+            categoryError = undefined;
+            categoryId = id;
+          } else categoryError = 'Duplicated';
         }
       }
 
