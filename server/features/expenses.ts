@@ -7,16 +7,16 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
 
 type Option = {
-  name: string;
-  id: string;
+  label: string;
+  value: string;
 };
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
-  const subjects = await db.query.subjectsTable.findMany({
-    where: eq(schema.subjectsTable.belongsToId, user.id),
-    orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
-    columns: { name: true, id: true, type: true },
-  });
+  const subjects = await db
+    .select({ value: schema.subjectsTable.id, label: schema.subjectsTable.name, type: schema.subjectsTable.type })
+    .from(schema.subjectsTable)
+    .where(eq(schema.subjectsTable.belongsToId, user.id))
+    .orderBy(asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt));
 
   const accountOptions: Option[] = [];
   const categoryOptions: Option[] = [];
@@ -68,12 +68,12 @@ const saveExpenseProcedure = protectedProcedure
         .transform(v => v ?? null),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-      accountId: z
-        .union([z.string(), z.object({ name: z.string() })])
+      account: z
+        .object({ value: z.string(), label: z.string() })
         .nullish()
         .transform(v => v ?? null),
-      categoryId: z
-        .union([z.string(), z.object({ name: z.string() })])
+      category: z
+        .object({ value: z.string(), label: z.string() })
         .nullish()
         .transform(v => v ?? null),
     }),
@@ -83,42 +83,45 @@ const saveExpenseProcedure = protectedProcedure
     const userId = user.id;
     let accountId: string | null = null;
     let categoryId: string | null = null;
-    if (input.accountId || input.categoryId) {
+    if (input.account || input.category) {
+      const isSelectExistingAccount = input.account?.value !== 'create';
+      const isSelectExistingCategory = input.category?.value !== 'create';
+
       const foundIds = await db
         .select({ id: schema.subjectsTable.id, type: schema.subjectsTable.type })
         .from(schema.subjectsTable)
         .limit(2)
         .where(
           or(
-            input.accountId
+            input.account
               ? and(
-                  typeof input.accountId === 'string'
-                    ? eq(schema.subjectsTable.id, input.accountId)
-                    : eq(schema.subjectsTable.name, input.accountId.name),
+                  isSelectExistingAccount
+                    ? eq(schema.subjectsTable.id, input.account.value)
+                    : eq(schema.subjectsTable.name, input.account.label),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.ACCOUNT),
                 )
               : undefined,
-            input.categoryId
+            input.category
               ? and(
-                  typeof input.categoryId === 'string'
-                    ? eq(schema.subjectsTable.id, input.categoryId)
-                    : eq(schema.subjectsTable.name, input.categoryId.name),
+                  isSelectExistingCategory
+                    ? eq(schema.subjectsTable.id, input.category.value)
+                    : eq(schema.subjectsTable.name, input.category.label),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.CATEGORY),
                 )
               : undefined,
           ),
         );
 
-      let accountError = typeof input.accountId === 'string' ? 'Invalid' : undefined;
-      let categoryError = typeof input.categoryId === 'string' ? 'Invalid' : undefined;
+      let accountError = isSelectExistingAccount ? 'Invalid' : undefined;
+      let categoryError = isSelectExistingCategory ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
-        if (type === schema.SUBJECT_TYPE.ACCOUNT) {
-          if (input.accountId === id) {
+        if (type === schema.SUBJECT_TYPE.ACCOUNT && input.account) {
+          if (input.account.value === id) {
             accountError = undefined;
             accountId = id;
           } else accountError = 'Duplicated';
-        } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
-          if (input.categoryId === id) {
+        } else if (type === schema.SUBJECT_TYPE.CATEGORY && input.category) {
+          if (input.category.value === id) {
             categoryError = undefined;
             categoryId = id;
           } else categoryError = 'Duplicated';
@@ -138,17 +141,17 @@ const saveExpenseProcedure = protectedProcedure
       }
     }
     const subjectsToInsert: (typeof schema.subjectsTable.$inferInsert)[] = [];
-    if (input.accountId && typeof input.accountId === 'object') {
+    if (input.account?.value === 'create') {
       subjectsToInsert.push({
-        name: input.accountId.name,
+        name: input.account.label,
         belongsToId: userId,
         type: schema.SUBJECT_TYPE.ACCOUNT,
       });
     }
 
-    if (input.categoryId && typeof input.categoryId === 'object') {
+    if (input.category?.value === 'create') {
       subjectsToInsert.push({
-        name: input.categoryId.name,
+        name: input.category.label,
         belongsToId: userId,
         type: schema.SUBJECT_TYPE.CATEGORY,
       });

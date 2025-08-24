@@ -8,10 +8,7 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-
-type FormValue = Omit<RouterInputs['expense']['save'], 'billedAt' | 'expenseId'> & {
-  billedAt: Date;
-};
+import CreatableSelect from 'react-select/creatable';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -31,28 +28,35 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
-  const {
-    data: { accountOptions, categoryOptions },
-  } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const { accountOptions, categoryOptions } = optionsData;
   const { data, isSuccess } = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useForm({
     defaultValues: {
-      description: undefined,
+      description: undefined as undefined | null | string,
       amountCents: 0.0,
       billedAt: new Date(),
-      accountId: undefined,
-      categoryId: undefined,
-    } as FormValue,
+      account: undefined as undefined | (typeof accountOptions)[number],
+      category: undefined as undefined | (typeof categoryOptions)[number],
+    },
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
+        const { billedAt, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
-          createExpenseMutation.mutateAsync({ expenseId, ...value, billedAt: value.billedAt.toISOString() }),
+          createExpenseMutation.mutateAsync({
+            expenseId,
+            ...otherValues,
+            billedAt: billedAt.toISOString(),
+          }),
         );
         if (formError) return formError;
         queryClient.invalidateQueries(trpc.expense.list.queryFilter());
         queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId }));
+        if ([value.account?.value, value.category?.value].includes('create')) {
+          queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter());
+        }
         navigate({ to: '/expenses' });
       },
     },
@@ -60,10 +64,14 @@ function RouteComponent() {
 
   useEffect(() => {
     if (isSuccess && data) {
-      const { billedAt, ...rest } = data;
+      const { billedAt, accountId, categoryId, ...rest } = data;
+      const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
+      const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
       form.reset(
         {
           billedAt: new Date(billedAt),
+          account,
+          category,
           ...rest,
         },
         { keepDefaultValues: true },
@@ -154,55 +162,76 @@ function RouteComponent() {
           </label>
         )}
       </form.Field>
-      <form.Field name='categoryId'>
+      <form.Field name='category'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-2'>
-            <span>Category</span>
-            <select
-              name={field.name}
-              value={!field.state.value ? '' : typeof field.state.value === 'object' ? 'create' : field.state.value}
-              className='select select-lg select-primary w-full'
-              onChange={e =>
-                e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
-              }
-            >
-              <option value=''>None</option>
-              {categoryOptions.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-              {field.state.value && typeof field.state.value === 'object' && (
-                <option value=''>{field.state.value.name}</option>
-              )}
-            </select>
-            <FieldError field={field} />
+          <label htmlFor={field.name} className='floating-label'>
+            <span className='text-lg'>Category</span>
+            <CreatableSelect
+              options={categoryOptions}
+              placeholder='Unspecified'
+              classNamePrefix='react-select-lg'
+              unstyled
+              maxMenuHeight={124}
+              isClearable
+              isSearchable
+              value={field.state.value}
+              getNewOptionData={label => ({ label, value: 'create' })}
+              createOptionPosition='first'
+              formatCreateLabel={label => 'Create: ' + label}
+              onChange={(v, meta) => {
+                if (v === null) {
+                  field.handleChange(undefined);
+                  return;
+                }
+                if (meta.action === 'create-option') {
+                  const createIndex = categoryOptions.findIndex(({ value }) => value === 'create');
+                  const newCategoryOptions = [...categoryOptions];
+                  if (createIndex > -1) newCategoryOptions[createIndex] = v;
+                  else newCategoryOptions.push(v);
+                  queryClient.setQueryData(trpc.expense.loadOptions.queryKey(), {
+                    categoryOptions: newCategoryOptions,
+                    accountOptions,
+                  });
+                }
+                field.handleChange(v);
+              }}
+            />
           </label>
         )}
       </form.Field>
-      <form.Field name='accountId'>
+      <form.Field name='account'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-2'>
-            <span>Account</span>
-            <select
-              name={field.name}
-              value={!field.state.value ? '' : typeof field.state.value === 'object' ? 'create' : field.state.value}
-              className='select select-lg select-primary w-full'
-              onChange={e =>
-                e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
-              }
-            >
-              <option value=''>None</option>
-              {accountOptions.map(({ id, name }) => (
-                <option key={id} value={id}>
-                  {name}
-                </option>
-              ))}
-              {field.state.value && typeof field.state.value === 'object' && (
-                <option value=''>{field.state.value.name}</option>
-              )}
-            </select>
-            <FieldError field={field} />
+          <label htmlFor={field.name} className='floating-label mt-4'>
+            <span className='text-lg'>Account</span>
+            <CreatableSelect
+              options={accountOptions}
+              placeholder='Unspecified'
+              classNamePrefix='react-select-lg'
+              unstyled
+              maxMenuHeight={124}
+              isClearable
+              isSearchable
+              value={field.state.value}
+              getNewOptionData={label => ({ label, value: 'create' })}
+              createOptionPosition='first'
+              formatCreateLabel={label => 'Create: ' + label}
+              onChange={(v, meta) => {
+                if (v === null) {
+                  return;
+                }
+                if (meta.action === 'create-option') {
+                  const createIndex = accountOptions.findIndex(({ value }) => value === 'create');
+                  const newAccountOptions = [...accountOptions];
+                  if (createIndex > -1) newAccountOptions[createIndex] = v;
+                  else newAccountOptions.push(v);
+                  queryClient.setQueryData(trpc.expense.loadOptions.queryKey(), {
+                    accountOptions: newAccountOptions,
+                    categoryOptions,
+                  });
+                }
+                field.handleChange(v);
+              }}
+            />
           </label>
         )}
       </form.Field>
