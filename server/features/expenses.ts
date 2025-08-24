@@ -135,12 +135,10 @@ const saveExpenseProcedure = protectedProcedure
       accountId: input.accountId,
       categoryId: input.categoryId,
       billedAt: input.billedAt,
-      belongsToId: userId,
-      updatedBy: userId,
-    } satisfies typeof schema.expensesTable.$inferInsert;
+    } satisfies Omit<typeof schema.expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {
-      await db.insert(schema.expensesTable).values(values);
+      await db.insert(schema.expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
     } else {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
