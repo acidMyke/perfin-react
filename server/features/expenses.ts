@@ -4,7 +4,7 @@ import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { endOfMonth, parseISO } from 'date-fns';
+import { endOfMonth, isThisWeek, parseISO } from 'date-fns';
 
 type Option = {
   name: string;
@@ -69,11 +69,11 @@ const saveExpenseProcedure = protectedProcedure
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       accountId: z
-        .string()
+        .union([z.string(), z.object({ name: z.string() })])
         .nullish()
         .transform(v => v ?? null),
       categoryId: z
-        .string()
+        .union([z.string(), z.object({ name: z.string() })])
         .nullish()
         .transform(v => v ?? null),
     }),
@@ -81,7 +81,8 @@ const saveExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
-
+    let accountId: string | null = null;
+    let categoryId: string | null = null;
     if (input.accountId || input.categoryId) {
       const foundIds = await db
         .select({ id: schema.subjectsTable.id, type: schema.subjectsTable.type })
@@ -91,40 +92,73 @@ const saveExpenseProcedure = protectedProcedure
           or(
             input.accountId
               ? and(
-                  eq(schema.subjectsTable.id, input.accountId),
+                  typeof input.accountId === 'string'
+                    ? eq(schema.subjectsTable.id, input.accountId)
+                    : eq(schema.subjectsTable.name, input.accountId.name),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.ACCOUNT),
                 )
               : undefined,
             input.categoryId
               ? and(
-                  eq(schema.subjectsTable.id, input.categoryId),
+                  typeof input.categoryId === 'string'
+                    ? eq(schema.subjectsTable.id, input.categoryId)
+                    : eq(schema.subjectsTable.name, input.categoryId.name),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.CATEGORY),
                 )
               : undefined,
           ),
         );
 
-      let hasAccountId = input.accountId == undefined;
-      let hasCategoryId = input.categoryId == undefined;
+      let accountError = typeof input.accountId === 'string' ? 'Invalid' : undefined;
+      let categoryError = typeof input.categoryId === 'string' ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
-        if (input.accountId == id && type === 'account') {
-          hasAccountId = true;
-        }
-        if (input.categoryId == id && type === 'category') {
-          hasCategoryId = true;
+        if (type === schema.SUBJECT_TYPE.ACCOUNT) {
+          if (input.accountId === id) accountError = undefined;
+          else accountError = 'Duplicated';
+        } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
+          if (input.categoryId === id) categoryError = undefined;
+          else categoryError = 'Duplicated';
         }
       }
 
-      if (!hasAccountId || !hasCategoryId) {
+      if (accountError || categoryError) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           cause: new FormInputError({
             fieldErrors: {
-              accountId: !hasAccountId ? ['Invalid account'] : undefined,
-              categoryId: !hasCategoryId ? ['Invalid category'] : undefined,
+              accountId: accountError ? [accountError + '  Account'] : undefined,
+              categoryId: categoryError ? [categoryError + '  Category'] : undefined,
             },
           }),
         });
+      }
+    }
+    const subjectsToInsert: (typeof schema.subjectsTable.$inferInsert)[] = [];
+    if (input.accountId && typeof input.accountId === 'object') {
+      subjectsToInsert.push({
+        name: input.accountId.name,
+        belongsToId: userId,
+        type: schema.SUBJECT_TYPE.ACCOUNT,
+      });
+    }
+
+    if (input.categoryId && typeof input.categoryId === 'object') {
+      subjectsToInsert.push({
+        name: input.categoryId.name,
+        belongsToId: userId,
+        type: schema.SUBJECT_TYPE.CATEGORY,
+      });
+    }
+
+    if (subjectsToInsert.length > 0) {
+      const insertedSubjects = await db
+        .insert(schema.subjectsTable)
+        .values(subjectsToInsert)
+        .returning({ id: schema.subjectsTable.id, type: schema.subjectsTable.type });
+
+      for (const newSubject of insertedSubjects) {
+        if (newSubject.type === schema.SUBJECT_TYPE.ACCOUNT) accountId = newSubject.id;
+        if (newSubject.type === schema.SUBJECT_TYPE.CATEGORY) categoryId = newSubject.id;
       }
     }
 
@@ -132,8 +166,8 @@ const saveExpenseProcedure = protectedProcedure
     const values = {
       description: input.description,
       amountCents: input.amountCents,
-      accountId: input.accountId,
-      categoryId: input.categoryId,
+      accountId: accountId,
+      categoryId: categoryId,
       billedAt: input.billedAt,
     } satisfies Omit<typeof schema.expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
