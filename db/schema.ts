@@ -24,6 +24,21 @@ const baseColumns = () => ({
   updatedAt: updatedAtColumn(),
 });
 
+export type BaseColumns = keyof ReturnType<typeof baseColumns>;
+
+export const historiesTable = sqliteTable('histories', {
+  id: text({ length: 16 })
+    .primaryKey()
+    .$defaultFn(() => nanoid(16)),
+  tableName: text().notNull(),
+  rowId: idColumn(),
+  // Values extracted from source
+  valuesWere: text({ mode: 'json' }).notNull(),
+  versionWas: integer().notNull(),
+  wasUpdatedAt: dateColumn(),
+  wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
+});
+
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
   name: text(),
@@ -112,6 +127,7 @@ export const expensesTable = sqliteTable('expenses', {
   belongsToId: idColumn().references(() => usersTable.id),
   accountId: nullableIdColumn().references(() => subjectsTable.id),
   categoryId: nullableIdColumn().references(() => subjectsTable.id),
+  updatedBy: idColumn().references(() => usersTable.id),
 });
 
 export const expensesRelations = relations(expensesTable, ({ one }) => ({

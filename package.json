@@ -10,7 +10,8 @@
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts",
     "migration:generate": "drizzle-kit generate",
     "migration:apply": "wrangler d1 migrations apply perfin-staging --local",
-    "migration:apply-staging": "wrangler d1 migrations apply perfin-staging --remote"
+    "migration:apply-staging": "wrangler d1 migrations apply perfin-staging --remote",
+    "runsql": "wrangler d1 execute perfin-staging --local --command"
   },
   "dependencies": {
     "@tanstack/react-form": "^1.17.0",

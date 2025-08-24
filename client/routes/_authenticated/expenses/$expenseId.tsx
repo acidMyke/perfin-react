@@ -1,50 +1,71 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { useForm } from '@tanstack/react-form';
 import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
+import { useEffect } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
     return Promise.all([
-      queryClient.ensureQueryData(trpc.expense.loadCreate.queryOptions()),
+      isCreate
+        ? undefined
+        : queryClient.ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: params.expenseId })),
+      queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
       // load existing detail if not create
     ]);
   },
 });
 
 function RouteComponent() {
+  const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
   const {
     data: { accountOptions, categoryOptions },
-  } = useSuspenseQuery(trpc.expense.loadCreate.queryOptions());
-  const createExpenseMutation = useMutation(
-    trpc.expense.create.mutationOptions({ onSuccess: () => void form.reset() }),
-  );
+  } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const { data, isSuccess } = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
+  const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useForm({
     defaultValues: {
-      description: undefined as string | undefined,
+      description: undefined as string | undefined | null,
       amountCents: 0.0,
       billedAt: new Date(),
-      accountId: undefined as string | undefined,
-      categoryId: undefined as string | undefined,
+      accountId: undefined as string | undefined | null,
+      categoryId: undefined as string | undefined | null,
     },
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
-        return handleFormMutateAsync(
-          createExpenseMutation.mutateAsync({ ...value, billedAt: value.billedAt.toISOString() }),
+        const formError = await handleFormMutateAsync(
+          createExpenseMutation.mutateAsync({ expenseId, ...value, billedAt: value.billedAt.toISOString() }),
         );
+        if (formError) return formError;
+        queryClient.invalidateQueries(trpc.expense.list.queryFilter());
+        queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId }));
+        navigate({ to: '/expenses' });
       },
     },
   });
+
+  useEffect(() => {
+    if (isSuccess && data) {
+      const { billedAt, ...rest } = data;
+      form.reset(
+        {
+          billedAt: new Date(billedAt),
+          ...rest,
+        },
+        { keepDefaultValues: true },
+      );
+    }
+  }, [isSuccess]);
 
   return (
     <form
@@ -67,7 +88,7 @@ function RouteComponent() {
                 id={field.name}
                 name={field.name}
                 placeholder='Amount'
-                value={(field.state.value / 100).toFixed(2).padStart(5, '0')}
+                value={(field.state.value / 100).toFixed(2)}
                 onChange={e =>
                   !isNaN(e.target.valueAsNumber) &&
                   field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
@@ -86,7 +107,7 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='description'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Description</span>
             <input
               type='text'
@@ -96,7 +117,7 @@ function RouteComponent() {
               className='input input-primary input-lg w-full'
               value={field.state.value ?? ''}
               onChange={e =>
-                field.state.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value)
+                e.target.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value.toUpperCase())
               }
             />
             <FieldError field={field} />
@@ -105,7 +126,7 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -131,13 +152,13 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='categoryId'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Category</span>
             <select
               name={field.name}
-              value={field.state.value}
+              value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
-              onSelect={e =>
+              onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
               }
             >
@@ -154,13 +175,13 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='accountId'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Account</span>
             <select
               name={field.name}
-              value={field.state.value}
+              value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
-              onSelect={e =>
+              onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
               }
             >

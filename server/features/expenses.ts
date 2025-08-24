@@ -1,18 +1,17 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import * as schema from '../../db/schema';
-import { and, asc, desc, eq, gte, lt, or, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { parseISO } from 'date-fns/parseISO';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { endOfMonth } from 'date-fns';
+import { endOfMonth, parseISO } from 'date-fns';
 
 type Option = {
   name: string;
   id: string;
 };
 
-const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
+const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const subjects = await db.query.subjectsTable.findMany({
     where: eq(schema.subjectsTable.belongsToId, user.id),
     orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
@@ -36,14 +35,47 @@ const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, 
   };
 });
 
-const createExpenseProcedure = protectedProcedure
+const loadExpenseDetailProcedure = protectedProcedure
+  .input(z.object({ expenseId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    const { user, db } = ctx;
+    const userId = user.id;
+    const expense = await db.query.expensesTable.findFirst({
+      where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+      columns: {
+        description: true,
+        amountCents: true,
+        billedAt: true,
+        accountId: true,
+        categoryId: true,
+      },
+    });
+
+    if (!expense) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    return expense;
+  });
+
+const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
-      description: z.string().nullish(),
+      expenseId: z.string(),
+      description: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-      accountId: z.string().nullish(),
-      categoryId: z.string().nullish(),
+      accountId: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
+      categoryId: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
     }),
   )
   .mutation(async ({ input, ctx }) => {
@@ -96,14 +128,50 @@ const createExpenseProcedure = protectedProcedure
       }
     }
 
-    await db.insert(schema.expensesTable).values({
+    const isCreate = input.expenseId === 'create';
+    const values = {
       description: input.description,
       amountCents: input.amountCents,
       accountId: input.accountId,
       categoryId: input.categoryId,
       billedAt: input.billedAt,
       belongsToId: userId,
-    });
+      updatedBy: userId,
+    } satisfies typeof schema.expensesTable.$inferInsert;
+
+    if (isCreate) {
+      await db.insert(schema.expensesTable).values(values);
+    } else {
+      const existing = await db.query.expensesTable.findFirst({
+        where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+      });
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
+      const valuesWere: Partial<typeof schema.expensesTable.$inferInsert> = {};
+      for (const key in values) {
+        // @ts-ignore
+        valuesWere[key] = existing[key];
+      }
+
+      await db.batch([
+        db
+          .update(schema.expensesTable)
+          .set(values)
+          .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId))),
+        db.insert(schema.historiesTable).values({
+          tableName: getTableName(schema.expensesTable),
+          rowId,
+          valuesWere,
+          versionWas,
+          wasUpdatedAt,
+          wasUpdatedBy,
+        }),
+      ]);
+    }
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -167,7 +235,8 @@ const listExpenseProcedure = protectedProcedure
   });
 
 export const expenseProcedures = {
-  loadCreate: loadCreateExpenseProcedure,
-  create: createExpenseProcedure,
+  loadOptions: loadExpenseOptionsProcedure,
+  loadDetail: loadExpenseDetailProcedure,
+  save: saveExpenseProcedure,
   list: listExpenseProcedure,
 };
