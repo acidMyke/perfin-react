@@ -1,5 +1,5 @@
 import { FormInputError, protectedProcedure } from '../trpc';
-import * as schema from '../../db/schema';
+import { expensesTable, historiesTable, SUBJECT_TYPE, subjectsTable } from '../../db/schema';
 import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -7,24 +7,24 @@ import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
 
 type Option = {
-  name: string;
-  id: string;
+  label: string;
+  value: string;
 };
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
-  const subjects = await db.query.subjectsTable.findMany({
-    where: eq(schema.subjectsTable.belongsToId, user.id),
-    orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
-    columns: { name: true, id: true, type: true },
-  });
+  const subjects = await db
+    .select({ value: subjectsTable.id, label: subjectsTable.name, type: subjectsTable.type })
+    .from(subjectsTable)
+    .where(eq(subjectsTable.belongsToId, user.id))
+    .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
 
   const accountOptions: Option[] = [];
   const categoryOptions: Option[] = [];
 
   for (const { type, ...option } of subjects) {
-    if (type === schema.SUBJECT_TYPE.ACCOUNT) {
+    if (type === SUBJECT_TYPE.ACCOUNT) {
       accountOptions.push(option);
-    } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
+    } else if (type === SUBJECT_TYPE.CATEGORY) {
       categoryOptions.push(option);
     }
   }
@@ -41,7 +41,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
     const expense = await db.query.expensesTable.findFirst({
-      where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+      where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
       columns: {
         description: true,
         amountCents: true,
@@ -68,12 +68,12 @@ const saveExpenseProcedure = protectedProcedure
         .transform(v => v ?? null),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-      accountId: z
-        .string()
+      account: z
+        .object({ value: z.string(), label: z.string() })
         .nullish()
         .transform(v => v ?? null),
-      categoryId: z
-        .string()
+      category: z
+        .object({ value: z.string(), label: z.string() })
         .nullish()
         .transform(v => v ?? null),
     }),
@@ -81,50 +81,93 @@ const saveExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
+    let accountId: string | null = null;
+    let categoryId: string | null = null;
+    if (input.account || input.category) {
+      const isSelectExistingAccount = input.account?.value !== 'create';
+      const isSelectExistingCategory = input.category?.value !== 'create';
 
-    if (input.accountId || input.categoryId) {
       const foundIds = await db
-        .select({ id: schema.subjectsTable.id, type: schema.subjectsTable.type })
-        .from(schema.subjectsTable)
+        .select({ id: subjectsTable.id, type: subjectsTable.type })
+        .from(subjectsTable)
         .limit(2)
         .where(
           or(
-            input.accountId
+            input.account
               ? and(
-                  eq(schema.subjectsTable.id, input.accountId),
-                  eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.ACCOUNT),
+                  isSelectExistingAccount
+                    ? eq(subjectsTable.id, input.account.value)
+                    : eq(subjectsTable.name, input.account.label),
+                  eq(subjectsTable.type, SUBJECT_TYPE.ACCOUNT),
+                  eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
-            input.categoryId
+            input.category
               ? and(
-                  eq(schema.subjectsTable.id, input.categoryId),
-                  eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.CATEGORY),
+                  isSelectExistingCategory
+                    ? eq(subjectsTable.id, input.category.value)
+                    : eq(subjectsTable.name, input.category.label),
+                  eq(subjectsTable.type, SUBJECT_TYPE.CATEGORY),
+                  eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
           ),
         );
 
-      let hasAccountId = input.accountId == undefined;
-      let hasCategoryId = input.categoryId == undefined;
+      let accountError = isSelectExistingAccount ? 'Invalid' : undefined;
+      let categoryError = isSelectExistingCategory ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
-        if (input.accountId == id && type === 'account') {
-          hasAccountId = true;
-        }
-        if (input.categoryId == id && type === 'category') {
-          hasCategoryId = true;
+        if (type === SUBJECT_TYPE.ACCOUNT && input.account) {
+          if (input.account.value === id) {
+            accountError = undefined;
+            accountId = id;
+          } else accountError = 'Duplicated';
+        } else if (type === SUBJECT_TYPE.CATEGORY && input.category) {
+          if (input.category.value === id) {
+            categoryError = undefined;
+            categoryId = id;
+          } else categoryError = 'Duplicated';
         }
       }
 
-      if (!hasAccountId || !hasCategoryId) {
+      if (accountError || categoryError) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           cause: new FormInputError({
             fieldErrors: {
-              accountId: !hasAccountId ? ['Invalid account'] : undefined,
-              categoryId: !hasCategoryId ? ['Invalid category'] : undefined,
+              accountId: accountError ? [accountError + '  Account'] : undefined,
+              categoryId: categoryError ? [categoryError + '  Category'] : undefined,
             },
           }),
         });
+      }
+    }
+    const subjectsToInsert: (typeof subjectsTable.$inferInsert)[] = [];
+    if (input.account?.value === 'create') {
+      subjectsToInsert.push({
+        name: input.account.label,
+        belongsToId: userId,
+        type: SUBJECT_TYPE.ACCOUNT,
+      });
+    }
+
+    if (input.category?.value === 'create') {
+      subjectsToInsert.push({
+        name: input.category.label,
+        belongsToId: userId,
+        type: SUBJECT_TYPE.CATEGORY,
+      });
+    }
+
+    if (subjectsToInsert.length > 0) {
+      const insertedSubjects = await db
+        .insert(subjectsTable)
+        .values(subjectsToInsert)
+        .returning({ id: subjectsTable.id, type: subjectsTable.type });
+
+      for (const newSubject of insertedSubjects) {
+        if (newSubject.type === SUBJECT_TYPE.ACCOUNT) accountId = newSubject.id;
+        if (newSubject.type === SUBJECT_TYPE.CATEGORY) categoryId = newSubject.id;
       }
     }
 
@@ -132,16 +175,16 @@ const saveExpenseProcedure = protectedProcedure
     const values = {
       description: input.description,
       amountCents: input.amountCents,
-      accountId: input.accountId,
-      categoryId: input.categoryId,
+      accountId: accountId,
+      categoryId: categoryId,
       billedAt: input.billedAt,
-    } satisfies Omit<typeof schema.expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
+    } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {
-      await db.insert(schema.expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
+      await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
     } else {
       const existing = await db.query.expensesTable.findFirst({
-        where: and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId)),
+        where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
       });
 
       if (!existing) {
@@ -149,7 +192,7 @@ const saveExpenseProcedure = protectedProcedure
       }
 
       const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
-      const valuesWere: Partial<typeof schema.expensesTable.$inferInsert> = {};
+      const valuesWere: Partial<typeof expensesTable.$inferInsert> = {};
       for (const key in values) {
         // @ts-ignore
         valuesWere[key] = existing[key];
@@ -157,11 +200,11 @@ const saveExpenseProcedure = protectedProcedure
 
       await db.batch([
         db
-          .update(schema.expensesTable)
+          .update(expensesTable)
           .set(values)
-          .where(and(eq(schema.expensesTable.belongsToId, userId), eq(schema.expensesTable.id, input.expenseId))),
-        db.insert(schema.historiesTable).values({
-          tableName: getTableName(schema.expensesTable),
+          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
+        db.insert(historiesTable).values({
+          tableName: getTableName(expensesTable),
           rowId,
           valuesWere,
           versionWas,
@@ -187,45 +230,39 @@ const listExpenseProcedure = protectedProcedure
     const filterEnd = endOfMonth(filterStart);
 
     const filterList: SQL[] = [
-      eq(schema.expensesTable.belongsToId, userId),
-      gte(schema.expensesTable.billedAt, filterStart),
-      lt(schema.expensesTable.billedAt, filterEnd),
+      eq(expensesTable.belongsToId, userId),
+      gte(expensesTable.billedAt, filterStart),
+      lt(expensesTable.billedAt, filterEnd),
     ];
 
-    const accountSubject = alias(schema.subjectsTable, 'account');
-    const categorySubject = alias(schema.subjectsTable, 'category');
+    const accountSubject = alias(subjectsTable, 'account');
+    const categorySubject = alias(subjectsTable, 'category');
     const expenses = await db
       .select({
-        id: schema.expensesTable.id,
-        description: schema.expensesTable.description,
-        amount: sql<number>`ROUND(${schema.expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
-        // amountCents: schema.expensesTable.amountCents,
-        billedAt: schema.expensesTable.billedAt,
+        id: expensesTable.id,
+        description: expensesTable.description,
+        amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
+        // amountCents: expensesTable.amountCents,
+        billedAt: expensesTable.billedAt,
         account: {
           name: accountSubject.name,
         },
         category: {
           name: categorySubject.name,
         },
-        createdAt: schema.expensesTable.createdAt,
+        createdAt: expensesTable.createdAt,
       })
-      .from(schema.expensesTable)
+      .from(expensesTable)
       .leftJoin(
         accountSubject,
-        and(
-          eq(schema.expensesTable.accountId, accountSubject.id),
-          eq(accountSubject.type, schema.SUBJECT_TYPE.ACCOUNT),
-        ),
+        and(eq(expensesTable.accountId, accountSubject.id), eq(accountSubject.type, SUBJECT_TYPE.ACCOUNT)),
       )
       .leftJoin(
         categorySubject,
-        and(
-          eq(schema.expensesTable.categoryId, categorySubject.id),
-          eq(categorySubject.type, schema.SUBJECT_TYPE.CATEGORY),
-        ),
+        and(eq(expensesTable.categoryId, categorySubject.id), eq(categorySubject.type, SUBJECT_TYPE.CATEGORY)),
       )
       .where(and(...filterList))
-      .orderBy(desc(schema.expensesTable.billedAt));
+      .orderBy(desc(expensesTable.billedAt));
 
     return {
       expenses,
