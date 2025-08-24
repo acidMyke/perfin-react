@@ -99,6 +99,7 @@ const saveExpenseProcedure = protectedProcedure
                     ? eq(schema.subjectsTable.id, input.account.value)
                     : eq(schema.subjectsTable.name, input.account.label),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.ACCOUNT),
+                  eq(schema.subjectsTable.belongsToId, userId),
                 )
               : undefined,
             input.category
@@ -107,6 +108,7 @@ const saveExpenseProcedure = protectedProcedure
                     ? eq(schema.subjectsTable.id, input.category.value)
                     : eq(schema.subjectsTable.name, input.category.label),
                   eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.CATEGORY),
+                  eq(schema.subjectsTable.belongsToId, userId),
                 )
               : undefined,
           ),
