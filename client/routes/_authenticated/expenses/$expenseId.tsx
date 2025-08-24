@@ -24,6 +24,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
 });
 
 function RouteComponent() {
+  const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
   const {
@@ -42,9 +43,13 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
-        return handleFormMutateAsync(
+        const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({ expenseId, ...value, billedAt: value.billedAt.toISOString() }),
         );
+        if (formError) return formError;
+        queryClient.invalidateQueries(trpc.expense.list.queryFilter());
+        queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId }));
+        navigate({ to: '/expenses' });
       },
     },
   });
@@ -112,7 +117,7 @@ function RouteComponent() {
               className='input input-primary input-lg w-full'
               value={field.state.value ?? ''}
               onChange={e =>
-                e.target.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value)
+                e.target.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value.toUpperCase())
               }
             />
             <FieldError field={field} />
