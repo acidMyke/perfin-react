@@ -83,7 +83,7 @@ function RouteComponent() {
                 id={field.name}
                 name={field.name}
                 placeholder='Amount'
-                value={(field.state.value / 100).toFixed(2).padStart(5, '0')}
+                value={(field.state.value / 100).toFixed(2)}
                 onChange={e =>
                   !isNaN(e.target.valueAsNumber) &&
                   field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
@@ -102,7 +102,7 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='description'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Description</span>
             <input
               type='text'
@@ -112,7 +112,7 @@ function RouteComponent() {
               className='input input-primary input-lg w-full'
               value={field.state.value ?? ''}
               onChange={e =>
-                field.state.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value)
+                e.target.value === '' ? field.handleChange(undefined) : field.handleChange(e.target.value)
               }
             />
             <FieldError field={field} />
@@ -121,7 +121,7 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -147,13 +147,13 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='categoryId'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Category</span>
             <select
               name={field.name}
               value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
-              onSelect={e =>
+              onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
               }
             >
@@ -170,13 +170,13 @@ function RouteComponent() {
       </form.Field>
       <form.Field name='accountId'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Account</span>
             <select
               name={field.name}
               value={field.state.value ?? ''}
               className='select select-lg select-primary w-full'
-              onSelect={e =>
+              onChange={e =>
                 e.currentTarget.value ? field.handleChange(e.currentTarget.value) : field.handleChange(undefined)
               }
             >
