@@ -65,11 +65,9 @@ function RouteComponent() {
     >
       <h1 className='mt-20 text-center text-3xl font-black'>Sign Up</h1>
       <form.AppForm>
-        <form.AppField name='username'>
-          {({ TextInput }) => <TextInput type='text' label='Username' marginTop={8} />}
-        </form.AppField>
+        <form.AppField name='username'>{({ TextInput }) => <TextInput type='text' label='Username' />}</form.AppField>
         <form.AppField name='password'>
-          {({ TextInput }) => <TextInput type='password' label='Password' marginTop={8} />}
+          {({ TextInput }) => <TextInput type='password' label='Password' />}
         </form.AppField>
         <form.SubmitButton
           label='Sign Up'
