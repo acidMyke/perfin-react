@@ -29,7 +29,7 @@ export function FieldError({ field, takeOne = false }: FieldErorProps) {
   }
 
   return (
-    <p role='alert' className='text-error h-[1em]'>
+    <p role='alert' className='text-error h-[1em] text-sm'>
       {errMsgs.join(', ')}
     </p>
   );
