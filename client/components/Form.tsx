@@ -1,8 +1,10 @@
 import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
 import { FieldError } from './FieldError';
-import { twMerge } from 'tailwind-merge';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
+import { useState } from 'react';
+import CreatableSelect from 'react-select/creatable';
+import { twMerge } from '../twMerge';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 
@@ -33,6 +35,53 @@ function TextInput(props: TextInputProps) {
         onChange={e => field.handleChange(() => e.target.value)}
       />
       <FieldError field={field} />
+    </label>
+  );
+}
+
+type Option = {
+  label: string;
+  value: string;
+};
+
+type CreatableSelectProps = {
+  label: string;
+  options: Option[];
+  placeholder?: string;
+  maxMenuHeight?: number;
+  containerCn?: string;
+  labelCn?: string;
+};
+
+function ComboBox(props: CreatableSelectProps) {
+  const { label, options, placeholder = 'Unspecified', maxMenuHeight = 124, containerCn, labelCn } = props;
+  const field = useFieldContext<Option | undefined>();
+  const [createOption, setCreateOption] = useState<Option | undefined>();
+
+  return (
+    <label htmlFor={field.name} className={cn('floating-label', containerCn)}>
+      <span className={cn('text-lg', labelCn)}>{label}</span>
+      <CreatableSelect
+        options={createOption ? [...options, createOption] : options}
+        placeholder={placeholder}
+        classNamePrefix='react-select-lg'
+        unstyled
+        maxMenuHeight={maxMenuHeight}
+        isClearable
+        isSearchable
+        value={field.state.value}
+        getNewOptionData={label => ({ label, value: 'create' })}
+        createOptionPosition='first'
+        formatCreateLabel={label => 'Create: ' + label}
+        onChange={(v, meta) => {
+          if (v === null) {
+            field.handleChange(undefined);
+            return;
+          }
+          if (meta.action === 'create-option') setCreateOption(v);
+          field.handleChange(v);
+        }}
+      />
     </label>
   );
 }
@@ -76,5 +125,6 @@ export const { useAppForm } = createFormHook({
   },
   fieldComponents: {
     TextInput,
+    ComboBox,
   },
 });
