@@ -16,10 +16,11 @@ type TextInputProps = {
   containerCn?: string;
   labelCn?: string;
   inputCn?: string;
+  transform?: 'uppercase';
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn } = props;
+  const { label, type, containerCn, labelCn, inputCn, transform } = props;
   const field = useFieldContext<string>();
 
   return (
@@ -32,7 +33,13 @@ function TextInput(props: TextInputProps) {
         placeholder={label}
         className={cn('input input-primary input-xl w-full', inputCn)}
         value={field.state.value}
-        onChange={e => field.handleChange(() => e.target.value)}
+        onChange={e => {
+          let value = e.target.value;
+          if (transform === 'uppercase') {
+            value = value.toUpperCase();
+          }
+          field.handleChange(() => value);
+        }}
       />
       <FieldError field={field} />
     </label>

@@ -120,7 +120,9 @@ function RouteComponent() {
           )}
         </form.Field>
         <form.AppField name='description'>
-          {({ TextInput }) => <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' />}
+          {({ TextInput }) => (
+            <TextInput type='text' label='Description' containerCn='mt-2' inputCn='input-lg' transform='uppercase' />
+          )}
         </form.AppField>
         <form.Field name='billedAt'>
           {field => (
