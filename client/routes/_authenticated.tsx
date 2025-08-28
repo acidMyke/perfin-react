@@ -27,7 +27,6 @@ const options = linkOptions([
     to: '/expenses',
     label: 'Expenses',
     Icon: ScrollText,
-    activeOptions: {},
   },
   {
     to: '/settings',
