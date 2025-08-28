@@ -1,14 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc, type RouterInputs } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { useForm } from '@tanstack/react-form';
 import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-import CreatableSelect from 'react-select/creatable';
 import { useAppForm } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
