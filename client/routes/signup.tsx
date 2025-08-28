@@ -71,7 +71,7 @@ function RouteComponent() {
         </form.AppField>
         <form.SubmitButton
           label='Sign Up'
-          inProgressLabel='Signing In...'
+          inProgressLabel='Signing Up...'
           doneLabel={`Welcome, ${signUpMutation.data?.userName}`}
         />
       </form.AppForm>
