@@ -1,4 +1,4 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { initTRPC, TRPCError, type inferProcedureBuilderResolverOptions } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
@@ -135,3 +135,5 @@ export const protectedProcedure = publicProcedure.use(async opts => {
 
   return res;
 });
+
+export type ProtectedContext = inferProcedureBuilderResolverOptions<typeof protectedProcedure>['ctx'];
