@@ -1,7 +1,8 @@
 import z from 'zod';
 import { protectedProcedure } from '../trpc';
-import { SUBJECT_TYPE_ENUM, subjectsTable } from '../../db/schema';
+import { subjectsTable } from '../../db/schema';
 import { and, asc, eq } from 'drizzle-orm';
+import { SUBJECT_TYPES_TUPLE } from '../../db/enum';
 
 // let subjectPr =
 //   typeof cursor !== 'undefined' && cursor !== null
@@ -27,7 +28,7 @@ import { and, asc, eq } from 'drizzle-orm';
 //         .where(eq(schema.subjectsTable.belongsToId, userId));
 
 const listSubjectsProcedure = protectedProcedure
-  .input(z.object({ subjectType: z.enum(SUBJECT_TYPE_ENUM) }))
+  .input(z.object({ subjectType: z.enum(SUBJECT_TYPES_TUPLE) }))
   .query(async ({ ctx, input }) => {
     const { db, user } = ctx;
     const { subjectType } = input;
@@ -37,7 +38,6 @@ const listSubjectsProcedure = protectedProcedure
         id: subjectsTable.id,
         name: subjectsTable.name,
         description: subjectsTable.description,
-        sequence: subjectsTable.sequence,
       })
       .from(subjectsTable)
       .where(and(eq(subjectsTable.type, subjectType), eq(subjectsTable.belongsToId, user.id)))
