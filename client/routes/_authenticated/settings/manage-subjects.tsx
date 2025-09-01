@@ -96,7 +96,7 @@ function RouteComponent() {
               {({ TextInput }) => <TextInput type='text' label='Name' />}
             </form.AppField>
             <form.AppField name='selected.description'>
-              {({ TextInput }) => <TextInput type='text' label='Description' />}
+              {({ TextInput }) => <TextInput type='text' label='Description' transform='emptyIsNull' />}
             </form.AppField>
             <form.Subscribe
               selector={({ values: { selected, subjects } }) => {

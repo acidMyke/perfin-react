@@ -10,18 +10,31 @@ export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 
 const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
 
+const TextTransformers = {
+  uppercase: value => value?.toUpperCase() ?? null,
+  emptyIsNull: value => (value == '' ? null : ''),
+} satisfies Record<string, (v: string | null) => string | null>;
+
 type TextInputProps = {
   label: string;
   type: 'text' | 'password' | 'email' | 'search';
   containerCn?: string;
   labelCn?: string;
   inputCn?: string;
-  transform?: 'uppercase';
+  /** @deprecated Use transforms instead */
+  transform?: keyof typeof TextTransformers;
+  transforms?: (keyof typeof TextTransformers)[];
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn, transform } = props;
-  const field = useFieldContext<string>();
+  const { label, type, containerCn, labelCn, inputCn } = props;
+  const field = useFieldContext<string | null>();
+
+  let transforms = props.transform
+    ? props.transforms
+      ? [...props.transforms, props.transform]
+      : [props.transform]
+    : props.transforms;
 
   return (
     <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
@@ -34,11 +47,8 @@ function TextInput(props: TextInputProps) {
         className={cn('input input-primary input-xl w-full', inputCn)}
         value={field.state.value ?? ''}
         onChange={e => {
-          let value = e.target.value;
-          if (transform === 'uppercase') {
-            value = value.toUpperCase();
-          }
-          field.handleChange(() => value);
+          const value = transforms?.reduce((a, t) => TextTransformers[t](a), e.target.value as string | null);
+          field.handleChange(() => value ?? e.target.value);
         }}
       />
       <FieldError field={field} />
