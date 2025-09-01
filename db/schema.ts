@@ -72,9 +72,11 @@ export const SUBJECT_TYPE = {
   CATEGORY: 'category',
 } as const;
 
+export const SUBJECT_TYPE_ENUM = [SUBJECT_TYPE.ACCOUNT, SUBJECT_TYPE.CATEGORY] as const;
+
 export const subjectsTable = sqliteTable('ledger_subjects', {
   ...baseColumns(),
-  type: text({ enum: [SUBJECT_TYPE.ACCOUNT, SUBJECT_TYPE.CATEGORY] }).notNull(),
+  type: text({ enum: SUBJECT_TYPE_ENUM }).notNull(),
   belongsToId: idColumn().references(() => usersTable.id),
   name: text().notNull(),
   description: text(),

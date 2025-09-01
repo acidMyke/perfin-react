@@ -1,3 +1,8 @@
+import z from 'zod';
+import { protectedProcedure } from '../trpc';
+import { SUBJECT_TYPE_ENUM, subjectsTable } from '../../db/schema';
+import { and, asc, eq } from 'drizzle-orm';
+
 // let subjectPr =
 //   typeof cursor !== 'undefined' && cursor !== null
 //     ? undefined
@@ -21,4 +26,24 @@
 //         .from(schema.subjectsTable)
 //         .where(eq(schema.subjectsTable.belongsToId, userId));
 
-export const subjectProcedures = {};
+const listSubjectsProcedure = protectedProcedure
+  .input(z.object({ subjectType: z.enum(SUBJECT_TYPE_ENUM) }))
+  .query(async ({ ctx, input }) => {
+    const { db, user } = ctx;
+    const { subjectType } = input;
+
+    return await db
+      .select({
+        id: subjectsTable.id,
+        name: subjectsTable.name,
+        description: subjectsTable.description,
+        sequence: subjectsTable.sequence,
+      })
+      .from(subjectsTable)
+      .where(and(eq(subjectsTable.type, subjectType), eq(subjectsTable.belongsToId, user.id)))
+      .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
+  });
+
+export const subjectProcedures = {
+  list: listSubjectsProcedure,
+};
