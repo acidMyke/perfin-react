@@ -1,11 +1,10 @@
-import { useForm } from '@tanstack/react-form';
 import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
 import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
 import { sleep } from '../../server/lib';
 import { signInValidator } from '../../server/validators';
-import { FieldError } from '../components/FieldError';
+import { useAppForm } from '../components/Form';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
@@ -42,15 +41,12 @@ function RouteComponent() {
         });
       },
       onError() {
-        signInForm.resetField('password');
+        form.resetField('password');
       },
     }),
   );
-  const signInForm = useForm({
-    defaultValues: {
-      username: '',
-      password: '',
-    },
+  const form = useAppForm({
+    defaultValues: { username: '', password: '' },
     validators: {
       onChange: signInValidator,
       onSubmitAsync: ({ value, signal }) => {
@@ -69,67 +65,17 @@ function RouteComponent() {
       }}
     >
       <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
-      <signInForm.Field name='username'>
-        {field => (
-          <label htmlFor={field.name} className='floating-label mt-8'>
-            <span>Username</span>
-            <input
-              type='text'
-              id={field.name}
-              name={field.name}
-              placeholder='Username'
-              className='input input-primary input-xl w-full'
-              value={field.state.value}
-              onChange={e => field.handleChange(e.target.value)}
-            />
-            <FieldError field={field} />
-          </label>
-        )}
-      </signInForm.Field>
-
-      <signInForm.Field name='password'>
-        {field => (
-          <label htmlFor={field.name} className='floating-label mt-8'>
-            <span>Password</span>
-            <input
-              type='password'
-              id={field.name}
-              name={field.name}
-              placeholder='Password'
-              className='input input-primary input-xl w-full'
-              value={field.state.value}
-              onChange={e => field.handleChange(e.target.value)}
-            />
-            <FieldError field={field} />
-          </label>
-        )}
-      </signInForm.Field>
-
-      <signInForm.Subscribe selector={state => [state.errorMap]}>
-        {([{ onSubmit }]) => (
-          <p role='alert' className='text-error h-[1em]'>
-            {onSubmit && Array.isArray(onSubmit) ? onSubmit.join(', ') : undefined}
-          </p>
-        )}
-      </signInForm.Subscribe>
-
-      <signInForm.Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
-        {([isPristine, canSubmit, isSubmitting]) => (
-          <button
-            type='button'
-            className='btn btn-primary btn-lg btn-block mt-8'
-            disabled={isPristine || !canSubmit || isSubmitting}
-            onClick={() => signInForm.handleSubmit()}
-          >
-            {isSubmitting && <span className='loading loading-dots loading-md'></span>}
-            {isSubmitting
-              ? 'Signing In...'
-              : signInMutation.isSuccess
-                ? `Welcome back, ${signInMutation.data.userName}`
-                : 'Sign In'}
-          </button>
-        )}
-      </signInForm.Subscribe>
+      <form.AppForm>
+        <form.AppField name='username'>{({ TextInput }) => <TextInput type='text' label='Username' />}</form.AppField>
+        <form.AppField name='password'>
+          {({ TextInput }) => <TextInput type='password' label='Password' />}
+        </form.AppField>
+        <form.SubmitButton
+          label='Sign In'
+          inProgressLabel='Signing In...'
+          doneLabel={`Welcome, ${signInMutation.data?.userName}`}
+        />
+      </form.AppForm>
     </form>
   );
 }
