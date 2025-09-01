@@ -24,7 +24,7 @@ function RouteComponent() {
       <PageHeader title='Settings' />
       <Link
         to='/settings/manage-subjects'
-        search={{ type: 'accounts' }}
+        search={{ type: 'account' }}
         className='btn btn-block btn-xl btn-ghost bg-base-200/25'
       >
         <h3 className='inline-block text-2xl'>Manage accounts</h3>
@@ -32,7 +32,7 @@ function RouteComponent() {
       </Link>
       <Link
         to='/settings/manage-subjects'
-        search={{ type: 'categories' }}
+        search={{ type: 'category' }}
         className='btn btn-block btn-xl btn-ghost bg-base-200/25'
       >
         <h3 className='inline-block text-2xl'>Manage categories</h3>

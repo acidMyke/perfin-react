@@ -29,7 +29,7 @@ function TextInput(props: TextInputProps) {
         name={field.name}
         placeholder={label}
         className={cn('input input-primary input-xl w-full', inputCn)}
-        value={field.state.value}
+        value={field.state.value ?? ''}
         onChange={e => field.handleChange(() => e.target.value)}
       />
       <FieldError field={field} />
