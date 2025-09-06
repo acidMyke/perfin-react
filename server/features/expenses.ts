@@ -1,10 +1,11 @@
 import { FormInputError, protectedProcedure } from '../trpc';
-import { expensesTable, historiesTable, SUBJECT_TYPE, subjectsTable } from '../../db/schema';
+import { expensesTable, historiesTable, subjectsTable } from '../../db/schema';
 import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
+import { SubjectTypeConst } from '../../db/enum';
 
 type Option = {
   label: string;
@@ -22,9 +23,9 @@ const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db,
   const categoryOptions: Option[] = [];
 
   for (const { type, ...option } of subjects) {
-    if (type === SUBJECT_TYPE.ACCOUNT) {
+    if (type === SubjectTypeConst.ACCOUNT) {
       accountOptions.push(option);
-    } else if (type === SUBJECT_TYPE.CATEGORY) {
+    } else if (type === SubjectTypeConst.CATEGORY) {
       categoryOptions.push(option);
     }
   }
@@ -98,7 +99,7 @@ const saveExpenseProcedure = protectedProcedure
                   isSelectExistingAccount
                     ? eq(subjectsTable.id, input.account.value)
                     : eq(subjectsTable.name, input.account.label),
-                  eq(subjectsTable.type, SUBJECT_TYPE.ACCOUNT),
+                  eq(subjectsTable.type, SubjectTypeConst.ACCOUNT),
                   eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
@@ -107,7 +108,7 @@ const saveExpenseProcedure = protectedProcedure
                   isSelectExistingCategory
                     ? eq(subjectsTable.id, input.category.value)
                     : eq(subjectsTable.name, input.category.label),
-                  eq(subjectsTable.type, SUBJECT_TYPE.CATEGORY),
+                  eq(subjectsTable.type, SubjectTypeConst.CATEGORY),
                   eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
@@ -117,12 +118,12 @@ const saveExpenseProcedure = protectedProcedure
       let accountError = isSelectExistingAccount ? 'Invalid' : undefined;
       let categoryError = isSelectExistingCategory ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
-        if (type === SUBJECT_TYPE.ACCOUNT && input.account) {
+        if (type === SubjectTypeConst.ACCOUNT && input.account) {
           if (input.account.value === id) {
             accountError = undefined;
             accountId = id;
           } else accountError = 'Duplicated';
-        } else if (type === SUBJECT_TYPE.CATEGORY && input.category) {
+        } else if (type === SubjectTypeConst.CATEGORY && input.category) {
           if (input.category.value === id) {
             categoryError = undefined;
             categoryId = id;
@@ -147,7 +148,7 @@ const saveExpenseProcedure = protectedProcedure
       subjectsToInsert.push({
         name: input.account.label,
         belongsToId: userId,
-        type: SUBJECT_TYPE.ACCOUNT,
+        type: SubjectTypeConst.ACCOUNT,
       });
     }
 
@@ -155,7 +156,7 @@ const saveExpenseProcedure = protectedProcedure
       subjectsToInsert.push({
         name: input.category.label,
         belongsToId: userId,
-        type: SUBJECT_TYPE.CATEGORY,
+        type: SubjectTypeConst.CATEGORY,
       });
     }
 
@@ -166,8 +167,8 @@ const saveExpenseProcedure = protectedProcedure
         .returning({ id: subjectsTable.id, type: subjectsTable.type });
 
       for (const newSubject of insertedSubjects) {
-        if (newSubject.type === SUBJECT_TYPE.ACCOUNT) accountId = newSubject.id;
-        if (newSubject.type === SUBJECT_TYPE.CATEGORY) categoryId = newSubject.id;
+        if (newSubject.type === SubjectTypeConst.ACCOUNT) accountId = newSubject.id;
+        if (newSubject.type === SubjectTypeConst.CATEGORY) categoryId = newSubject.id;
       }
     }
 
@@ -255,11 +256,11 @@ const listExpenseProcedure = protectedProcedure
       .from(expensesTable)
       .leftJoin(
         accountSubject,
-        and(eq(expensesTable.accountId, accountSubject.id), eq(accountSubject.type, SUBJECT_TYPE.ACCOUNT)),
+        and(eq(expensesTable.accountId, accountSubject.id), eq(accountSubject.type, SubjectTypeConst.ACCOUNT)),
       )
       .leftJoin(
         categorySubject,
-        and(eq(expensesTable.categoryId, categorySubject.id), eq(categorySubject.type, SUBJECT_TYPE.CATEGORY)),
+        and(eq(expensesTable.categoryId, categorySubject.id), eq(categorySubject.type, SubjectTypeConst.CATEGORY)),
       )
       .where(and(...filterList))
       .orderBy(desc(expensesTable.billedAt));

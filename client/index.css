@@ -64,6 +64,7 @@
 html {
   color: var(--color-content);
   /* background-color: var(--color-base-100); */
+  scrollbar-gutter: stable both-edges; /* Modal layouut shift fix*/
 }
 
 /* Slight modification to daisy styling */
