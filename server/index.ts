@@ -3,7 +3,7 @@
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router';
 import { createContextFactory } from './trpc';
-import { CookieHeaders } from './lib';
+import { CookieHeaders } from './lib/CookieHeaders';
 
 export default {
   async fetch(req, env, ctx) {

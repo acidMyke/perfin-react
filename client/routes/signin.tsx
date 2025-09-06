@@ -2,7 +2,7 @@ import { useMutation } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
 import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
-import { sleep } from '../../server/lib';
+import { sleep } from '../../server/lib/utils';
 import { signInValidator } from '../../server/validators';
 import { useAppForm } from '../components/Form';
 

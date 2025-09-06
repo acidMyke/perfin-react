@@ -3,8 +3,8 @@ import { FormInputError, protectedProcedure, publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
-import { sleep } from '../lib';
-import sessions from '../sessions';
+import { sleep } from '../lib/utils';
+import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 
 function generateSalt(length = 16) {
