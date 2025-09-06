@@ -12,7 +12,3 @@ function mapToConstants<Tuples extends readonly string[]>(tuples: Tuples) {
 export const SUBJECT_TYPES_TUPLE = ['account', 'category'] as const;
 export type SubjectType = (typeof SUBJECT_TYPES_TUPLE)[number];
 export const SubjectTypeConst = mapToConstants(SUBJECT_TYPES_TUPLE);
-
-export const PERIOD_TYPES_TUPLE = ['full', 'year', 'month', 'week'] as const;
-export type PeriodType = (typeof PERIOD_TYPES_TUPLE)[number];
-export const PeriodTypeConst = mapToConstants(PERIOD_TYPES_TUPLE);

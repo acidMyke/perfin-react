@@ -1,7 +1,7 @@
 import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
-import { PERIOD_TYPES_TUPLE, SUBJECT_TYPES_TUPLE } from './enum';
+import { SUBJECT_TYPES_TUPLE } from './enum';
 
 export const generateId = () => nanoid(8);
 const nullableIdColumn = () => text({ length: 8 });
@@ -91,14 +91,11 @@ export const ledgersTable = sqliteTable('ledgers', {
   totalCents: centsColumn(),
   creditCents: centsColumn(),
   debitCents: centsColumn(),
-  type: text({ enum: PERIOD_TYPES_TUPLE }).notNull(),
-  /** For ALL but FULL type ledgers */
-  year: integer(),
-  /** For MONTH type ledgers*/
-  month: integer(),
-  /** For WEEK type ledgers */
-  week: integer(),
-  forSubjectId: idColumn(),
+  dateFrom: dateColumn(),
+  dateTo: integer({ mode: 'timestamp' }),
+  forSubjectId: nullableIdColumn().references(() => subjectsTable.id),
+  shouldRecon: integer({ mode: 'boolean' }).notNull().default(true),
+  belongsToId: idColumn().references(() => usersTable.id),
 });
 
 export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
