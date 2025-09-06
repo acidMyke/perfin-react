@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, blob, integer, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 import { SUBJECT_TYPES_TUPLE } from './enum';
 
@@ -86,17 +86,21 @@ export const subjectsRelations = relations(subjectsTable, ({ one, many }) => ({
   expenses: many(expensesTable),
 }));
 
-export const ledgersTable = sqliteTable('ledgers', {
-  ...baseColumns(),
-  totalCents: centsColumn(),
-  creditCents: centsColumn(),
-  debitCents: centsColumn(),
-  dateFrom: dateColumn(),
-  dateTo: integer({ mode: 'timestamp' }),
-  forSubjectId: nullableIdColumn().references(() => subjectsTable.id),
-  shouldRecon: integer({ mode: 'boolean' }).notNull().default(true),
-  belongsToId: idColumn().references(() => usersTable.id),
-});
+export const ledgersTable = sqliteTable(
+  'ledgers',
+  {
+    ...baseColumns(),
+    totalCents: centsColumn(),
+    creditCents: centsColumn(),
+    debitCents: centsColumn(),
+    dateFrom: dateColumn(),
+    dateTo: integer({ mode: 'timestamp' }),
+    forSubjectId: nullableIdColumn().references(() => subjectsTable.id),
+    isDirty: integer({ mode: 'boolean' }).notNull().default(true),
+    belongsToId: idColumn().references(() => usersTable.id),
+  },
+  table => [uniqueIndex('ledgers_unique_idx').on(table.belongsToId, table.forSubjectId, table.dateFrom, table.dateTo)],
+);
 
 export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
   subject: one(subjectsTable, {

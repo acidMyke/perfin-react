@@ -6,7 +6,7 @@ import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
 import { SubjectTypeConst } from '../../db/enum';
-import { updateLedgerOnExpense } from '../lib/ledgers';
+import { touchLedgers } from '../lib/ledgers';
 
 type Option = {
   label: string;
@@ -184,7 +184,12 @@ const saveExpenseProcedure = protectedProcedure
 
     if (isCreate) {
       await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
-      wctx.waitUntil(updateLedgerOnExpense(ctx, values));
+      wctx.waitUntil(
+        touchLedgers(ctx, {
+          date: input.billedAt,
+          subjects: [accountId, categoryId],
+        }),
+      );
     } else {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
@@ -218,10 +223,13 @@ const saveExpenseProcedure = protectedProcedure
         }),
       ]);
 
-      const fieldUpdated = Object.keys(values);
-      if (['accountId', 'categoryId', 'billedAt'].some(field => fieldUpdated.includes(field))) {
-        // Cannot perform incremental
-      }
+      wctx.waitUntil(
+        touchLedgers(
+          ctx,
+          { date: existing.billedAt, subjects: [existing.accountId, existing.categoryId] },
+          { date: input.billedAt, subjects: [accountId, categoryId] },
+        ),
+      );
     }
   });
 
