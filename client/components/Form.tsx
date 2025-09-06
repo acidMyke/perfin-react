@@ -1,22 +1,20 @@
 import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
-import { FieldError } from './FieldError';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
 import { useState } from 'react';
 import CreatableSelect from 'react-select/creatable';
 import { twMerge } from '../twMerge';
+import { FieldError } from './FieldError';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
-
 const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
 
 const TextTransformers = {
-  uppercase: value => value?.toUpperCase() ?? null,
-  emptyIsNull: value => (value == '' ? null : ''),
-} satisfies Record<string, (v: string | null) => string | null>;
+  uppercase: value => value.toUpperCase(),
+} satisfies Record<string, (v: string) => string>;
 
 type TextInputProps = {
-  label: string;
+  label?: string;
   type: 'text' | 'password' | 'email' | 'search';
   containerCn?: string;
   labelCn?: string;
@@ -24,21 +22,22 @@ type TextInputProps = {
   /** @deprecated Use transforms instead */
   transform?: keyof typeof TextTransformers;
   transforms?: (keyof typeof TextTransformers)[];
+  nullIfEmpty?: boolean;
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn } = props;
+  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty } = props;
   const field = useFieldContext<string | null>();
 
   let transforms = props.transform
     ? props.transforms
       ? [...props.transforms, props.transform]
       : [props.transform]
-    : props.transforms;
+    : (props.transforms ?? []);
 
   return (
     <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
-      <span className={labelCn}>{label}</span>
+      {label && <span className={labelCn}>{label}</span>}
       <input
         type={type}
         id={field.name}
@@ -47,8 +46,12 @@ function TextInput(props: TextInputProps) {
         className={cn('input input-primary input-xl w-full', inputCn)}
         value={field.state.value ?? ''}
         onChange={e => {
-          const value = transforms?.reduce((a, t) => TextTransformers[t](a), e.target.value as string | null);
-          field.handleChange(() => value ?? e.target.value);
+          const value = transforms.reduce((a, t) => TextTransformers[t](a), e.target.value as string);
+          if (nullIfEmpty && value === '') {
+            field.handleChange(() => null);
+          } else {
+            field.handleChange(() => value);
+          }
         }}
       />
       <FieldError field={field} />

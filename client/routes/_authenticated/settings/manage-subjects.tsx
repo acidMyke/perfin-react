@@ -1,11 +1,10 @@
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
 import { SUBJECT_TYPES_TUPLE, type SubjectType } from '../../../../db/enum';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { useAppForm } from '../../../components/Form';
 import { PageHeader } from '../../../components/PageHeader';
-import { ChevronDown, ChevronUp, PenLine } from 'lucide-react';
-import { useRef } from 'react';
+import { ChevronDown, ChevronUp, Undo } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/settings/manage-subjects')({
   component: RouteComponent,
@@ -29,16 +28,23 @@ export const Route = createFileRoute('/_authenticated/settings/manage-subjects')
 });
 
 function RouteComponent() {
-  const modalRef = useRef<HTMLDialogElement>(null);
+  const navigate = Route.useNavigate();
   const { subjectType } = Route.useLoaderDeps();
   const { data: subjects } = useSuspenseQuery(trpc.subject.list.queryOptions({ subjectType }));
+  const originalSubjectMap = new Map<string, (typeof subjects)[number]>(subjects.map(s => [s.id, s]));
+  const saveMutation = useMutation(trpc.subject.save.mutationOptions());
   const form = useAppForm({
-    defaultValues: {
-      subjects,
-      selected: {
-        index: null as number | null,
-        name: '',
-        description: '' as string | null,
+    defaultValues: { subjects },
+    validators: {
+      onSubmitAsync: async ({ value, signal }) => {
+        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
+        const subjects = value.subjects;
+        const formError = await handleFormMutateAsync(saveMutation.mutateAsync({ subjects, subjectType }));
+        if (formError) {
+          return formError;
+        }
+        queryClient.invalidateQueries(trpc.subject.list.queryOptions({ subjectType }));
+        navigate({ to: '/settings' });
       },
     },
   });
@@ -50,36 +56,43 @@ function RouteComponent() {
         <form.Field name='subjects' mode='array'>
           {field => (
             <ul className='list bg-base-100 rounded-box shadow-md'>
-              {field.state.value.map(({ id, name, description }, subIndex, { length }) => (
+              {field.state.value.map(({ id }, subjectIndex, { length }) => (
                 <li key={id} className='list-row'>
                   <div className='list-col-grow'>
-                    <div className='text-xl'>{name}</div>
-                    <div className='text-xs'>{description}</div>
+                    <form.AppField
+                      name={`subjects[${subjectIndex}].name`}
+                      validators={{ onChange: v => (v.value == '' ? 'Cannot be empty' : '') }}
+                    >
+                      {({ TextInput }) => (
+                        <TextInput type='text' containerCn='mt-0' inputCn='input-sm input-neutral' label='Name' />
+                      )}
+                    </form.AppField>
                   </div>
                   <button
                     className='btn btn-square btn-ghost'
                     onClick={() => {
-                      form.setFieldValue('selected', {
-                        index: subIndex,
-                        name,
-                        description,
-                      });
-                      modalRef.current?.showModal();
+                      form.setFieldValue(`subjects[${subjectIndex}].name`, originalSubjectMap.get(id)!.name);
+                      form.setFieldMeta(`subjects[${subjectIndex}].name`, meta => ({
+                        ...meta,
+                        isTouched: true,
+                        errorMap: {},
+                        errorSourceMap: {},
+                      }));
                     }}
                   >
-                    <PenLine />
+                    <Undo />
                   </button>
                   <button
                     className='btn btn-square btn-ghost'
-                    disabled={subIndex === 0}
-                    onClick={() => field.swapValues(subIndex, subIndex - 1)}
+                    disabled={subjectIndex === 0}
+                    onClick={() => field.swapValues(subjectIndex, subjectIndex - 1)}
                   >
                     <ChevronUp />
                   </button>
                   <button
                     className='btn btn-square btn-ghost'
-                    disabled={subIndex === length - 1}
-                    onClick={() => field.swapValues(subIndex, subIndex + 1)}
+                    disabled={subjectIndex === length - 1}
+                    onClick={() => field.swapValues(subjectIndex, subjectIndex + 1)}
                   >
                     <ChevronDown />
                   </button>
@@ -88,54 +101,7 @@ function RouteComponent() {
             </ul>
           )}
         </form.Field>
-        {/* Open the modal using document.getElementById('ID').showModal() method */}
-        <dialog ref={modalRef} className='modal'>
-          <div className='modal-box'>
-            <h3 className='text-lg font-bold'>Edit subject</h3>
-            <form.AppField name='selected.name'>
-              {({ TextInput }) => <TextInput type='text' label='Name' />}
-            </form.AppField>
-            <form.AppField name='selected.description'>
-              {({ TextInput }) => <TextInput type='text' label='Description' transform='emptyIsNull' />}
-            </form.AppField>
-            <form.Subscribe
-              selector={({ values: { selected, subjects } }) => {
-                if (selected.index == null) return [null, null, false] as const;
-                const defaultValue = subjects[selected.index];
-                return [
-                  selected.index,
-                  defaultValue,
-                  selected.index != null &&
-                    (defaultValue.name !== selected.name ||
-                      (defaultValue.description ?? '') !== (selected.description ?? '')),
-                ] as const;
-              }}
-            >
-              {([selectedIndex, defaultValue, valueChanged]) => (
-                <div className='modal-action'>
-                  <button
-                    type='button'
-                    className='btn btn-sm btn-neutral'
-                    onClick={() => {
-                      if (selectedIndex === null || defaultValue === null) return;
-                      if (valueChanged) {
-                        form.setFieldValue('selected', { index: selectedIndex, ...defaultValue });
-                      } else {
-                        modalRef.current?.close();
-                        form.resetField('selected');
-                      }
-                    }}
-                  >
-                    {valueChanged ? 'Reset' : 'Close'}
-                  </button>
-                  <button type='button' className='btn btn-sm btn-primary' disabled={!valueChanged}>
-                    Update & Close
-                  </button>
-                </div>
-              )}
-            </form.Subscribe>
-          </div>
-        </dialog>
+        <form.SubmitButton label='Save' />
       </form.AppForm>
     </div>
   );
