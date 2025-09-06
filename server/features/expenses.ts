@@ -6,6 +6,7 @@ import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
 import { SubjectTypeConst } from '../../db/enum';
+import { updateLedgerOnExpense } from '../lib/ledgers';
 
 type Option = {
   label: string;
@@ -80,7 +81,7 @@ const saveExpenseProcedure = protectedProcedure
     }),
   )
   .mutation(async ({ input, ctx }) => {
-    const { user, db } = ctx;
+    const { user, db, wctx } = ctx;
     const userId = user.id;
     let accountId: string | null = null;
     let categoryId: string | null = null;
@@ -183,6 +184,7 @@ const saveExpenseProcedure = protectedProcedure
 
     if (isCreate) {
       await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
+      wctx.waitUntil(updateLedgerOnExpense(ctx, values));
     } else {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
@@ -195,8 +197,10 @@ const saveExpenseProcedure = protectedProcedure
       const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
       const valuesWere: Partial<typeof expensesTable.$inferInsert> = {};
       for (const key in values) {
-        // @ts-ignore
-        valuesWere[key] = existing[key];
+        // @ts-expect-error
+        if (values[key] === existing[key]) delete values[key];
+        // @ts-expect-error
+        else valuesWere[key] = existing[key];
       }
 
       await db.batch([
@@ -213,6 +217,11 @@ const saveExpenseProcedure = protectedProcedure
           wasUpdatedBy,
         }),
       ]);
+
+      const fieldUpdated = Object.keys(values);
+      if (['accountId', 'categoryId', 'billedAt'].some(field => fieldUpdated.includes(field))) {
+        // Cannot perform incremental
+      }
     }
   });
 
