@@ -15,6 +15,13 @@
       "when": 1756005642030,
       "tag": "0001_chunky_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1757178982405,
+      "tag": "0002_dapper_human_robot",
+      "breakpoints": true
     }
   ]
 }
