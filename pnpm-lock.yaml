@@ -8,9 +8,6 @@ importers:
 
   .:
     dependencies:
-      '@date-fns/tz':
-        specifier: ^1.4.1
-        version: 1.4.1
       '@tanstack/react-form':
         specifier: ^1.19.3
         version: 1.19.3(react-dom@19.1.1(react@19.1.1))(react@19.1.1)
@@ -340,9 +337,6 @@ packages:
   '@cspotcode/source-map-support@0.8.1':
     resolution: {integrity: sha512-IchNf6dN4tHoMFIn/7OE8LWZ19Y6q/67Bmf6vnGREv8RSbBVb9LPJxEcnwrcwX6ixSvaiGoomAUvu4YSxXrVgw==}
     engines: {node: '>=12'}
-
-  '@date-fns/tz@1.4.1':
-    resolution: {integrity: sha512-P5LUNhtbj6YfI3iJjw5EL9eUAG6OitD0W3fWQcpQjDRc/QIsL0tRNuO1PcDvPccWL1fSTXXdE1ds+l95DV/OFA==}
 
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
@@ -3127,8 +3121,6 @@ snapshots:
   '@cspotcode/source-map-support@0.8.1':
     dependencies:
       '@jridgewell/trace-mapping': 0.3.9
-
-  '@date-fns/tz@1.4.1': {}
 
   '@drizzle-team/brocli@0.10.2': {}
 
