@@ -10,12 +10,17 @@ import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 import { format } from 'date-fns/format';
 
-export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
-  const db = drizzle(env.db, {
+function createDrizzleDb(env: Pick<Env, 'db'>) {
+  return drizzle(env.db, {
     logger: import.meta.env.DEV,
     casing: 'snake_case',
     schema,
   });
+}
+export type AppDatabase = ReturnType<typeof createDrizzleDb>;
+
+export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
+  const db = createDrizzleDb(env);
   return function ({ req }: FetchCreateContextFnOptions) {
     return {
       db,

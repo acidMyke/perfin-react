@@ -96,7 +96,6 @@ export const ledgersTable = sqliteTable(
     dateFrom: dateColumn(),
     dateTo: integer({ mode: 'timestamp' }),
     forSubjectId: nullableIdColumn().references(() => subjectsTable.id),
-    isDirty: integer({ mode: 'boolean' }).notNull().default(true),
     belongsToId: idColumn().references(() => usersTable.id),
   },
   table => [uniqueIndex('ledgers_unique_idx').on(table.belongsToId, table.forSubjectId, table.dateFrom, table.dateTo)],

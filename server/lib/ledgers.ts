@@ -1,26 +1,25 @@
-import { and, eq, gt, inArray, isNull, lte, or, SQL } from 'drizzle-orm';
-import { ledgersTable } from '../../db/schema';
-import { type ProtectedContext } from '../trpc';
+import { and, eq, gte, lt, or, sum } from 'drizzle-orm';
+import { expensesTable, ledgersTable } from '../../db/schema';
+import { type AppDatabase, type ProtectedContext } from '../trpc';
 import {
-  startOfYear,
-  endOfYear,
   startOfQuarter,
   endOfQuarter,
   startOfMonth,
   endOfMonth,
   startOfWeek,
   endOfWeek,
+  startOfDay,
+  endOfDay,
 } from 'date-fns';
 
 type DateRange = Pick<typeof ledgersTable.$inferSelect, 'dateFrom' | 'dateTo'>;
 
 export function getLedgerRanges(date: Date): DateRange[] {
   return [
-    { dateFrom: new Date(0), dateTo: null },
-    { dateFrom: startOfYear(date), dateTo: endOfYear(date) },
     { dateFrom: startOfQuarter(date), dateTo: endOfQuarter(date) },
     { dateFrom: startOfMonth(date), dateTo: endOfMonth(date) },
     { dateFrom: startOfWeek(date), dateTo: endOfWeek(date) },
+    { dateFrom: startOfDay(date), dateTo: endOfDay(date) },
   ];
 }
 
@@ -29,42 +28,57 @@ export type LedgerFilter = {
   date: Date;
 };
 
-export async function touchLedgers(ctx: ProtectedContext, ...filters: LedgerFilter[]) {
+export async function recomputeLedgers(ctx: ProtectedContext, ...filters: LedgerFilter[]) {
   const { user, db } = ctx;
-  const inserts: (typeof ledgersTable.$inferInsert)[] = [];
-  const conditions: (SQL | undefined)[] = [];
+  const promises: ReturnType<typeof recomputeLedger>[] = [];
 
   for (const filter of filters) {
     const ranges = getLedgerRanges(filter.date);
-    const subjects = filter.subjects.filter(Boolean) as string[];
+    const subjects = filter.subjects.filter(Boolean) as [string, string, null];
+    subjects.push(null);
 
-    inserts.push(
-      ...[...subjects, null].flatMap(forSubjectId =>
-        ranges.map(range => ({ ...range, forSubjectId, belongsToId: user.id, isDirty: true })),
-      ),
-    );
-
-    conditions.push(
-      and(
-        lte(ledgersTable.dateFrom, filter.date),
-        or(isNull(ledgersTable.dateTo), gt(ledgersTable.dateTo, filter.date)),
-        or(isNull(ledgersTable.forSubjectId), inArray(ledgersTable.forSubjectId, subjects)),
-      ),
-    );
+    for (const forSubjectId of subjects) {
+      for (const { dateTo, dateFrom } of ranges) {
+        promises.push(recomputeLedger(db, { belongsToId: user.id, dateTo, dateFrom, forSubjectId }));
+      }
+    }
   }
 
-  const insertedLedgers = await db.insert(ledgersTable).values(inserts).onConflictDoNothing().returning({
-    id: ledgersTable.id,
-  });
+  return Promise.all(promises);
+}
 
-  const updatedLedgers = await db
-    .update(ledgersTable)
-    .set({ isDirty: true })
-    .where(and(eq(ledgersTable.belongsToId, user.id), or(...conditions)))
-    .returning({ id: ledgersTable.id });
+type LedgerCriteria = Pick<typeof ledgersTable.$inferSelect, 'dateFrom' | 'dateTo' | 'forSubjectId' | 'belongsToId'>;
 
-  return {
-    inserted: insertedLedgers.length,
-    updated: updatedLedgers.length,
-  };
+async function recomputeLedger(db: AppDatabase, criteria: LedgerCriteria) {
+  const { dateFrom, dateTo, forSubjectId, belongsToId } = criteria;
+  if (dateTo == null) return;
+
+  const [[{ expenses }]] = await Promise.all([
+    /// expensesTable
+    db
+      .select({ expenses: sum(expensesTable.amountCents).mapWith(Number) })
+      .from(expensesTable)
+      .where(
+        and(
+          eq(expensesTable.belongsToId, belongsToId),
+          gte(expensesTable.billedAt, dateFrom),
+          lt(expensesTable.billedAt, dateTo),
+          forSubjectId
+            ? or(eq(expensesTable.accountId, forSubjectId), eq(expensesTable.categoryId, forSubjectId))
+            : undefined,
+        ),
+      ),
+  ]);
+
+  const totalCents = -expenses;
+
+  await db
+    .insert(ledgersTable)
+    .values({ belongsToId, dateFrom, dateTo, forSubjectId, debitCents: expenses, creditCents: 0, totalCents })
+    .onConflictDoUpdate({
+      set: { debitCents: expenses, creditCents: 0, totalCents },
+      target: [ledgersTable.belongsToId, ledgersTable.forSubjectId, ledgersTable.dateFrom, ledgersTable.dateTo],
+    });
+
+  return;
 }

@@ -6,7 +6,7 @@ import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
 import { SubjectTypeConst } from '../../db/enum';
-import { touchLedgers } from '../lib/ledgers';
+import { recomputeLedgers } from '../lib/ledgers';
 
 type Option = {
   label: string;
@@ -185,7 +185,7 @@ const saveExpenseProcedure = protectedProcedure
     if (isCreate) {
       await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
       wctx.waitUntil(
-        touchLedgers(ctx, {
+        recomputeLedgers(ctx, {
           date: input.billedAt,
           subjects: [accountId, categoryId],
         }),
@@ -224,7 +224,7 @@ const saveExpenseProcedure = protectedProcedure
       ]);
 
       wctx.waitUntil(
-        touchLedgers(
+        recomputeLedgers(
           ctx,
           { date: existing.billedAt, subjects: [existing.accountId, existing.categoryId] },
           { date: input.billedAt, subjects: [accountId, categoryId] },
