@@ -1,6 +1,7 @@
 import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
+import { PERIOD_TYPES_TUPLE, SUBJECT_TYPES_TUPLE } from './enum';
 
 export const generateId = () => nanoid(8);
 const nullableIdColumn = () => text({ length: 8 });
@@ -67,14 +68,9 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   }),
 }));
 
-export const SUBJECT_TYPE = {
-  ACCOUNT: 'account',
-  CATEGORY: 'category',
-} as const;
-
 export const subjectsTable = sqliteTable('ledger_subjects', {
   ...baseColumns(),
-  type: text({ enum: [SUBJECT_TYPE.ACCOUNT, SUBJECT_TYPE.CATEGORY] }).notNull(),
+  type: text({ enum: SUBJECT_TYPES_TUPLE }).notNull(),
   belongsToId: idColumn().references(() => usersTable.id),
   name: text().notNull(),
   description: text(),
@@ -90,19 +86,12 @@ export const subjectsRelations = relations(subjectsTable, ({ one, many }) => ({
   expenses: many(expensesTable),
 }));
 
-export const LEDGER_TYPES = {
-  FULL: 'full',
-  YEAR: 'year',
-  MONTH: 'month',
-  WEEK: 'week',
-} as const;
-
 export const ledgersTable = sqliteTable('ledgers', {
   ...baseColumns(),
   totalCents: centsColumn(),
   creditCents: centsColumn(),
   debitCents: centsColumn(),
-  type: text({ enum: [LEDGER_TYPES.FULL, LEDGER_TYPES.YEAR, LEDGER_TYPES.MONTH, LEDGER_TYPES.WEEK] }).notNull(),
+  type: text({ enum: PERIOD_TYPES_TUPLE }).notNull(),
   /** For ALL but FULL type ledgers */
   year: integer(),
   /** For MONTH type ledgers*/

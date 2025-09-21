@@ -1,10 +1,10 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { FormInputError, publicProcedure } from '../trpc';
+import { FormInputError, protectedProcedure, publicProcedure } from '../trpc';
 import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
-import { sleep } from '../lib';
-import sessions from '../sessions';
+import { sleep } from '../lib/utils';
+import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 
 function generateSalt(length = 16) {
@@ -155,6 +155,10 @@ const signUpProcedure = publicProcedure
     }
   });
 
+const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
+  sessions.revoke(ctx);
+});
+
 const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
   const { isAuthenticated, user, session, promises } = await sessions.resolve(ctx, /*allowUnauthicated:*/ true);
   if (promises) {
@@ -175,5 +179,6 @@ export const usersProcedures = {
   session: {
     signIn: signInProcedure,
     signUp: signUpProcedure,
+    signOut: signOutProcedure,
   },
 } as const;

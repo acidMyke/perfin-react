@@ -1,6 +1,6 @@
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { Link, linkOptions, Outlet } from '@tanstack/react-router';
-import { ChartLine, Plus, ScrollText } from 'lucide-react';
+import { ChartLine, Plus, ScrollText, Settings } from 'lucide-react';
 import { queryClient } from '../trpc';
 import { whoamiQueryOptions } from '../queryOptions';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
@@ -31,7 +31,11 @@ const options = linkOptions([
     to: '/expenses',
     label: 'Expenses',
     Icon: ScrollText,
-    activeOptions: {},
+  },
+  {
+    to: '/settings',
+    label: 'Settings',
+    Icon: Settings,
   },
 ]);
 
