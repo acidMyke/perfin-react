@@ -1,7 +1,8 @@
-import { endOfToday, getUnixTime, subDays } from 'date-fns';
+import { endOfToday, getUnixTime, sub, subDays } from 'date-fns';
 import { protectedProcedure } from '../trpc';
-import { and, between, eq, sql } from 'drizzle-orm';
+import { and, between, eq, gt, sql } from 'drizzle-orm';
 import { expensesTable } from '../../db/schema';
+import z from 'zod';
 
 const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
@@ -45,6 +46,41 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
   };
 });
 
+const getTrendProcedure = protectedProcedure
+  .input(
+    z.object({
+      interval: z.enum(['days', 'weeks', 'months']).default('days'),
+    }),
+  )
+  .query(async ({ ctx, input }) => {
+    const { interval } = input;
+    const { db, userId } = ctx;
+
+    const strf = {
+      days: sql`%Y-%m-%d`,
+      weeks: sql`%Y-%W`,
+      months: sql`%Y-%m`,
+    }[interval];
+
+    const trendData = await db
+      .select({
+        label: sql<string>`strftime('${strf}', datetime(${expensesTable.billedAt}, 'unixepoch', '-8 hours')) as label`,
+        expensesSum: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
+      })
+      .from(expensesTable)
+      .where(
+        and(
+          eq(expensesTable.belongsToId, userId),
+          gt(expensesTable.billedAt, sub(endOfToday(), { [interval]: interval == 'days' ? 28 : 14 })),
+        ),
+      )
+      .groupBy(sql`label`)
+      .orderBy(sql`label asc`);
+
+    return trendData;
+  });
+
 export const dashboardProcedure = {
   getInsights: getInsightsProcedure,
+  getTrend: getTrendProcedure,
 };
