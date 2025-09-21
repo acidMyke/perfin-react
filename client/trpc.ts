@@ -5,6 +5,7 @@ import type { AppRouter } from '../server/router';
 import { observable, type Unsubscribable } from '@trpc/server/observable';
 import type { AppErrorShapeData } from '../server/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
+import { notFound } from '@tanstack/react-router';
 
 export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -105,5 +106,16 @@ export async function handleFormMutateAsync(mutatePromise: Promise<unknown>) {
     }
     console.log('Unknown Error', typeof error === 'object' ? { ...error } : error);
     throw error;
+  }
+}
+
+export function throwIfNotFound(error: unknown) {
+  if (isTRPCClientError(error)) {
+    if ('data' in error.shape) {
+      const shapeData = error.shape.data as AppErrorShapeData;
+      if (shapeData.code === 'NOT_FOUND') {
+        throw notFound();
+      }
+    }
   }
 }

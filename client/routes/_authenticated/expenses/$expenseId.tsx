@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
 import { DollarSign } from 'lucide-react';
@@ -11,12 +11,15 @@ import { useAppForm } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
+  notFoundComponent: ExpenseNotFoundComponent,
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
     return Promise.all([
       isCreate
         ? undefined
-        : queryClient.ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: params.expenseId })),
+        : queryClient
+            .ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: params.expenseId }))
+            .catch(error => throwIfNotFound(error)),
       queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
       // load existing detail if not create
     ]);
@@ -29,7 +32,7 @@ function RouteComponent() {
   const isCreate = expenseId === 'create';
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
-  const { data, isSuccess } = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
+  const existingExpenseQuery = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useAppForm({
     defaultValues: {
@@ -62,8 +65,8 @@ function RouteComponent() {
   });
 
   useEffect(() => {
-    if (isSuccess && data) {
-      const { billedAt, accountId, categoryId, ...rest } = data;
+    if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
+      const { billedAt, accountId, categoryId, ...rest } = existingExpenseQuery.data;
       const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
       const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
       form.reset(
@@ -76,7 +79,7 @@ function RouteComponent() {
         { keepDefaultValues: true },
       );
     }
-  }, [isSuccess]);
+  }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
 
   return (
     <form
@@ -169,5 +172,23 @@ function RouteComponent() {
         </form.Subscribe>
       </form.AppForm>
     </form>
+  );
+}
+
+function ExpenseNotFoundComponent() {
+  return (
+    <div
+      className='mx-auto max-w-md'
+      onSubmit={e => {
+        e.preventDefault();
+        e.stopPropagation();
+      }}
+    >
+      <PageHeader title='Expense not found' showBackButton />
+      <p className='mt-8'>Unable to find selected expenses</p>
+      <Link to='..' className='btn btn-primary btn-lg btn-block mt-8'>
+        Back
+      </Link>
+    </div>
   );
 }
