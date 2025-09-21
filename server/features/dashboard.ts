@@ -33,7 +33,7 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
 
   const lastFourteenDays = amounts[0] + amounts[1];
   const diffSevenDays = amounts[0] - amounts[1];
-  const diffFourteenDays = amounts[2] - lastFourteenDays;
+  const diffFourteenDays = lastFourteenDays - amounts[2];
 
   return {
     lastSevenDays: amounts[0],

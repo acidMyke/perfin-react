@@ -23,7 +23,7 @@ function RouteComponent() {
   return (
     <div className='mx-auto flex max-w-md flex-col'>
       <PageHeader title='Overview' />
-      <p>You have spent</p>
+      <h2 className='mb-2 text-xl'>You have spent</h2>
 
       <div className='stats pl-4 shadow'>
         <div className='stat w-full'>
