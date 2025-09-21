@@ -3,10 +3,9 @@ import { protectedProcedure } from '../trpc';
 import { and, between, eq, sql } from 'drizzle-orm';
 import { expensesTable } from '../../db/schema';
 
-const getDashboardDataProcedure = protectedProcedure.query(async ({ ctx }) => {
+const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
 
-  //  7days & 14 days segments
   const d = endOfToday();
   const dMinus7 = subDays(d, 7);
   const dMinus14 = subDays(d, 14);
@@ -32,19 +31,20 @@ const getDashboardDataProcedure = protectedProcedure.query(async ({ ctx }) => {
     amounts[rangeId] = expensesSum;
   }
 
+  const lastFourteenDays = amounts[0] + amounts[1];
+  const diffSevenDays = amounts[0] - amounts[1];
+  const diffFourteenDays = amounts[2] - lastFourteenDays;
+
   return {
-    sevenDays: {
-      current: amounts[0],
-      prior: amounts[1],
-    },
-    fourteenDays: {
-      current: amounts[0] + amounts[1],
-      prior: amounts[2],
-    },
-    recentExpenses: [],
+    lastSevenDays: amounts[0],
+    diffSevenDays,
+    percentSevenDays: amounts[1] === 0 ? 1 : diffSevenDays / amounts[1],
+    lastFourteenDays,
+    diffFourteenDays,
+    percentFourteenDays: amounts[2] === 0 ? 1 : diffFourteenDays / amounts[2],
   };
 });
 
 export const dashboardProcedure = {
-  getData: getDashboardDataProcedure,
+  getInsights: getInsightsProcedure,
 };
