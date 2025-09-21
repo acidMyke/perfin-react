@@ -1,11 +1,15 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { Link, linkOptions, Outlet } from '@tanstack/react-router';
 import { ChartLine, Plus, ScrollText } from 'lucide-react';
 import { queryClient } from '../trpc';
 import { whoamiQueryOptions } from '../queryOptions';
+import { useQueryErrorResetBoundary } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { PageHeader } from '../components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
+  errorComponent: ErrorComponent,
   async beforeLoad({ location }) {
     const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
     if (!isAuthenticated) {
@@ -67,5 +71,33 @@ function RouteComponent() {
       <FloatingButton />
       <NavDock />
     </>
+  );
+}
+
+function ErrorComponent({ error }: ErrorComponentProps) {
+  const router = useRouter();
+  const queryErrorResetBoundary = useQueryErrorResetBoundary();
+
+  useEffect(() => {
+    // Reset the query error boundary
+    queryErrorResetBoundary.reset();
+  }, [queryErrorResetBoundary]);
+
+  return (
+    <div className='mx-auto max-w-md'>
+      <div className='h-8'></div>
+      <PageHeader title='Oops...' />
+      {error.message}
+      <button
+        className='btn btn-primary btn-lg btn-block mt-8'
+        onClick={() => {
+          // Invalidate the route to reload the loader, and reset any router error boundaries
+          router.invalidate();
+        }}
+      >
+        Retry
+      </button>
+      <NavDock />
+    </div>
   );
 }
