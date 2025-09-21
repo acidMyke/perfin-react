@@ -125,6 +125,7 @@ export const protectedProcedure = publicProcedure.use(async opts => {
   const res = opts.next({
     ctx: {
       user: user!,
+      userId: user!.id,
       session: session!,
     },
   });
