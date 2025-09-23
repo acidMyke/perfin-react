@@ -150,6 +150,25 @@ async function resolve(ctx: Context, allowUnauthicated = false) {
   throw new TRPCError({ code: 'UNAUTHORIZED' });
 }
 
+async function getTelemetry(ctx: Context) {
+  const { db, req } = ctx;
+  const cf = req.cf;
+  const headers = req.headers;
+
+  const telemetry: Omit<typeof schema.loginAttemptsTable.$inferInsert, 'isSuccess' | 'attemptedForId'> = {
+    ip: headers.get('cf-connecting-ip') ?? '',
+    userAgent: headers.get('user-agent') ?? '',
+  };
+
+  const cfKeys = ['asn', 'city', 'region', 'country', 'colo'];
+  for (const key of cfKeys) {
+    if (cf?.[key]) {
+      // @ts-expect-error
+      telemetry[key] = cf?.[key];
+    }
+  }
+}
+
 export const sessions = {
   create,
   resolve,

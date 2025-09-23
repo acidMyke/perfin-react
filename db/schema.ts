@@ -40,6 +40,23 @@ export const historiesTable = sqliteTable('histories', {
   wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
 });
 
+export const loginAttemptsTable = sqliteTable('login_attempts', {
+  id: text({ length: 16 })
+    .primaryKey()
+    .$defaultFn(() => nanoid(16)),
+  timestamp: createdAtColumn(),
+  attemptedForId: idColumn().references(() => usersTable.id),
+  isSuccess: integer({ mode: 'boolean' }).notNull(),
+
+  ip: text().notNull(),
+  asn: integer(),
+  city: text(),
+  region: text(),
+  country: text({ length: 2 }),
+  colo: text({ length: 3 }),
+  userAgent: text(),
+});
+
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
   name: text(),
