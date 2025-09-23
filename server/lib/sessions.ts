@@ -6,6 +6,7 @@ import { and, eq } from 'drizzle-orm';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { addMinutes } from 'date-fns/addMinutes';
 import { TRPCError } from '@trpc/server';
+import { UAParser } from 'ua-parser-js';
 
 export function generateTokenParam() {
   return {
@@ -154,10 +155,13 @@ async function getTelemetry(ctx: Context) {
   const { db, req } = ctx;
   const cf = req.cf;
   const headers = req.headers;
+  const ua = headers.get('user-agent') ?? '';
+  const parsedUa = new UAParser(ua).getResult();
+  const userAgent = `${parsedUa.browser.name} ${parsedUa.browser.version} / ${parsedUa.os.name} ${parsedUa.os.version}`;
 
   const telemetry: Omit<typeof schema.loginAttemptsTable.$inferInsert, 'isSuccess' | 'attemptedForId'> = {
     ip: headers.get('cf-connecting-ip') ?? '',
-    userAgent: headers.get('user-agent') ?? '',
+    userAgent,
   };
 
   const cfKeys = ['asn', 'city', 'region', 'country', 'colo'];
