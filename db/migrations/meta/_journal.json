@@ -8,6 +8,13 @@
       "when": 1754813107108,
       "tag": "0000_bent_wasp",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1756005642030,
+      "tag": "0001_chunky_jubilee",
+      "breakpoints": true
     }
   ]
 }

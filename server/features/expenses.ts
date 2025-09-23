@@ -1,31 +1,31 @@
 import { FormInputError, protectedProcedure } from '../trpc';
-import * as schema from '../../db/schema';
-import { and, asc, desc, eq, gte, lt, or, sql, SQL } from 'drizzle-orm';
+import { expensesTable, historiesTable, subjectsTable } from '../../db/schema';
+import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { parseISO } from 'date-fns/parseISO';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { endOfMonth } from 'date-fns';
+import { endOfMonth, parseISO } from 'date-fns';
+import { SubjectTypeConst } from '../../db/enum';
 
 type Option = {
-  name: string;
-  id: string;
+  label: string;
+  value: string;
 };
 
-const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
-  const subjects = await db.query.subjectsTable.findMany({
-    where: eq(schema.subjectsTable.belongsToId, user.id),
-    orderBy: [asc(schema.subjectsTable.sequence), asc(schema.subjectsTable.createdAt)],
-    columns: { name: true, id: true, type: true },
-  });
+const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
+  const subjects = await db
+    .select({ value: subjectsTable.id, label: subjectsTable.name, type: subjectsTable.type })
+    .from(subjectsTable)
+    .where(eq(subjectsTable.belongsToId, user.id))
+    .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
 
   const accountOptions: Option[] = [];
   const categoryOptions: Option[] = [];
 
   for (const { type, ...option } of subjects) {
-    if (type === schema.SUBJECT_TYPE.ACCOUNT) {
+    if (type === SubjectTypeConst.ACCOUNT) {
       accountOptions.push(option);
-    } else if (type === schema.SUBJECT_TYPE.CATEGORY) {
+    } else if (type === SubjectTypeConst.CATEGORY) {
       categoryOptions.push(option);
     }
   }
@@ -36,74 +36,184 @@ const loadCreateExpenseProcedure = protectedProcedure.query(async ({ ctx: { db, 
   };
 });
 
-const createExpenseProcedure = protectedProcedure
+const loadExpenseDetailProcedure = protectedProcedure
+  .input(z.object({ expenseId: z.string() }))
+  .query(async ({ input, ctx }) => {
+    const { user, db } = ctx;
+    const userId = user.id;
+    const expense = await db.query.expensesTable.findFirst({
+      where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+      columns: {
+        description: true,
+        amountCents: true,
+        billedAt: true,
+        accountId: true,
+        categoryId: true,
+      },
+    });
+
+    if (!expense) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    return expense;
+  });
+
+const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
-      description: z.string().nullish(),
+      expenseId: z.string(),
+      description: z
+        .string()
+        .nullish()
+        .transform(v => v ?? null),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-      accountId: z.string().nullish(),
-      categoryId: z.string().nullish(),
+      account: z
+        .object({ value: z.string(), label: z.string() })
+        .nullish()
+        .transform(v => v ?? null),
+      category: z
+        .object({ value: z.string(), label: z.string() })
+        .nullish()
+        .transform(v => v ?? null),
     }),
   )
   .mutation(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
+    let accountId: string | null = null;
+    let categoryId: string | null = null;
+    if (input.account || input.category) {
+      const isSelectExistingAccount = input.account?.value !== 'create';
+      const isSelectExistingCategory = input.category?.value !== 'create';
 
-    if (input.accountId || input.categoryId) {
       const foundIds = await db
-        .select({ id: schema.subjectsTable.id, type: schema.subjectsTable.type })
-        .from(schema.subjectsTable)
+        .select({ id: subjectsTable.id, type: subjectsTable.type })
+        .from(subjectsTable)
         .limit(2)
         .where(
           or(
-            input.accountId
+            input.account
               ? and(
-                  eq(schema.subjectsTable.id, input.accountId),
-                  eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.ACCOUNT),
+                  isSelectExistingAccount
+                    ? eq(subjectsTable.id, input.account.value)
+                    : eq(subjectsTable.name, input.account.label),
+                  eq(subjectsTable.type, SubjectTypeConst.ACCOUNT),
+                  eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
-            input.categoryId
+            input.category
               ? and(
-                  eq(schema.subjectsTable.id, input.categoryId),
-                  eq(schema.subjectsTable.type, schema.SUBJECT_TYPE.CATEGORY),
+                  isSelectExistingCategory
+                    ? eq(subjectsTable.id, input.category.value)
+                    : eq(subjectsTable.name, input.category.label),
+                  eq(subjectsTable.type, SubjectTypeConst.CATEGORY),
+                  eq(subjectsTable.belongsToId, userId),
                 )
               : undefined,
           ),
         );
 
-      let hasAccountId = input.accountId == undefined;
-      let hasCategoryId = input.categoryId == undefined;
+      let accountError = isSelectExistingAccount ? 'Invalid' : undefined;
+      let categoryError = isSelectExistingCategory ? 'Invalid' : undefined;
       for (const { id, type } of foundIds) {
-        if (input.accountId == id && type === 'account') {
-          hasAccountId = true;
-        }
-        if (input.categoryId == id && type === 'category') {
-          hasCategoryId = true;
+        if (type === SubjectTypeConst.ACCOUNT && input.account) {
+          if (input.account.value === id) {
+            accountError = undefined;
+            accountId = id;
+          } else accountError = 'Duplicated';
+        } else if (type === SubjectTypeConst.CATEGORY && input.category) {
+          if (input.category.value === id) {
+            categoryError = undefined;
+            categoryId = id;
+          } else categoryError = 'Duplicated';
         }
       }
 
-      if (!hasAccountId || !hasCategoryId) {
+      if (accountError || categoryError) {
         throw new TRPCError({
           code: 'BAD_REQUEST',
           cause: new FormInputError({
             fieldErrors: {
-              accountId: !hasAccountId ? ['Invalid account'] : undefined,
-              categoryId: !hasCategoryId ? ['Invalid category'] : undefined,
+              accountId: accountError ? [accountError + '  Account'] : undefined,
+              categoryId: categoryError ? [categoryError + '  Category'] : undefined,
             },
           }),
         });
       }
     }
+    const subjectsToInsert: (typeof subjectsTable.$inferInsert)[] = [];
+    if (input.account?.value === 'create') {
+      subjectsToInsert.push({
+        name: input.account.label,
+        belongsToId: userId,
+        type: SubjectTypeConst.ACCOUNT,
+      });
+    }
 
-    await db.insert(schema.expensesTable).values({
+    if (input.category?.value === 'create') {
+      subjectsToInsert.push({
+        name: input.category.label,
+        belongsToId: userId,
+        type: SubjectTypeConst.CATEGORY,
+      });
+    }
+
+    if (subjectsToInsert.length > 0) {
+      const insertedSubjects = await db
+        .insert(subjectsTable)
+        .values(subjectsToInsert)
+        .returning({ id: subjectsTable.id, type: subjectsTable.type });
+
+      for (const newSubject of insertedSubjects) {
+        if (newSubject.type === SubjectTypeConst.ACCOUNT) accountId = newSubject.id;
+        if (newSubject.type === SubjectTypeConst.CATEGORY) categoryId = newSubject.id;
+      }
+    }
+
+    const isCreate = input.expenseId === 'create';
+    const values = {
       description: input.description,
       amountCents: input.amountCents,
-      accountId: input.accountId,
-      categoryId: input.categoryId,
+      accountId: accountId,
+      categoryId: categoryId,
       billedAt: input.billedAt,
-      belongsToId: userId,
-    });
+    } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
+
+    if (isCreate) {
+      await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
+    } else {
+      const existing = await db.query.expensesTable.findFirst({
+        where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+      });
+
+      if (!existing) {
+        throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
+      const valuesWere: Partial<typeof expensesTable.$inferInsert> = {};
+      for (const key in values) {
+        // @ts-ignore
+        valuesWere[key] = existing[key];
+      }
+
+      await db.batch([
+        db
+          .update(expensesTable)
+          .set(values)
+          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
+        db.insert(historiesTable).values({
+          tableName: getTableName(expensesTable),
+          rowId,
+          valuesWere,
+          versionWas,
+          wasUpdatedAt,
+          wasUpdatedBy,
+        }),
+      ]);
+    }
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -121,45 +231,39 @@ const listExpenseProcedure = protectedProcedure
     const filterEnd = endOfMonth(filterStart);
 
     const filterList: SQL[] = [
-      eq(schema.expensesTable.belongsToId, userId),
-      gte(schema.expensesTable.billedAt, filterStart),
-      lt(schema.expensesTable.billedAt, filterEnd),
+      eq(expensesTable.belongsToId, userId),
+      gte(expensesTable.billedAt, filterStart),
+      lt(expensesTable.billedAt, filterEnd),
     ];
 
-    const accountSubject = alias(schema.subjectsTable, 'account');
-    const categorySubject = alias(schema.subjectsTable, 'category');
+    const accountSubject = alias(subjectsTable, 'account');
+    const categorySubject = alias(subjectsTable, 'category');
     const expenses = await db
       .select({
-        id: schema.expensesTable.id,
-        description: schema.expensesTable.description,
-        amount: sql<number>`ROUND(${schema.expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
-        // amountCents: schema.expensesTable.amountCents,
-        billedAt: schema.expensesTable.billedAt,
+        id: expensesTable.id,
+        description: expensesTable.description,
+        amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
+        // amountCents: expensesTable.amountCents,
+        billedAt: expensesTable.billedAt,
         account: {
           name: accountSubject.name,
         },
         category: {
           name: categorySubject.name,
         },
-        createdAt: schema.expensesTable.createdAt,
+        createdAt: expensesTable.createdAt,
       })
-      .from(schema.expensesTable)
+      .from(expensesTable)
       .leftJoin(
         accountSubject,
-        and(
-          eq(schema.expensesTable.accountId, accountSubject.id),
-          eq(accountSubject.type, schema.SUBJECT_TYPE.ACCOUNT),
-        ),
+        and(eq(expensesTable.accountId, accountSubject.id), eq(accountSubject.type, SubjectTypeConst.ACCOUNT)),
       )
       .leftJoin(
         categorySubject,
-        and(
-          eq(schema.expensesTable.categoryId, categorySubject.id),
-          eq(categorySubject.type, schema.SUBJECT_TYPE.CATEGORY),
-        ),
+        and(eq(expensesTable.categoryId, categorySubject.id), eq(categorySubject.type, SubjectTypeConst.CATEGORY)),
       )
       .where(and(...filterList))
-      .orderBy(desc(schema.expensesTable.billedAt));
+      .orderBy(desc(expensesTable.billedAt));
 
     return {
       expenses,
@@ -167,7 +271,8 @@ const listExpenseProcedure = protectedProcedure
   });
 
 export const expenseProcedures = {
-  loadCreate: loadCreateExpenseProcedure,
-  create: createExpenseProcedure,
+  loadOptions: loadExpenseOptionsProcedure,
+  loadDetail: loadExpenseDetailProcedure,
+  save: saveExpenseProcedure,
   list: listExpenseProcedure,
 };

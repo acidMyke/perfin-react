@@ -1,8 +1,8 @@
-import type { Context } from './trpc';
+import type { Context, ProtectedContext } from '../trpc';
 import { addDays } from 'date-fns/addDays';
 import { randomBytes } from 'node:crypto';
-import * as schema from '../db/schema';
-import { eq } from 'drizzle-orm';
+import * as schema from '../../db/schema';
+import { and, eq } from 'drizzle-orm';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { addMinutes } from 'date-fns/addMinutes';
 import { TRPCError } from '@trpc/server';
@@ -32,6 +32,22 @@ async function create(ctx: Context, userId: string) {
     expires: expiresAt,
     maxAge,
   });
+}
+
+function unsetCookie(ctx: Pick<Context, 'resHeaders' | 'env'>) {
+  const { resHeaders, env } = ctx;
+  resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
+}
+
+async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
+  const { session, user, db } = ctx;
+  if (!otherSessionId) {
+    unsetCookie(ctx);
+  }
+  await db
+    .update(schema.sessionsTable)
+    .set({ expiresAt: new Date() })
+    .where(and(eq(schema.sessionsTable.id, otherSessionId ?? session.id), eq(schema.sessionsTable.userId, user.id)));
 }
 
 function getTokenFromHeader(ctx: Context) {
@@ -118,6 +134,7 @@ async function resolve(ctx: Context, allowUnauthicated = false) {
       };
     }
     failureReason = 'Unable to find token';
+    unsetCookie(ctx);
   }
 
   if (allowUnauthicated) {
@@ -136,6 +153,7 @@ async function resolve(ctx: Context, allowUnauthicated = false) {
 export const sessions = {
   create,
   resolve,
+  revoke,
 };
 
 export default sessions;

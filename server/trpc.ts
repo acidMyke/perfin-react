@@ -1,10 +1,10 @@
-import { initTRPC, TRPCError } from '@trpc/server';
+import { initTRPC, TRPCError, type inferProcedureBuilderResolverOptions } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { drizzle } from 'drizzle-orm/d1';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
 import * as schema from '../db/schema';
-import { type CookieHeaders } from './lib';
-import sessions from './sessions';
+import { type CookieHeaders } from './lib/CookieHeaders';
+import sessions from './lib/sessions';
 import { $ZodError } from 'zod/v4/core';
 import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
@@ -125,6 +125,7 @@ export const protectedProcedure = publicProcedure.use(async opts => {
   const res = opts.next({
     ctx: {
       user: user!,
+      userId: user!.id,
       session: session!,
     },
   });
@@ -135,3 +136,5 @@ export const protectedProcedure = publicProcedure.use(async opts => {
 
   return res;
 });
+
+export type ProtectedContext = inferProcedureBuilderResolverOptions<typeof protectedProcedure>['ctx'];

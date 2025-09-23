@@ -1,5 +1,3 @@
-export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
 export class CookieHeaders extends Headers {
   constructor(init?: HeadersInit) {
     super(init);
