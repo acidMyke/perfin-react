@@ -3,9 +3,9 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { queryClient, trpc, type RouterInputs } from '../../trpc';
 import { PageHeader } from '../../components/PageHeader';
 import { cn } from '../../components/Form';
-import { MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
+import { ChevronDown, MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
 import { useState } from 'react';
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
@@ -82,11 +82,28 @@ function TrendLineSection() {
   return (
     <>
       <h2 className='mt-4 mb-2 text-xl'>
-        Over the past {duration} {interval}
+        Over the past {duration}
+        <div className='dropdown ml-2'>
+          <div tabIndex={0} role='button' className='btn'>
+            {interval}
+            <ChevronDown />
+          </div>
+          <ul tabIndex={0} className='menu dropdown-content bg-base-100 rounded-box z-1 w-36 p-2 shadow-sm'>
+            <li>
+              <button onClick={() => setInterval('days')}>days</button>
+            </li>
+            <li>
+              <button onClick={() => setInterval('weeks')}>weeks</button>
+            </li>
+            <li>
+              <button onClick={() => setInterval('months')}>months</button>
+            </li>
+          </ul>
+        </div>
       </h2>
 
-      <LineChart data={trendData} width={448} height={320}>
-        <CartesianGrid strokeDasharray='3 3' />
+      <LineChart data={trendData} width={440} height={320}>
+        <CartesianGrid />
         <XAxis dataKey='tick' />
         <YAxis />
         <Legend />
