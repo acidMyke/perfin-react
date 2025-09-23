@@ -55,6 +55,7 @@ const getTrendProcedure = protectedProcedure
   .query(async ({ ctx, input }) => {
     const { interval } = input;
     const { db, userId } = ctx;
+    const duration = interval == 'days' ? 28 : 14;
 
     const strf = {
       days: sql`%Y-%m-%d`,
@@ -64,20 +65,23 @@ const getTrendProcedure = protectedProcedure
 
     const trendData = await db
       .select({
-        label: sql<string>`strftime('${strf}', datetime(${expensesTable.billedAt}, 'unixepoch', '-8 hours')) as label`,
-        expensesSum: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
+        tick: sql<string>`strftime('${strf}', datetime(${expensesTable.billedAt}, 'unixepoch', '-8 hours')) as label`,
+        amount: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
       })
       .from(expensesTable)
       .where(
         and(
           eq(expensesTable.belongsToId, userId),
-          gt(expensesTable.billedAt, sub(endOfToday(), { [interval]: interval == 'days' ? 28 : 14 })),
+          gt(expensesTable.billedAt, sub(endOfToday(), { [interval]: duration })),
         ),
       )
       .groupBy(sql`label`)
       .orderBy(sql`label asc`);
 
-    return trendData;
+    return {
+      trendData,
+      duration,
+    };
   });
 
 export const dashboardProcedure = {

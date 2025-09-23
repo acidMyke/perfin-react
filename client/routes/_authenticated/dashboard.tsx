@@ -1,14 +1,19 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { queryClient, trpc } from '../../trpc';
+import { queryClient, trpc, type RouterInputs } from '../../trpc';
 import { PageHeader } from '../../components/PageHeader';
 import { cn } from '../../components/Form';
 import { MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
+import { useState } from 'react';
+import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
   loader: () => {
-    return Promise.all([queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions())]);
+    return Promise.all([
+      queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions()),
+      queryClient.ensureQueryData(trpc.dashboard.getTrend.queryOptions({ interval: 'days' })),
+    ]);
   },
 });
 
@@ -22,6 +27,7 @@ function RouteComponent() {
     <div className='mx-auto flex max-w-md flex-col'>
       <PageHeader title='Overview' />
       <InsightsSection />
+      <TrendLineSection />
     </div>
   );
 }
@@ -65,4 +71,27 @@ function TrendIcon({ diff, invert = false, ...rest }: { diff: number; invert?: b
   } else {
     return <MoveRight {...rest} />;
   }
+}
+
+function TrendLineSection() {
+  const [interval, setInterval] = useState<RouterInputs['dashboard']['getTrend']['interval']>('days');
+  const {
+    data: { duration, trendData },
+  } = useSuspenseQuery(trpc.dashboard.getTrend.queryOptions({ interval }));
+
+  return (
+    <>
+      <h2 className='mt-4 mb-2 text-xl'>
+        Over the past {duration} {interval}
+      </h2>
+
+      <LineChart data={trendData} width={448} height={320}>
+        <CartesianGrid strokeDasharray='3 3' />
+        <XAxis dataKey='tick' />
+        <YAxis />
+        <Legend />
+        <Line type='linear' stroke='#51a2ff' dataKey='amount' name='Amount' />
+      </LineChart>
+    </>
+  );
 }
