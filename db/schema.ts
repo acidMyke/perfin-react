@@ -1,5 +1,5 @@
 import { sql, relations } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 import { PERIOD_TYPES_TUPLE, SUBJECT_TYPES_TUPLE } from './enum';
 
@@ -117,9 +117,13 @@ export const expensesTable = sqliteTable('expenses', {
   accountId: nullableIdColumn().references(() => subjectsTable.id),
   categoryId: nullableIdColumn().references(() => subjectsTable.id),
   updatedBy: idColumn().references(() => usersTable.id),
+  shopId: nullableIdColumn().references(() => shopsTable.id),
+  latitude: real(),
+  longitude: real(),
+  geoAccuracy: real(),
 });
 
-export const expensesRelations = relations(expensesTable, ({ one }) => ({
+export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
   belongsTo: one(usersTable, {
     fields: [expensesTable.belongsToId],
     references: [usersTable.id],
@@ -132,4 +136,36 @@ export const expensesRelations = relations(expensesTable, ({ one }) => ({
     fields: [expensesTable.categoryId],
     references: [subjectsTable.id],
   }),
+  items: many(expenseItemsTable),
+  shop: one(shopsTable, {
+    fields: [expensesTable.shopId],
+    references: [shopsTable.id],
+  }),
 }));
+
+export const expenseItemsTable = sqliteTable('expense_items', {
+  ...baseColumns(),
+  sequence: integer().notNull(),
+  name: text().notNull(),
+  quantity: integer().default(1).notNull(),
+  priceCents: centsColumn(),
+  expenseId: idColumn().references(() => expensesTable.id),
+  categoryId: nullableIdColumn().references(() => subjectsTable.id),
+});
+
+export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => ({
+  expense: one(expensesTable, {
+    fields: [expenseItemsTable.expenseId],
+    references: [expensesTable.id],
+  }),
+  category: one(subjectsTable, {
+    fields: [expenseItemsTable.categoryId],
+    references: [subjectsTable.id],
+  }),
+}));
+
+export const shopsTable = sqliteTable('shops', {
+  ...baseColumns(),
+  name: text().notNull(),
+  mall: text(),
+});
