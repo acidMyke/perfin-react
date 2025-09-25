@@ -91,43 +91,27 @@ function RouteComponent() {
     >
       <form.AppForm>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
-        <form.Field name='amountCents'>
-          {field => (
-            <label htmlFor={field.name} className='floating-label mt-8'>
-              <span>Amount</span>
-              <label className='input input-primary input-lg w-full'>
-                <DollarSign size='1em' />
-                <input
-                  autoFocus
-                  type='number'
-                  id={field.name}
-                  name={field.name}
-                  placeholder='Amount'
-                  value={(field.state.value / 100).toFixed(2)}
-                  onChange={e =>
-                    !isNaN(e.target.valueAsNumber) &&
-                    field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
-                  }
-                  onKeyDown={e => {
-                    if (e.key === 'Backspace') field.handleChange(v => v / 10);
-                    else if (e.key === '.') field.handleChange(v => v * 100);
-                    else return;
-                    e.preventDefault();
-                  }}
-                />
-              </label>
-              <FieldError field={field} />
-            </label>
+        <form.AppField name='amountCents'>
+          {({ NumericInput }) => (
+            <NumericInput
+              min={0}
+              max={1000}
+              label='Amount'
+              containerCn='mt-4'
+              inputCn='input-lg'
+              transforms={['amountInCents']}
+              numberFormat={new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' })}
+            />
           )}
-        </form.Field>
+        </form.AppField>
         <form.AppField name='description'>
           {({ TextInput }) => (
-            <TextInput type='text' label='Description' containerCn='mt-2' inputCn='input-lg' transform='uppercase' />
+            <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' transform='uppercase' />
           )}
         </form.AppField>
         <form.Field name='billedAt'>
           {field => (
-            <label htmlFor={field.name} className='floating-label mt-2'>
+            <label htmlFor={field.name} className='floating-label mt-4'>
               <span>Date</span>
               <input
                 type='datetime-local'
@@ -152,10 +136,10 @@ function RouteComponent() {
           )}
         </form.Field>
         <form.AppField name='category'>
-          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} />}
+          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-4' />}
         </form.AppField>
         <form.AppField name='account'>
-          {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-4' />}
+          {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-8' />}
         </form.AppField>
         <form.Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
           {([isPristine, canSubmit, isSubmitting]) => (
