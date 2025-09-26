@@ -114,7 +114,7 @@ function NumericInput(props: NumericInputProps) {
             }
             if ((nullIfZero && value === 0) || isNaN(value)) field.handleChange(() => null);
             else field.handleChange(() => transforms.reduce((a, t) => NumericTransformers[t].transform(a), value));
-            field.setErrorMap({ onBlur: '' });
+            field.setErrorMap({ onBlur: undefined });
           }}
         />
         {postfix && <span>{postfix}</span>}

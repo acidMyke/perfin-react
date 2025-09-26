@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
-import { DollarSign } from 'lucide-react';
+import { DollarSign, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
@@ -41,15 +41,19 @@ function RouteComponent() {
       billedAt: new Date(),
       account: undefined as undefined | (typeof accountOptions)[number],
       category: undefined as undefined | (typeof categoryOptions)[number],
+      geolocation: undefined as undefined | { latitude: number; longitude: number; accuracy: number },
     },
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
-        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
-        const { billedAt, ...otherValues } = value;
+        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
+        const { billedAt, geolocation, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
             ...otherValues,
+            latitude: geolocation?.latitude ?? null,
+            longitude: geolocation?.longitude ?? null,
+            geoAccuracy: geolocation?.accuracy ?? null,
             billedAt: billedAt.toISOString(),
           }),
         );
@@ -66,20 +70,41 @@ function RouteComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      const { billedAt, accountId, categoryId, ...rest } = existingExpenseQuery.data;
+      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = existingExpenseQuery.data;
       const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
       const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
-      form.reset(
-        {
-          billedAt: new Date(billedAt),
-          account,
-          category,
-          ...rest,
-        },
-        { keepDefaultValues: true },
-      );
+      const formData: typeof form.state.values = {
+        billedAt: new Date(billedAt),
+        account,
+        category,
+        geolocation: undefined,
+        ...rest,
+      };
+
+      if (latitude !== null && longitude !== null && geoAccuracy !== null) {
+        formData.geolocation = {
+          latitude,
+          longitude,
+          accuracy: geoAccuracy,
+        };
+      }
+      form.reset(formData, { keepDefaultValues: true });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
+
+  useEffect(() => {
+    if (isCreate && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          const { latitude, longitude, accuracy } = coords;
+          form.setFieldValue('geolocation', { latitude, longitude, accuracy });
+        },
+        () => {
+          form.setFieldMeta('geolocation', meta => ({ ...meta, isTouched: true, isDirty: true }));
+        },
+      );
+    }
+  }, []);
 
   return (
     <form
@@ -109,6 +134,26 @@ function RouteComponent() {
             <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' transform='uppercase' />
           )}
         </form.AppField>
+        <form.Subscribe selector={state => [state.values.geolocation]}>
+          {([geolocation]) =>
+            geolocation ? (
+              <p>
+                Location: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
+                  target='_blank'
+                  className='link'
+                >
+                  Open in maps
+                  <ExternalLink className='ml-2 inline-block' size='1em' />
+                </a>
+                )
+              </p>
+            ) : (
+              <p>Location: {isCreate ? 'Unable to retrieve your location' : 'Unsepcified'}</p>
+            )
+          }
+        </form.Subscribe>
         <form.Field name='billedAt'>
           {field => (
             <label htmlFor={field.name} className='floating-label mt-4'>

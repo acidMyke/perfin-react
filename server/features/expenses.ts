@@ -49,6 +49,9 @@ const loadExpenseDetailProcedure = protectedProcedure
         billedAt: true,
         accountId: true,
         categoryId: true,
+        latitude: true,
+        longitude: true,
+        geoAccuracy: true,
       },
     });
 
@@ -77,6 +80,9 @@ const saveExpenseProcedure = protectedProcedure
         .object({ value: z.string(), label: z.string() })
         .nullish()
         .transform(v => v ?? null),
+      latitude: z.number().nullish(),
+      longitude: z.number().nullish(),
+      geoAccuracy: z.number().nullish(),
     }),
   )
   .mutation(async ({ input, ctx }) => {
@@ -179,6 +185,9 @@ const saveExpenseProcedure = protectedProcedure
       accountId: accountId,
       categoryId: categoryId,
       billedAt: input.billedAt,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      geoAccuracy: input.geoAccuracy,
     } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {
