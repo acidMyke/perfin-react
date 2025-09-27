@@ -117,10 +117,11 @@ export const expensesTable = sqliteTable('expenses', {
   accountId: nullableIdColumn().references(() => subjectsTable.id),
   categoryId: nullableIdColumn().references(() => subjectsTable.id),
   updatedBy: idColumn().references(() => usersTable.id),
-  shopId: nullableIdColumn().references(() => shopsTable.id),
   latitude: real(),
   longitude: real(),
   geoAccuracy: real(),
+  shopName: text(),
+  shopMall: text(),
 });
 
 export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
@@ -137,10 +138,6 @@ export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
     references: [subjectsTable.id],
   }),
   items: many(expenseItemsTable),
-  shop: one(shopsTable, {
-    fields: [expensesTable.shopId],
-    references: [shopsTable.id],
-  }),
 }));
 
 export const expenseItemsTable = sqliteTable('expense_items', {
@@ -163,9 +160,3 @@ export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => (
     references: [subjectsTable.id],
   }),
 }));
-
-export const shopsTable = sqliteTable('shops', {
-  ...baseColumns(),
-  name: text().notNull(),
-  mall: text(),
-});
