@@ -52,6 +52,8 @@ const loadExpenseDetailProcedure = protectedProcedure
         latitude: true,
         longitude: true,
         geoAccuracy: true,
+        shopMall: true,
+        shopName: true,
       },
     });
 
@@ -83,6 +85,8 @@ const saveExpenseProcedure = protectedProcedure
       latitude: z.number().nullish(),
       longitude: z.number().nullish(),
       geoAccuracy: z.number().nullish(),
+      shopName: z.string().nullish(),
+      shopMall: z.string().nullish(),
     }),
   )
   .mutation(async ({ input, ctx }) => {
@@ -188,6 +192,8 @@ const saveExpenseProcedure = protectedProcedure
       latitude: input.latitude,
       longitude: input.longitude,
       geoAccuracy: input.geoAccuracy,
+      shopName: input.shopName,
+      shopMall: input.shopName,
     } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {
