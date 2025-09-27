@@ -1,6 +1,6 @@
 import { FormInputError, protectedProcedure } from '../trpc';
 import { expensesTable, historiesTable, subjectsTable } from '../../db/schema';
-import { and, asc, desc, eq, getTableName, gte, lt, or, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -285,9 +285,81 @@ const listExpenseProcedure = protectedProcedure
     };
   });
 
+const getSuggestionsProcedure = protectedProcedure
+  .input(
+    z
+      .object({
+        type: z.literal('shopName'),
+        search: z.string().default(''),
+      })
+      .or(
+        z.object({
+          type: z.literal('shopMall'),
+          search: z.string().default(''),
+        }),
+      )
+      .or(
+        z.object({
+          type: z.literal('itemName'),
+          search: z.string().default(''),
+          shopName: z.string().optional(),
+        }),
+      ),
+  )
+  .query(async ({ input, ctx, signal }) => {
+    const { db, userId } = ctx;
+    if (input.search.length < 2) {
+      return {
+        ...input,
+        suggestions: [],
+      };
+    }
+    const likelyValue = input.search.split('').join('%');
+    signal?.throwIfAborted();
+
+    if (input.type === 'shopName') {
+      const suggestions = await db
+        .selectDistinct({
+          value: sql<string>`${expensesTable.shopName}`,
+        })
+        .from(expensesTable)
+        .where(
+          and(
+            eq(expensesTable.belongsToId, userId),
+            isNotNull(expensesTable.shopName),
+            like(expensesTable.shopName, likelyValue),
+          ),
+        );
+      return {
+        ...input,
+        suggestions: suggestions.map(({ value }) => value),
+      };
+    } else if (input.type === 'shopMall') {
+      const suggestions = await db
+        .selectDistinct({
+          value: sql<string>`${expensesTable.shopName}`,
+        })
+        .from(expensesTable)
+        .where(
+          and(
+            eq(expensesTable.belongsToId, userId),
+            isNotNull(expensesTable.shopMall),
+            like(expensesTable.shopMall, likelyValue),
+          ),
+        );
+      return {
+        ...input,
+        suggestions: suggestions.map(({ value }) => value),
+      };
+    } else {
+      throw new TRPCError({ code: 'NOT_IMPLEMENTED' });
+    }
+  });
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
+  getSuggestions: getSuggestionsProcedure,
 };
