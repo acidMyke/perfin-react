@@ -185,10 +185,19 @@ type CreatableSelectProps = {
   maxMenuHeight?: number;
   containerCn?: string;
   labelCn?: string;
+  getNewOptionData?: (label: string) => Option;
 };
 
 function ComboBox(props: CreatableSelectProps) {
-  const { label, options, placeholder = 'Unspecified', maxMenuHeight = 124, containerCn, labelCn } = props;
+  const {
+    label,
+    options,
+    placeholder = 'Unspecified',
+    maxMenuHeight = 124,
+    containerCn,
+    labelCn,
+    getNewOptionData,
+  } = props;
   const field = useFieldContext<Option | undefined>();
   const [createOption, setCreateOption] = useState<Option | undefined>();
 
@@ -204,7 +213,7 @@ function ComboBox(props: CreatableSelectProps) {
         isClearable
         isSearchable
         value={field.state.value}
-        getNewOptionData={label => ({ label, value: 'create' })}
+        getNewOptionData={getNewOptionData ?? (label => ({ label, value: 'create' }))}
         createOptionPosition='first'
         formatCreateLabel={label => 'Create: ' + label}
         onChange={(v, meta) => {
@@ -251,15 +260,23 @@ function SubmitButton(props: SubmitButtonProps) {
   );
 }
 
+const formComponents = {
+  SubmitButton,
+};
+
+export type AppFormComponenets = typeof formComponents;
+
+const fieldComponents = {
+  TextInput,
+  ComboBox,
+  NumericInput,
+};
+
+export type AppFieldComponents = typeof fieldComponents;
+
 export const { useAppForm } = createFormHook({
   formContext,
   fieldContext,
-  formComponents: {
-    SubmitButton,
-  },
-  fieldComponents: {
-    TextInput,
-    ComboBox,
-    NumericInput,
-  },
+  formComponents,
+  fieldComponents,
 });

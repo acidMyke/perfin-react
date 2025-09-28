@@ -290,31 +290,25 @@ const getSuggestionsProcedure = protectedProcedure
     z
       .object({
         type: z.literal('shopName'),
-        search: z.string().default(''),
+        search: z.string().min(2),
       })
       .or(
         z.object({
           type: z.literal('shopMall'),
-          search: z.string().default(''),
+          search: z.string().min(2),
         }),
       )
       .or(
         z.object({
           type: z.literal('itemName'),
-          search: z.string().default(''),
+          search: z.string().min(2),
           shopName: z.string().optional(),
         }),
       ),
   )
   .query(async ({ input, ctx, signal }) => {
     const { db, userId } = ctx;
-    if (input.search.length < 2) {
-      return {
-        ...input,
-        suggestions: [],
-      };
-    }
-    const likelyValue = input.search.split('').join('%');
+    const likelyValue = '%' + input.search.split('').join('%') + '%';
     signal?.throwIfAborted();
 
     if (input.type === 'shopName') {
@@ -332,12 +326,12 @@ const getSuggestionsProcedure = protectedProcedure
         );
       return {
         ...input,
-        suggestions: suggestions.map(({ value }) => value),
+        suggestions: suggestions.map(({ value }) => ({ label: value, value })),
       };
     } else if (input.type === 'shopMall') {
       const suggestions = await db
         .selectDistinct({
-          value: sql<string>`${expensesTable.shopName}`,
+          value: sql<string>`${expensesTable.shopMall}`,
         })
         .from(expensesTable)
         .where(
@@ -349,7 +343,7 @@ const getSuggestionsProcedure = protectedProcedure
         );
       return {
         ...input,
-        suggestions: suggestions.map(({ value }) => value),
+        suggestions: suggestions.map(({ value }) => ({ label: value, value })),
       };
     } else {
       throw new TRPCError({ code: 'NOT_IMPLEMENTED' });

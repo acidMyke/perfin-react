@@ -6,8 +6,11 @@ import { DollarSign, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
-import { useEffect } from 'react';
-import { useAppForm } from '../../../components/Form';
+import { useEffect, useState } from 'react';
+import { useAppForm, type AppFieldComponents, type Option } from '../../../components/Form';
+import type { FieldApi } from '@tanstack/react-form';
+import AsyncCreatableSelect from 'react-select/async-creatable';
+import CreatableSelect from 'react-select/creatable';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -36,6 +39,7 @@ function RouteComponent() {
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useAppForm({
     defaultValues: {
+      shopName: undefined as Option | undefined,
       description: undefined as undefined | null | string,
       amountCents: 0.0,
       billedAt: new Date(),
@@ -46,10 +50,11 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ...otherValues } = value;
+        const { billedAt, geolocation, shopName, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
+            shopName: shopName?.value ?? null,
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
@@ -70,7 +75,8 @@ function RouteComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = existingExpenseQuery.data;
+      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, ...rest } =
+        existingExpenseQuery.data;
       const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
       const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
       const formData: typeof form.state.values = {
@@ -78,6 +84,7 @@ function RouteComponent() {
         account,
         category,
         geolocation: undefined,
+        shopName: shopName !== undefined && shopName !== null ? { label: shopName, value: shopName } : undefined,
         ...rest,
       };
 
@@ -129,6 +136,9 @@ function RouteComponent() {
             />
           )}
         </form.AppField>
+        {/* <form.Field name='shopName'>{field => <ExpenseShopField type='shopName' field={field} />}</form.Field> */}
+        <form.AppField name='shopName'>{field => <ExpenseShopField type='shopName' field={field} />}</form.AppField>
+
         <form.AppField name='description'>
           {({ TextInput }) => (
             <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' transform='uppercase' />
@@ -201,6 +211,64 @@ function RouteComponent() {
         </form.Subscribe>
       </form.AppForm>
     </form>
+  );
+}
+
+type ExpenseShopFieldProps = {
+  type: 'shopName' | 'shopMall';
+  field: FieldApi<
+    any,
+    any,
+    Option | undefined,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any
+  > &
+    AppFieldComponents;
+};
+
+function ExpenseShopField(props: ExpenseShopFieldProps) {
+  const { type, field } = props;
+  const currentValueStr = field.state.value?.value ?? '';
+  const suggestionQuery = useQuery(
+    trpc.expense.getSuggestions.queryOptions(
+      { type, search: currentValueStr },
+      {
+        enabled: currentValueStr.length > 1,
+        initialData: { type, search: currentValueStr, suggestions: [] as { label: string; value: string }[] },
+      },
+    ),
+  );
+
+  return (
+    <field.ComboBox
+      placeholder=''
+      label='Name'
+      options={suggestionQuery.data.suggestions ?? []}
+      getNewOptionData={value => {
+        value = value.toUpperCase();
+        const option = { label: value, value };
+        field.handleChange(option);
+        return option;
+      }}
+    />
   );
 }
 
