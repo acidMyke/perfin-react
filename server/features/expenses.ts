@@ -1,5 +1,5 @@
 import { FormInputError, protectedProcedure } from '../trpc';
-import { expensesTable, historiesTable, subjectsTable } from '../../db/schema';
+import { expenseItemsTable, expensesTable, historiesTable, subjectsTable } from '../../db/schema';
 import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -55,6 +55,17 @@ const loadExpenseDetailProcedure = protectedProcedure
         shopMall: true,
         shopName: true,
       },
+      with: {
+        items: {
+          orderBy: asc(expenseItemsTable.sequence),
+          columns: {
+            id: true,
+            name: true,
+            quantity: true,
+            priceCents: true,
+          },
+        },
+      },
     });
 
     if (!expense) {
@@ -87,6 +98,14 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
+      items: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string(),
+          priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
+          quantity: z.int().min(0, { error: 'Must be non-negative value' }),
+        }),
+      ),
     }),
   )
   .mutation(async ({ input, ctx }) => {
@@ -197,10 +216,26 @@ const saveExpenseProcedure = protectedProcedure
     } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {
-      await db.insert(expensesTable).values({ ...values, belongsToId: userId, updatedBy: userId });
+      const insertReturns = await db
+        .insert(expensesTable)
+        .values({ ...values, belongsToId: userId, updatedBy: userId })
+        .returning({ id: expensesTable.id });
+
+      if (!insertReturns || insertReturns.length < 1) return;
+      const expenseId = insertReturns[0].id;
+      await db.batch([
+        db.insert(expenseItemsTable).values(
+          input.items.map(({ id, ...data }, sequence) => ({
+            ...data,
+            expenseId,
+            sequence,
+          })),
+        ),
+      ]);
     } else {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+        with: { items: true },
       });
 
       if (!existing) {
@@ -213,6 +248,9 @@ const saveExpenseProcedure = protectedProcedure
         // @ts-ignore
         valuesWere[key] = existing[key];
       }
+
+      // @ts-ignore
+      valuesWere['items'] = existing.items;
 
       await db.batch([
         db
@@ -227,6 +265,20 @@ const saveExpenseProcedure = protectedProcedure
           wasUpdatedAt,
           wasUpdatedBy,
         }),
+        db
+          .insert(expenseItemsTable)
+          .values(
+            input.items.map(({ id, ...data }, sequence) => ({
+              ...data,
+              id: id === 'create' ? undefined : id,
+              expenseId: input.expenseId,
+              sequence,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: expenseItemsTable.id,
+            set: { name: sql`excluded.name`, priceCents: sql`excluded.price_cents`, quantity: sql`excluded.quantity` },
+          }),
       ]);
     }
   });
@@ -302,7 +354,6 @@ const getSuggestionsProcedure = protectedProcedure
         z.object({
           type: z.literal('itemName'),
           search: z.string().min(2),
-          shopName: z.string().optional(),
         }),
       ),
   )
@@ -341,6 +392,18 @@ const getSuggestionsProcedure = protectedProcedure
             like(expensesTable.shopMall, likelyValue),
           ),
         );
+      return {
+        ...input,
+        suggestions: suggestions.map(({ value }) => value),
+      };
+    } else if (input.type === 'itemName') {
+      const suggestions = await db
+        .selectDistinct({
+          value: sql<string>`${expenseItemsTable.name}`,
+        })
+        .from(expenseItemsTable)
+        .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
+        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, likelyValue)));
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),

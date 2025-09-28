@@ -2,12 +2,12 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc, type RouterOutputs } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
-import { ExternalLink } from 'lucide-react';
+import { Cross, ExternalLink, Plus, X } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-import { useAppForm, withForm } from '../../../components/Form';
+import { useAppForm, withFieldGroup, withForm } from '../../../components/Form';
 import { formOptions } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
@@ -56,11 +56,13 @@ function mapExpenseDetailToForm(
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
+      items: [] as Exclude<typeof detail, undefined>['items'],
     };
   }
 }
 
 const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
+const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
 
 function CreateEditExpensePageComponent() {
   const navigate = Route.useNavigate();
@@ -118,13 +120,7 @@ function CreateEditExpensePageComponent() {
   }, []);
 
   return (
-    <form
-      className='mx-auto max-w-md'
-      onSubmit={e => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
+    <div className='mx-auto max-w-md'>
       <form.AppForm>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
         <form.AppField name='amountCents'>
@@ -136,12 +132,35 @@ function CreateEditExpensePageComponent() {
               containerCn='mt-4'
               inputCn='input-lg'
               transforms={['amountInCents']}
-              numberFormat={new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' })}
+              numberFormat={currencyNumberFormat}
             />
           )}
         </form.AppField>
         {/* @ts-expect-errors */}
         <ShopDetailSubForm form={form} />
+        <form.Field name='items' mode='array'>
+          {field => (
+            <ul className='mt-8 flex flex-col'>
+              {field.state.value.map(({ id }, itemIndex) => (
+                <ItemDetailFieldGroup
+                  key={id + itemIndex}
+                  form={form}
+                  fields={`items[${itemIndex}]`}
+                  onRemove={() => field.removeValue(itemIndex)}
+                />
+              ))}
+              <li key='Create' className=''>
+                <button
+                  className='btn-ghost btn btn-block list-col-grow justify-start'
+                  onClick={() => field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1 })}
+                >
+                  <Plus />
+                  Add item
+                </button>
+              </li>
+            </ul>
+          )}
+        </form.Field>
         <form.AppField name='description'>
           {({ TextInput }) => (
             <TextInput type='text' label='Description' containerCn='mt-6' inputCn='input-lg' transform='uppercase' />
@@ -213,7 +232,7 @@ function CreateEditExpensePageComponent() {
           )}
         </form.Subscribe>
       </form.AppForm>
-    </form>
+    </div>
   );
 }
 
@@ -294,6 +313,65 @@ const ShopDetailSubForm = withForm({
           )}
         </form.AppField>
       </div>
+    );
+  },
+});
+
+const ItemDetailFieldGroup = withFieldGroup({
+  defaultValues: {
+    name: '',
+    quantity: 1,
+    priceCents: 0.0,
+  },
+  props: { onRemove: () => {} },
+  render({ group, onRemove }) {
+    const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+
+    return (
+      <li className='grid auto-cols-auto grid-flow-col place-items-center gap-4 pl-4 shadow-lg'>
+        <group.AppField
+          name='name'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value && value.length > 1) {
+                itenNameSuggestionMutation.mutateAsync({
+                  type: 'itemName',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Name'
+              containerCn='col-span-4 w-full'
+              options={itenNameSuggestionMutation.data?.suggestions ?? []}
+            />
+          )}
+        </group.AppField>
+        <group.AppField name='priceCents'>
+          {({ NumericInput }) => (
+            <NumericInput
+              label='Price'
+              transforms={['amountInCents']}
+              numberFormat={currencyNumberFormat}
+              inputCn='input-lg'
+              containerCn='mt-0 col-span-2 w-56'
+            />
+          )}
+        </group.AppField>
+        <group.AppField name='quantity'>
+          {({ NumericInput }) => <NumericInput inputCn='input-lg' label='Quantity' containerCn='mt-0 w-full' />}
+        </group.AppField>
+        <button className='btn-ghost btn col-start-4 row-start-2 mb-[1em]' onClick={() => onRemove()}>
+          Remove
+        </button>
+      </li>
     );
   },
 });
