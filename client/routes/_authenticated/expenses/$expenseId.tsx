@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc, type RouterOutputs } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
 import { ExternalLink } from 'lucide-react';
@@ -7,7 +7,7 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-import { useAppForm, withForm, type Option } from '../../../components/Form';
+import { useAppForm, withForm } from '../../../components/Form';
 import { formOptions } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
@@ -27,18 +27,42 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
-const createEditExpenseFormOptions = formOptions({
-  defaultValues: {
-    description: undefined as undefined | null | string,
-    amountCents: 0.0,
-    billedAt: new Date(),
-    account: undefined as undefined | Option,
-    category: undefined as undefined | Option,
-    geolocation: undefined as undefined | { latitude: number; longitude: number; accuracy: number },
-    shopName: undefined as undefined | Option,
-    shopMall: undefined as undefined | Option,
-  },
-});
+function mapExpenseDetailToForm(
+  detail?: RouterOutputs['expense']['loadDetail'],
+  options?: RouterOutputs['expense']['loadOptions'],
+) {
+  if (detail && options) {
+    const { accountOptions, categoryOptions } = options;
+    const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, shopMall, ...rest } = detail;
+    const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
+    const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+    return {
+      billedAt: new Date(billedAt),
+      account,
+      category,
+      geolocation:
+        latitude !== null && longitude !== null && geoAccuracy !== null
+          ? { latitude, longitude, accuracy: geoAccuracy }
+          : undefined,
+      shopName: shopName !== undefined && shopName !== null ? { label: shopName, value: shopName } : undefined,
+      shopMall: shopMall !== undefined && shopMall !== null ? { label: shopMall, value: shopMall } : undefined,
+      ...rest,
+    };
+  } else {
+    return {
+      description: undefined,
+      amountCents: 0.0,
+      billedAt: new Date(),
+      account: undefined,
+      category: undefined,
+      geolocation: undefined,
+      shopName: undefined,
+      shopMall: undefined,
+    };
+  }
+}
+
+const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
 
 function CreateEditExpensePageComponent() {
   const navigate = Route.useNavigate();
@@ -79,28 +103,7 @@ function CreateEditExpensePageComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, shopMall, ...rest } =
-        existingExpenseQuery.data;
-      const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
-      const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
-      const formData: typeof form.state.values = {
-        billedAt: new Date(billedAt),
-        account,
-        category,
-        geolocation: undefined,
-        shopName: shopName !== undefined && shopName !== null ? { label: shopName, value: shopName } : undefined,
-        shopMall: shopMall !== undefined && shopMall !== null ? { label: shopMall, value: shopMall } : undefined,
-        ...rest,
-      };
-
-      if (latitude !== null && longitude !== null && geoAccuracy !== null) {
-        formData.geolocation = {
-          latitude,
-          longitude,
-          accuracy: geoAccuracy,
-        };
-      }
-      form.reset(formData, { keepDefaultValues: true });
+      form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), { keepDefaultValues: true });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
 
