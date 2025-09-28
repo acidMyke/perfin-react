@@ -33,7 +33,7 @@ function mapExpenseDetailToForm(
 ) {
   if (detail && options) {
     const { accountOptions, categoryOptions } = options;
-    const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, shopMall, ...rest } = detail;
+    const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
     const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
     const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
     return {
@@ -44,14 +44,12 @@ function mapExpenseDetailToForm(
         latitude !== null && longitude !== null && geoAccuracy !== null
           ? { latitude, longitude, accuracy: geoAccuracy }
           : undefined,
-      shopName: shopName !== undefined && shopName !== null ? { label: shopName, value: shopName } : undefined,
-      shopMall: shopMall !== undefined && shopMall !== null ? { label: shopMall, value: shopMall } : undefined,
       ...rest,
     };
   } else {
     return {
       description: undefined,
-      amountCents: 0.0,
+      amountCents: 0,
       billedAt: new Date(),
       account: undefined,
       category: undefined,
@@ -77,12 +75,10 @@ function CreateEditExpensePageComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, shopName, shopMall, ...otherValues } = value;
+        const { billedAt, geolocation, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
-            shopName: shopName?.value ?? null,
-            shopMall: shopMall?.value ?? null,
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
@@ -251,12 +247,12 @@ const ShopDetailSubForm = withForm({
           name='shopName'
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value: option, signal }) => {
+            onChangeAsync: ({ value, signal }) => {
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (option?.value && option.value.length > 1) {
+              if (value !== null && value.length > 1) {
                 shopNameSuggestionMutation.mutateAsync({
                   type: 'shopName',
-                  search: option.value,
+                  search: value,
                 });
               }
             },
@@ -264,16 +260,11 @@ const ShopDetailSubForm = withForm({
         >
           {field => (
             <field.ComboBox
+              suggestionMode
               placeholder=''
               label='Shop name'
               containerCn='flex-grow-1'
               options={shopNameSuggestionMutation.data?.suggestions ?? []}
-              getNewOptionData={value => {
-                value = value.toUpperCase();
-                const option = { label: value, value };
-                field.handleChange(option);
-                return option;
-              }}
             />
           )}
         </form.AppField>
@@ -281,12 +272,12 @@ const ShopDetailSubForm = withForm({
           name='shopMall'
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value: option, signal }) => {
+            onChangeAsync: ({ value, signal }) => {
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (option?.value && option.value.length > 1) {
+              if (value !== null && value.length > 1) {
                 shopMallSuggestionMutation.mutateAsync({
                   type: 'shopMall',
-                  search: option.value,
+                  search: value,
                 });
               }
             },
@@ -294,16 +285,11 @@ const ShopDetailSubForm = withForm({
         >
           {field => (
             <field.ComboBox
+              suggestionMode
               placeholder=''
               label='Mall'
               containerCn='flex-grow-1'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}
-              getNewOptionData={value => {
-                value = value.toUpperCase();
-                const option = { label: value, value };
-                field.handleChange(option);
-                return option;
-              }}
             />
           )}
         </form.AppField>

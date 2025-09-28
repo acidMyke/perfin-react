@@ -326,7 +326,7 @@ const getSuggestionsProcedure = protectedProcedure
         );
       return {
         ...input,
-        suggestions: suggestions.map(({ value }) => ({ label: value, value })),
+        suggestions: suggestions.map(({ value }) => value),
       };
     } else if (input.type === 'shopMall') {
       const suggestions = await db
@@ -343,7 +343,7 @@ const getSuggestionsProcedure = protectedProcedure
         );
       return {
         ...input,
-        suggestions: suggestions.map(({ value }) => ({ label: value, value })),
+        suggestions: suggestions.map(({ value }) => value),
       };
     } else {
       throw new TRPCError({ code: 'NOT_IMPLEMENTED' });

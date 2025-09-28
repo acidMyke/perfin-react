@@ -180,26 +180,26 @@ export type Option = {
 
 type CreatableSelectProps = {
   label: string;
-  options: Option[];
+  options: (Option | string)[];
   placeholder?: string;
   maxMenuHeight?: number;
   containerCn?: string;
   labelCn?: string;
-  getNewOptionData?: (label: string) => Option;
+  suggestionMode?: boolean;
 };
 
 function ComboBox(props: CreatableSelectProps) {
-  const {
-    label,
-    options,
-    placeholder = 'Unspecified',
-    maxMenuHeight = 124,
-    containerCn,
-    labelCn,
-    getNewOptionData,
-  } = props;
-  const field = useFieldContext<Option | undefined>();
+  const { label, placeholder = 'Unspecified', maxMenuHeight = 124, containerCn, labelCn, suggestionMode } = props;
+  const field = useFieldContext<Option | string | undefined>();
   const [createOption, setCreateOption] = useState<Option | undefined>();
+
+  const value = (
+    typeof field.state.value === 'string' ? { label: field.state.value, value: field.state.value } : field.state.value
+  ) as Option | undefined;
+
+  const options = suggestionMode
+    ? (props.options as string[]).map(value => ({ label: value, value }))
+    : (props.options as Option[]);
 
   return (
     <label htmlFor={field.name} className={cn('floating-label', containerCn)}>
@@ -212,8 +212,16 @@ function ComboBox(props: CreatableSelectProps) {
         maxMenuHeight={maxMenuHeight}
         isClearable
         isSearchable
-        value={field.state.value}
-        getNewOptionData={getNewOptionData ?? (label => ({ label, value: 'create' }))}
+        value={value}
+        getNewOptionData={label => {
+          if (suggestionMode) {
+            label = label.toUpperCase();
+            field.handleChange(label);
+            return { label, value: label };
+          } else {
+            return { label, value: 'create' };
+          }
+        }}
         createOptionPosition='first'
         formatCreateLabel={label => 'Create: ' + label}
         onChange={(v, meta) => {
@@ -222,7 +230,7 @@ function ComboBox(props: CreatableSelectProps) {
             return;
           }
           if (meta.action === 'create-option') setCreateOption(v);
-          field.handleChange(v);
+          field.handleChange(suggestionMode ? v.value : v);
         }}
       />
     </label>
