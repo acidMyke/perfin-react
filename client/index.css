@@ -113,3 +113,8 @@ html {
 .react-select-lg__option--is-selected {
   @apply bg-base-300;
 }
+
+/* Rechart outline removal */
+.recharts-wrapper > svg {
+  outline: none;
+}
