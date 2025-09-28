@@ -7,10 +7,11 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-import { useAppForm, type Option } from '../../../components/Form';
+import { useAppForm, withForm, type Option } from '../../../components/Form';
+import { formOptions } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
-  component: RouteComponent,
+  component: CreateEditExpensePageComponent,
   notFoundComponent: ExpenseNotFoundComponent,
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
@@ -26,7 +27,20 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
-function RouteComponent() {
+const createEditExpenseFormOptions = formOptions({
+  defaultValues: {
+    description: undefined as undefined | null | string,
+    amountCents: 0.0,
+    billedAt: new Date(),
+    account: undefined as undefined | Option,
+    category: undefined as undefined | Option,
+    geolocation: undefined as undefined | { latitude: number; longitude: number; accuracy: number },
+    shopName: undefined as undefined | Option,
+    shopMall: undefined as undefined | Option,
+  },
+});
+
+function CreateEditExpensePageComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
@@ -34,25 +48,17 @@ function RouteComponent() {
   const { accountOptions, categoryOptions } = optionsData;
   const existingExpenseQuery = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
-  const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
   const form = useAppForm({
-    defaultValues: {
-      description: undefined as undefined | null | string,
-      amountCents: 0.0,
-      billedAt: new Date(),
-      account: undefined as undefined | (typeof accountOptions)[number],
-      category: undefined as undefined | (typeof categoryOptions)[number],
-      geolocation: undefined as undefined | { latitude: number; longitude: number; accuracy: number },
-      shopName: undefined as undefined | Option,
-    },
+    ...createEditExpenseFormOptions,
     validators: {
-      onSubmitAsync: async ({ value, signal }) => {
+      onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, shopName, ...otherValues } = value;
+        const { billedAt, geolocation, shopName, shopMall, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
             shopName: shopName?.value ?? null,
+            shopMall: shopMall?.value ?? null,
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
@@ -73,7 +79,7 @@ function RouteComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, ...rest } =
+      const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, shopName, shopMall, ...rest } =
         existingExpenseQuery.data;
       const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
       const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
@@ -83,6 +89,7 @@ function RouteComponent() {
         category,
         geolocation: undefined,
         shopName: shopName !== undefined && shopName !== null ? { label: shopName, value: shopName } : undefined,
+        shopMall: shopMall !== undefined && shopMall !== null ? { label: shopMall, value: shopMall } : undefined,
         ...rest,
       };
 
@@ -134,38 +141,11 @@ function RouteComponent() {
             />
           )}
         </form.AppField>
-        <form.AppField
-          name='shopName'
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value: option, signal }) => {
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (option?.value && option.value.length > 1) {
-                shopNameSuggestionMutation.mutateAsync({
-                  type: 'shopName',
-                  search: option.value,
-                });
-              }
-            },
-          }}
-        >
-          {field => (
-            <field.ComboBox
-              placeholder=''
-              label='Name'
-              options={shopNameSuggestionMutation.data?.suggestions ?? []}
-              getNewOptionData={value => {
-                value = value.toUpperCase();
-                const option = { label: value, value };
-                field.handleChange(option);
-                return option;
-              }}
-            />
-          )}
-        </form.AppField>
+        {/* @ts-expect-errors */}
+        <ShopDetailSubForm form={form} />
         <form.AppField name='description'>
           {({ TextInput }) => (
-            <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' transform='uppercase' />
+            <TextInput type='text' label='Description' containerCn='mt-6' inputCn='input-lg' transform='uppercase' />
           )}
         </form.AppField>
         <form.Subscribe selector={state => [state.values.geolocation]}>
@@ -255,3 +235,76 @@ function ExpenseNotFoundComponent() {
     </div>
   );
 }
+
+const ShopDetailSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+
+    return (
+      <div className='mt-4 flex flex-row justify-between gap-2'>
+        <form.AppField
+          name='shopName'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value: option, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (option?.value && option.value.length > 1) {
+                shopNameSuggestionMutation.mutateAsync({
+                  type: 'shopName',
+                  search: option.value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              placeholder=''
+              label='Shop name'
+              containerCn='flex-grow-1'
+              options={shopNameSuggestionMutation.data?.suggestions ?? []}
+              getNewOptionData={value => {
+                value = value.toUpperCase();
+                const option = { label: value, value };
+                field.handleChange(option);
+                return option;
+              }}
+            />
+          )}
+        </form.AppField>
+        <form.AppField
+          name='shopMall'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value: option, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (option?.value && option.value.length > 1) {
+                shopMallSuggestionMutation.mutateAsync({
+                  type: 'shopMall',
+                  search: option.value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              placeholder=''
+              label='Mall'
+              containerCn='flex-grow-1'
+              options={shopMallSuggestionMutation.data?.suggestions ?? []}
+              getNewOptionData={value => {
+                value = value.toUpperCase();
+                const option = { label: value, value };
+                field.handleChange(option);
+                return option;
+              }}
+            />
+          )}
+        </form.AppField>
+      </div>
+    );
+  },
+});

@@ -193,7 +193,7 @@ const saveExpenseProcedure = protectedProcedure
       longitude: input.longitude,
       geoAccuracy: input.geoAccuracy,
       shopName: input.shopName,
-      shopMall: input.shopName,
+      shopMall: input.shopMall,
     } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
 
     if (isCreate) {

@@ -260,23 +260,15 @@ function SubmitButton(props: SubmitButtonProps) {
   );
 }
 
-const formComponents = {
-  SubmitButton,
-};
-
-export type AppFormComponenets = typeof formComponents;
-
-const fieldComponents = {
-  TextInput,
-  ComboBox,
-  NumericInput,
-};
-
-export type AppFieldComponents = typeof fieldComponents;
-
-export const { useAppForm } = createFormHook({
+export const { useAppForm, withForm, withFieldGroup } = createFormHook({
   formContext,
   fieldContext,
-  formComponents,
-  fieldComponents,
+  formComponents: {
+    SubmitButton,
+  },
+  fieldComponents: {
+    TextInput,
+    ComboBox,
+    NumericInput,
+  },
 });
