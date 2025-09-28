@@ -2,15 +2,12 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
-import { DollarSign, ExternalLink } from 'lucide-react';
+import { ExternalLink } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
-import { useEffect, useState } from 'react';
-import { useAppForm, type AppFieldComponents, type Option } from '../../../components/Form';
-import type { FieldApi } from '@tanstack/react-form';
-import AsyncCreatableSelect from 'react-select/async-creatable';
-import CreatableSelect from 'react-select/creatable';
+import { useEffect } from 'react';
+import { useAppForm, type Option } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -37,15 +34,16 @@ function RouteComponent() {
   const { accountOptions, categoryOptions } = optionsData;
   const existingExpenseQuery = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
+  const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
   const form = useAppForm({
     defaultValues: {
-      shopName: undefined as Option | undefined,
       description: undefined as undefined | null | string,
       amountCents: 0.0,
       billedAt: new Date(),
       account: undefined as undefined | (typeof accountOptions)[number],
       category: undefined as undefined | (typeof categoryOptions)[number],
       geolocation: undefined as undefined | { latitude: number; longitude: number; accuracy: number },
+      shopName: undefined as undefined | Option,
     },
     validators: {
       onSubmitAsync: async ({ value, signal }) => {
@@ -136,9 +134,35 @@ function RouteComponent() {
             />
           )}
         </form.AppField>
-        {/* <form.Field name='shopName'>{field => <ExpenseShopField type='shopName' field={field} />}</form.Field> */}
-        <form.AppField name='shopName'>{field => <ExpenseShopField type='shopName' field={field} />}</form.AppField>
-
+        <form.AppField
+          name='shopName'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value: option, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (option?.value && option.value.length > 1) {
+                shopNameSuggestionMutation.mutateAsync({
+                  type: 'shopName',
+                  search: option.value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              placeholder=''
+              label='Name'
+              options={shopNameSuggestionMutation.data?.suggestions ?? []}
+              getNewOptionData={value => {
+                value = value.toUpperCase();
+                const option = { label: value, value };
+                field.handleChange(option);
+                return option;
+              }}
+            />
+          )}
+        </form.AppField>
         <form.AppField name='description'>
           {({ TextInput }) => (
             <TextInput type='text' label='Description' containerCn='mt-4' inputCn='input-lg' transform='uppercase' />
@@ -211,64 +235,6 @@ function RouteComponent() {
         </form.Subscribe>
       </form.AppForm>
     </form>
-  );
-}
-
-type ExpenseShopFieldProps = {
-  type: 'shopName' | 'shopMall';
-  field: FieldApi<
-    any,
-    any,
-    Option | undefined,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any,
-    any
-  > &
-    AppFieldComponents;
-};
-
-function ExpenseShopField(props: ExpenseShopFieldProps) {
-  const { type, field } = props;
-  const currentValueStr = field.state.value?.value ?? '';
-  const suggestionQuery = useQuery(
-    trpc.expense.getSuggestions.queryOptions(
-      { type, search: currentValueStr },
-      {
-        enabled: currentValueStr.length > 1,
-        initialData: { type, search: currentValueStr, suggestions: [] as { label: string; value: string }[] },
-      },
-    ),
-  );
-
-  return (
-    <field.ComboBox
-      placeholder=''
-      label='Name'
-      options={suggestionQuery.data.suggestions ?? []}
-      getNewOptionData={value => {
-        value = value.toUpperCase();
-        const option = { label: value, value };
-        field.handleChange(option);
-        return option;
-      }}
-    />
   );
 }
 

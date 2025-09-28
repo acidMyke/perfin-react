@@ -173,7 +173,7 @@ function TextInput(props: TextInputProps) {
   );
 }
 
-type Option = {
+export type Option = {
   label: string;
   value: string;
 };

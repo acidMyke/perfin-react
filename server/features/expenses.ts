@@ -306,7 +306,7 @@ const getSuggestionsProcedure = protectedProcedure
         }),
       ),
   )
-  .query(async ({ input, ctx, signal }) => {
+  .mutation(async ({ input, ctx, signal }) => {
     const { db, userId } = ctx;
     const likelyValue = '%' + input.search.split('').join('%') + '%';
     signal?.throwIfAborted();
