@@ -1,11 +1,9 @@
-import { FormInputError, protectedProcedure } from '../trpc';
-import { expenseItemsTable, expensesTable, historiesTable, subjectsTable } from '../../db/schema';
-import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, or, sql, SQL } from 'drizzle-orm';
+import { FormInputError, protectedProcedure, type ProtectedContext } from '../trpc';
+import { accountsTable, categoriesTable, expenseItemsTable, expensesTable, historiesTable } from '../../db/schema';
+import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { alias } from 'drizzle-orm/sqlite-core';
 import { endOfMonth, parseISO } from 'date-fns';
-import { SubjectTypeConst } from '../../db/enum';
 
 type Option = {
   label: string;
@@ -13,22 +11,18 @@ type Option = {
 };
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
-  const subjects = await db
-    .select({ value: subjectsTable.id, label: subjectsTable.name, type: subjectsTable.type })
-    .from(subjectsTable)
-    .where(eq(subjectsTable.belongsToId, user.id))
-    .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
-
-  const accountOptions: Option[] = [];
-  const categoryOptions: Option[] = [];
-
-  for (const { type, ...option } of subjects) {
-    if (type === SubjectTypeConst.ACCOUNT) {
-      accountOptions.push(option);
-    } else if (type === SubjectTypeConst.CATEGORY) {
-      categoryOptions.push(option);
-    }
-  }
+  const [accountOptions, categoryOptions] = await db.batch([
+    db
+      .select({ value: accountsTable.id, label: accountsTable.name })
+      .from(accountsTable)
+      .where(and(eq(accountsTable.belongsToId, user.id), eq(accountsTable.isDeleted, false)))
+      .orderBy(asc(accountsTable.sequence), asc(accountsTable.createdAt)),
+    db
+      .select({ value: categoriesTable.id, label: categoriesTable.name })
+      .from(categoriesTable)
+      .where(and(eq(categoriesTable.belongsToId, user.id), eq(categoriesTable.isDeleted, false)))
+      .orderBy(asc(categoriesTable.sequence), asc(categoriesTable.createdAt)),
+  ]);
 
   return {
     accountOptions,
@@ -42,9 +36,12 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
     const expense = await db.query.expensesTable.findFirst({
-      where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+      where: and(
+        eq(expensesTable.isDeleted, false),
+        eq(expensesTable.belongsToId, userId),
+        eq(expensesTable.id, input.expenseId),
+      ),
       columns: {
-        description: true,
         amountCents: true,
         billedAt: true,
         accountId: true,
@@ -57,6 +54,7 @@ const loadExpenseDetailProcedure = protectedProcedure
       },
       with: {
         items: {
+          where: eq(expenseItemsTable.isDeleted, false),
           orderBy: asc(expenseItemsTable.sequence),
           columns: {
             id: true,
@@ -74,6 +72,33 @@ const loadExpenseDetailProcedure = protectedProcedure
 
     return expense;
   });
+
+async function safelyCreateSubject(
+  ctx: ProtectedContext,
+  table: typeof accountsTable | typeof categoriesTable,
+  { value, label }: Option,
+  field: string,
+): Promise<string> {
+  const { db, userId } = ctx;
+  if (value !== 'create') return value;
+  const existings = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.belongsToId, userId), like(table.name, label), eq(table.isDeleted, false)))
+    .limit(1);
+
+  if (existings.length > 0) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      cause: new FormInputError({
+        fieldErrors: { [field]: [`${label} existed`] },
+      }),
+    });
+  }
+
+  const newRecord = await db.insert(table).values({ name: label, belongsToId: userId }).returning({ id: table.id });
+  return newRecord[0].id;
+}
 
 const saveExpenseProcedure = protectedProcedure
   .input(
@@ -111,99 +136,14 @@ const saveExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
-    let accountId: string | null = null;
-    let categoryId: string | null = null;
-    if (input.account || input.category) {
-      const isSelectExistingAccount = input.account?.value !== 'create';
-      const isSelectExistingCategory = input.category?.value !== 'create';
 
-      const foundIds = await db
-        .select({ id: subjectsTable.id, type: subjectsTable.type })
-        .from(subjectsTable)
-        .limit(2)
-        .where(
-          or(
-            input.account
-              ? and(
-                  isSelectExistingAccount
-                    ? eq(subjectsTable.id, input.account.value)
-                    : eq(subjectsTable.name, input.account.label),
-                  eq(subjectsTable.type, SubjectTypeConst.ACCOUNT),
-                  eq(subjectsTable.belongsToId, userId),
-                )
-              : undefined,
-            input.category
-              ? and(
-                  isSelectExistingCategory
-                    ? eq(subjectsTable.id, input.category.value)
-                    : eq(subjectsTable.name, input.category.label),
-                  eq(subjectsTable.type, SubjectTypeConst.CATEGORY),
-                  eq(subjectsTable.belongsToId, userId),
-                )
-              : undefined,
-          ),
-        );
-
-      let accountError = isSelectExistingAccount ? 'Invalid' : undefined;
-      let categoryError = isSelectExistingCategory ? 'Invalid' : undefined;
-      for (const { id, type } of foundIds) {
-        if (type === SubjectTypeConst.ACCOUNT && input.account) {
-          if (input.account.value === id) {
-            accountError = undefined;
-            accountId = id;
-          } else accountError = 'Duplicated';
-        } else if (type === SubjectTypeConst.CATEGORY && input.category) {
-          if (input.category.value === id) {
-            categoryError = undefined;
-            categoryId = id;
-          } else categoryError = 'Duplicated';
-        }
-      }
-
-      if (accountError || categoryError) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          cause: new FormInputError({
-            fieldErrors: {
-              accountId: accountError ? [accountError + '  Account'] : undefined,
-              categoryId: categoryError ? [categoryError + '  Category'] : undefined,
-            },
-          }),
-        });
-      }
-    }
-    const subjectsToInsert: (typeof subjectsTable.$inferInsert)[] = [];
-    if (input.account?.value === 'create') {
-      subjectsToInsert.push({
-        name: input.account.label,
-        belongsToId: userId,
-        type: SubjectTypeConst.ACCOUNT,
-      });
-    }
-
-    if (input.category?.value === 'create') {
-      subjectsToInsert.push({
-        name: input.category.label,
-        belongsToId: userId,
-        type: SubjectTypeConst.CATEGORY,
-      });
-    }
-
-    if (subjectsToInsert.length > 0) {
-      const insertedSubjects = await db
-        .insert(subjectsTable)
-        .values(subjectsToInsert)
-        .returning({ id: subjectsTable.id, type: subjectsTable.type });
-
-      for (const newSubject of insertedSubjects) {
-        if (newSubject.type === SubjectTypeConst.ACCOUNT) accountId = newSubject.id;
-        if (newSubject.type === SubjectTypeConst.CATEGORY) categoryId = newSubject.id;
-      }
-    }
+    const [accountId, categoryId] = await Promise.all([
+      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
+      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
+    ]);
 
     const isCreate = input.expenseId === 'create';
     const values = {
-      description: input.description,
       amountCents: input.amountCents,
       accountId: accountId,
       categoryId: categoryId,
@@ -303,32 +243,26 @@ const listExpenseProcedure = protectedProcedure
       lt(expensesTable.billedAt, filterEnd),
     ];
 
-    const accountSubject = alias(subjectsTable, 'account');
-    const categorySubject = alias(subjectsTable, 'category');
     const expenses = await db
       .select({
         id: expensesTable.id,
-        description: expensesTable.description,
+        // TODO: Set description
+        description: sql<string>`" "`,
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
-        // amountCents: expensesTable.amountCents,
         billedAt: expensesTable.billedAt,
         account: {
-          name: accountSubject.name,
+          name: accountsTable.name,
+          isDeleted: accountsTable.isDeleted,
         },
         category: {
-          name: categorySubject.name,
+          name: categoriesTable.name,
+          isDeleted: categoriesTable.isDeleted,
         },
         createdAt: expensesTable.createdAt,
       })
       .from(expensesTable)
-      .leftJoin(
-        accountSubject,
-        and(eq(expensesTable.accountId, accountSubject.id), eq(accountSubject.type, SubjectTypeConst.ACCOUNT)),
-      )
-      .leftJoin(
-        categorySubject,
-        and(eq(expensesTable.categoryId, categorySubject.id), eq(categorySubject.type, SubjectTypeConst.CATEGORY)),
-      )
+      .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
+      .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
       .where(and(...filterList))
       .orderBy(desc(expensesTable.billedAt));
 
