@@ -15,6 +15,7 @@ const dateColumn = () => integer({ mode: 'timestamp' }).notNull();
 const createdAtColumn = () => dateColumn().$default(() => new Date());
 const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
+const boolean = () => integer({ mode: 'boolean' });
 
 const baseColumns = () => ({
   id: idColumn()
@@ -49,7 +50,6 @@ export const usersTable = sqliteTable('users', {
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
-  subjects: many(subjectsTable),
   sessions: many(sessionsTable),
 }));
 
@@ -68,60 +68,38 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   }),
 }));
 
-export const subjectsTable = sqliteTable('ledger_subjects', {
+export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
-  type: text({ enum: SUBJECT_TYPES_TUPLE }).notNull(),
   belongsToId: idColumn().references(() => usersTable.id),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
+  isDeleted: boolean().default(false),
 });
 
-export const subjectsRelations = relations(subjectsTable, ({ one, many }) => ({
-  belongsTo: one(usersTable, {
-    fields: [subjectsTable.belongsToId],
-    references: [usersTable.id],
-  }),
-  ledgers: many(ledgersTable),
-  expenses: many(expensesTable),
-}));
-
-export const ledgersTable = sqliteTable('ledgers', {
+export const categoriesTable = sqliteTable('categories', {
   ...baseColumns(),
-  totalCents: centsColumn(),
-  creditCents: centsColumn(),
-  debitCents: centsColumn(),
-  type: text({ enum: PERIOD_TYPES_TUPLE }).notNull(),
-  /** For ALL but FULL type ledgers */
-  year: integer(),
-  /** For MONTH type ledgers*/
-  month: integer(),
-  /** For WEEK type ledgers */
-  week: integer(),
-  forSubjectId: idColumn(),
+  belongsToId: idColumn().references(() => usersTable.id),
+  name: text().notNull(),
+  description: text(),
+  sequence: integer(),
+  isDeleted: boolean().default(false),
 });
-
-export const ledgersRelations = relations(ledgersTable, ({ one }) => ({
-  subject: one(subjectsTable, {
-    fields: [ledgersTable.forSubjectId],
-    references: [subjectsTable.id],
-  }),
-}));
 
 export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
-  description: text(),
   amountCents: centsColumn(),
   billedAt: dateColumn(),
   belongsToId: idColumn().references(() => usersTable.id),
-  accountId: nullableIdColumn().references(() => subjectsTable.id),
-  categoryId: nullableIdColumn().references(() => subjectsTable.id),
+  accountId: nullableIdColumn().references(() => accountsTable.id),
+  categoryId: nullableIdColumn().references(() => categoriesTable.id),
   updatedBy: idColumn().references(() => usersTable.id),
   latitude: real(),
   longitude: real(),
   geoAccuracy: real(),
   shopName: text(),
   shopMall: text(),
+  isDeleted: boolean().default(false),
 });
 
 export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
@@ -129,13 +107,13 @@ export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
     fields: [expensesTable.belongsToId],
     references: [usersTable.id],
   }),
-  account: one(subjectsTable, {
+  account: one(accountsTable, {
     fields: [expensesTable.accountId],
-    references: [subjectsTable.id],
+    references: [accountsTable.id],
   }),
-  category: one(subjectsTable, {
+  category: one(categoriesTable, {
     fields: [expensesTable.categoryId],
-    references: [subjectsTable.id],
+    references: [categoriesTable.id],
   }),
   items: many(expenseItemsTable),
 }));
@@ -147,7 +125,8 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   quantity: integer().default(1).notNull(),
   priceCents: centsColumn(),
   expenseId: idColumn().references(() => expensesTable.id),
-  categoryId: nullableIdColumn().references(() => subjectsTable.id),
+  categoryId: nullableIdColumn().references(() => categoriesTable.id),
+  isDeleted: boolean().default(false),
 });
 
 export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => ({
@@ -155,8 +134,8 @@ export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => (
     fields: [expenseItemsTable.expenseId],
     references: [expensesTable.id],
   }),
-  category: one(subjectsTable, {
+  category: one(categoriesTable, {
     fields: [expenseItemsTable.categoryId],
-    references: [subjectsTable.id],
+    references: [categoriesTable.id],
   }),
 }));
