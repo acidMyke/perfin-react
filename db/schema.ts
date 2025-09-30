@@ -74,7 +74,7 @@ export const accountsTable = sqliteTable('accounts', {
   name: text().notNull(),
   description: text(),
   sequence: integer(),
-  isDeleted: boolean().default(false),
+  isDeleted: boolean().notNull().default(false),
 });
 
 export const categoriesTable = sqliteTable('categories', {
@@ -83,7 +83,7 @@ export const categoriesTable = sqliteTable('categories', {
   name: text().notNull(),
   description: text(),
   sequence: integer(),
-  isDeleted: boolean().default(false),
+  isDeleted: boolean().notNull().default(false),
 });
 
 export const expensesTable = sqliteTable('expenses', {
@@ -99,7 +99,7 @@ export const expensesTable = sqliteTable('expenses', {
   geoAccuracy: real(),
   shopName: text(),
   shopMall: text(),
-  isDeleted: boolean().default(false),
+  isDeleted: boolean().notNull().default(false),
 });
 
 export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
@@ -126,7 +126,7 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   priceCents: centsColumn(),
   expenseId: idColumn().references(() => expensesTable.id),
   categoryId: nullableIdColumn().references(() => categoriesTable.id),
-  isDeleted: boolean().default(false),
+  isDeleted: boolean().notNull().default(false),
 });
 
 export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => ({

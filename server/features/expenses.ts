@@ -36,11 +36,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
     const expense = await db.query.expensesTable.findFirst({
-      where: and(
-        eq(expensesTable.isDeleted, false),
-        eq(expensesTable.belongsToId, userId),
-        eq(expensesTable.id, input.expenseId),
-      ),
+      where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
       columns: {
         amountCents: true,
         billedAt: true,
@@ -51,6 +47,7 @@ const loadExpenseDetailProcedure = protectedProcedure
         geoAccuracy: true,
         shopMall: true,
         shopName: true,
+        version: true,
       },
       with: {
         items: {
@@ -61,6 +58,7 @@ const loadExpenseDetailProcedure = protectedProcedure
             name: true,
             quantity: true,
             priceCents: true,
+            isDeleted: true,
           },
         },
       },
@@ -104,10 +102,8 @@ const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
       expenseId: z.string(),
-      description: z
-        .string()
-        .nullish()
-        .transform(v => v ?? null),
+      version: z.int().optional().default(0),
+      isDeleted: z.boolean().optional().default(false),
       amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
@@ -129,6 +125,7 @@ const saveExpenseProcedure = protectedProcedure
           name: z.string(),
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
+          isDeleted: z.boolean().optional().default(false),
         }),
       ),
     }),
@@ -178,8 +175,20 @@ const saveExpenseProcedure = protectedProcedure
         with: { items: true },
       });
 
-      if (!existing) {
+      if (!existing || existing.isDeleted) {
         throw new TRPCError({ code: 'NOT_FOUND' });
+      }
+
+      if (existing.version > input.version) {
+        throw new TRPCError({ code: 'CONFLICT' });
+      }
+
+      if (input.isDeleted) {
+        await db
+          .update(expensesTable)
+          .set({ isDeleted: true })
+          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)));
+        return;
       }
 
       const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
@@ -228,19 +237,21 @@ const listExpenseProcedure = protectedProcedure
     z.object({
       month: z.number().min(0).max(11),
       year: z.number().min(2020),
+      showDeleted: z.boolean().optional().default(false),
     }),
   )
   .query(async ({ input, ctx }) => {
     const { db } = ctx;
     const userId = ctx.user.id;
-    const { year, month } = input;
+    const { year, month, showDeleted } = input;
     const filterStart = new Date(year, month, 1, 0, 0, 0);
     const filterEnd = endOfMonth(filterStart);
 
-    const filterList: SQL[] = [
+    const filterList: (SQL | undefined)[] = [
       eq(expensesTable.belongsToId, userId),
       gte(expensesTable.billedAt, filterStart),
       lt(expensesTable.billedAt, filterEnd),
+      !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
     ];
 
     const expenses = await db
