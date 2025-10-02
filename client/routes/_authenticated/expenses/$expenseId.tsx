@@ -97,6 +97,19 @@ function CreateEditExpensePageComponent() {
         navigate({ to: '/expenses' });
       },
     },
+    listeners: {
+      onChange: ({ fieldApi, formApi }) => {
+        const fieldInfo = fieldApi.getInfo();
+        if (fieldInfo?.instance?.name.startsWith('items')) {
+          const isBillAmountDirty = formApi.state.fieldMeta.amountCents.isDirty;
+          if (!isBillAmountDirty) {
+            const items = formApi.getFieldValue('items');
+            const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
+            formApi.setFieldValue('amountCents', totalCents, { dontUpdateMeta: false });
+          }
+        }
+      },
+    },
   });
 
   useEffect(() => {
@@ -123,6 +136,34 @@ function CreateEditExpensePageComponent() {
     <div className='mx-auto max-w-md'>
       <form.AppForm>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
+        <div className='h-4'></div>
+        {/* @ts-expect-errors */}
+        <ShopDetailSubForm form={form} />
+        <form.Field name='items' mode='array'>
+          {field => (
+            <ul className='mt-8 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-1 pr-2 pl-4'>
+              {field.state.value.map(({ id }, itemIndex) => (
+                <ItemDetailFieldGroup
+                  key={id + itemIndex}
+                  form={form}
+                  fields={`items[${itemIndex}]`}
+                  onLocalRemove={() => field.removeValue(itemIndex)}
+                />
+              ))}
+              <li key='Create'>
+                <button
+                  className='btn-soft btn-primary btn w-2/3 justify-start'
+                  onClick={() =>
+                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
+                  }
+                >
+                  <Plus />
+                  Add item
+                </button>
+              </li>
+            </ul>
+          )}
+        </form.Field>
         <form.AppField name='amountCents'>
           {({ NumericInput }) => (
             <NumericInput
@@ -136,33 +177,6 @@ function CreateEditExpensePageComponent() {
             />
           )}
         </form.AppField>
-        {/* @ts-expect-errors */}
-        <ShopDetailSubForm form={form} />
-        <form.Field name='items' mode='array'>
-          {field => (
-            <ul className='mt-8 flex flex-col'>
-              {field.state.value.map(({ id }, itemIndex) => (
-                <ItemDetailFieldGroup
-                  key={id + itemIndex}
-                  form={form}
-                  fields={`items[${itemIndex}]`}
-                  onLocalRemove={() => field.removeValue(itemIndex)}
-                />
-              ))}
-              <li key='Create' className=''>
-                <button
-                  className='btn-ghost btn btn-block list-col-grow justify-start'
-                  onClick={() =>
-                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
-                  }
-                >
-                  <Plus />
-                  Add item
-                </button>
-              </li>
-            </ul>
-          )}
-        </form.Field>
         <form.Subscribe selector={state => [state.values.geolocation]}>
           {([geolocation]) =>
             geolocation ? (
@@ -332,7 +346,7 @@ const ItemDetailFieldGroup = withFieldGroup({
 
     return (
       <li
-        className='grid auto-cols-auto grid-flow-col place-items-center gap-4 pl-4 shadow-lg data-[deleted=true]:*:line-through'
+        className='grid auto-cols-auto grid-flow-col place-items-center gap-4 shadow-lg data-[deleted=true]:*:line-through'
         data-deleted={isDeleted}
       >
         <group.AppField

@@ -129,6 +129,7 @@ function NumericInput(props: NumericInputProps) {
             else field.handleChange(() => transforms.reduce((a, t) => NumericTransformers[t].transform(a), value));
             field.setErrorMap({ onBlur: undefined });
           }}
+          onFocus={e => e.currentTarget.select()}
         />
         {postfix && <span>{postfix}</span>}
       </label>
