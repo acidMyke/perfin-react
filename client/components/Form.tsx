@@ -21,6 +21,7 @@ type NumericInputProps = {
   containerCn?: string;
   labelCn?: string;
   inputCn?: string;
+  innerInputCn?: string;
   nullIfZero?: boolean;
   transforms?: (keyof typeof NumericTransformers)[];
   numberFormat?: Intl.NumberFormat;
@@ -28,10 +29,21 @@ type NumericInputProps = {
   min?: number;
   max?: number;
   step?: number;
+  readOnly?: boolean;
 };
 
 function NumericInput(props: NumericInputProps) {
-  const { label, containerCn, labelCn, inputCn, nullIfZero, transforms = [], numberFormat, ...inputProps } = props;
+  const {
+    label,
+    containerCn,
+    labelCn,
+    inputCn,
+    innerInputCn,
+    nullIfZero,
+    transforms = [],
+    numberFormat,
+    ...inputProps
+  } = props;
   const formatOptions = useMemo(() => numberFormat?.resolvedOptions(), [numberFormat]);
   const formatValue = useCallback(
     (val: number | null) => {
@@ -94,6 +106,7 @@ function NumericInput(props: NumericInputProps) {
       <label htmlFor='' className={cn('input input-primary input-xl w-full', inputCn)}>
         {prefix && <span>{prefix}</span>}
         <input
+          className={innerInputCn}
           step={1 / Math.pow(10, formatOptions?.maximumFractionDigits ?? 1)}
           {...inputProps}
           type='number'
@@ -134,6 +147,7 @@ type TextInputProps = {
   containerCn?: string;
   labelCn?: string;
   inputCn?: string;
+  readOnly?: boolean;
   /** @deprecated Use transforms instead */
   transform?: keyof typeof TextTransformers;
   transforms?: (keyof typeof TextTransformers)[];
@@ -186,10 +200,19 @@ type CreatableSelectProps = {
   containerCn?: string;
   labelCn?: string;
   suggestionMode?: boolean;
+  readOnly?: boolean;
 };
 
 function ComboBox(props: CreatableSelectProps) {
-  const { label, placeholder = 'Unspecified', maxMenuHeight = 124, containerCn, labelCn, suggestionMode } = props;
+  const {
+    label,
+    placeholder = 'Unspecified',
+    maxMenuHeight = 124,
+    containerCn,
+    labelCn,
+    suggestionMode,
+    readOnly,
+  } = props;
   const field = useFieldContext<Option | string | undefined>();
   const [createOption, setCreateOption] = useState<Option | undefined>();
 
@@ -232,6 +255,7 @@ function ComboBox(props: CreatableSelectProps) {
           if (meta.action === 'create-option') setCreateOption(v);
           field.handleChange(suggestionMode ? v.value : v);
         }}
+        isDisabled={readOnly}
       />
     </label>
   );

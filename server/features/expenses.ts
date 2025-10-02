@@ -226,7 +226,12 @@ const saveExpenseProcedure = protectedProcedure
           )
           .onConflictDoUpdate({
             target: expenseItemsTable.id,
-            set: { name: sql`excluded.name`, priceCents: sql`excluded.price_cents`, quantity: sql`excluded.quantity` },
+            set: {
+              name: sql`excluded.name`,
+              priceCents: sql`excluded.price_cents`,
+              quantity: sql`excluded.quantity`,
+              isDeleted: sql`excluded.is_deleted`,
+            },
           }),
       ]);
     }

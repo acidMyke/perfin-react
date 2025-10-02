@@ -8,7 +8,7 @@ import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
 import { useAppForm, withFieldGroup, withForm } from '../../../components/Form';
-import { formOptions } from '@tanstack/react-form';
+import { formOptions, useStore } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: CreateEditExpensePageComponent,
@@ -146,13 +146,15 @@ function CreateEditExpensePageComponent() {
                   key={id + itemIndex}
                   form={form}
                   fields={`items[${itemIndex}]`}
-                  onRemove={() => field.removeValue(itemIndex)}
+                  onLocalRemove={() => field.removeValue(itemIndex)}
                 />
               ))}
               <li key='Create' className=''>
                 <button
                   className='btn-ghost btn btn-block list-col-grow justify-start'
-                  onClick={() => field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1 })}
+                  onClick={() =>
+                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
+                  }
                 >
                   <Plus />
                   Add item
@@ -161,11 +163,6 @@ function CreateEditExpensePageComponent() {
             </ul>
           )}
         </form.Field>
-        <form.AppField name='description'>
-          {({ TextInput }) => (
-            <TextInput type='text' label='Description' containerCn='mt-6' inputCn='input-lg' transform='uppercase' />
-          )}
-        </form.AppField>
         <form.Subscribe selector={state => [state.values.geolocation]}>
           {([geolocation]) =>
             geolocation ? (
@@ -319,16 +316,25 @@ const ShopDetailSubForm = withForm({
 
 const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: {
+    id: '',
     name: '',
     quantity: 1,
     priceCents: 0.0,
+    isDeleted: false,
   },
-  props: { onRemove: () => {} },
-  render({ group, onRemove }) {
+  props: {
+    onLocalRemove: () => {},
+  },
+  render({ group, onLocalRemove }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const id = useStore(group.store, state => state.values.id);
+    const isDeleted = useStore(group.store, state => state.values.isDeleted);
 
     return (
-      <li className='grid auto-cols-auto grid-flow-col place-items-center gap-4 pl-4 shadow-lg'>
+      <li
+        className='grid auto-cols-auto grid-flow-col place-items-center gap-4 pl-4 shadow-lg data-[deleted=true]:*:line-through'
+        data-deleted={isDeleted}
+      >
         <group.AppField
           name='name'
           validators={{
@@ -351,6 +357,7 @@ const ItemDetailFieldGroup = withFieldGroup({
               label='Name'
               containerCn='col-span-4 w-full'
               options={itenNameSuggestionMutation.data?.suggestions ?? []}
+              readOnly={isDeleted}
             />
           )}
         </group.AppField>
@@ -361,16 +368,41 @@ const ItemDetailFieldGroup = withFieldGroup({
               transforms={['amountInCents']}
               numberFormat={currencyNumberFormat}
               inputCn='input-lg'
-              containerCn='mt-0 col-span-2 w-56'
+              innerInputCn='read-only:line-through'
+              containerCn='mt-0 col-span-2 w-56 '
+              readOnly={isDeleted}
             />
           )}
         </group.AppField>
         <group.AppField name='quantity'>
-          {({ NumericInput }) => <NumericInput inputCn='input-lg' label='Quantity' containerCn='mt-0 w-full' />}
+          {({ NumericInput }) => (
+            <NumericInput
+              label='Quantity'
+              inputCn='input-lg'
+              innerInputCn='read-only:line-through'
+              containerCn='mt-0 w-full'
+              readOnly={isDeleted}
+            />
+          )}
         </group.AppField>
-        <button className='btn-ghost btn col-start-4 row-start-2 mb-[1em]' onClick={() => onRemove()}>
-          Remove
-        </button>
+        {isDeleted ? (
+          <button
+            className='btn-ghost btn col-start-4 row-start-2 mb-[1em] w-16'
+            onClick={() => group.setFieldValue('isDeleted', false)}
+          >
+            Undo remove
+          </button>
+        ) : (
+          <button
+            className='btn-ghost btn col-start-4 row-start-2 mb-[1em] w-16'
+            onClick={() => {
+              if (id === 'create') onLocalRemove();
+              else group.setFieldValue('isDeleted', true);
+            }}
+          >
+            Remove
+          </button>
+        )}
       </li>
     );
   },
