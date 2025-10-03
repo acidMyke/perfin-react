@@ -15,8 +15,13 @@
       "migrations_dir": "./db/migrations",
     },
   ],
+  "send_email": [
+    {
+      "name": "email",
+    },
+  ],
   "vars": {
-    "TOKEN_COOKIE_NAME": "token"
+    "TOKEN_COOKIE_NAME": "token",
   },
   "env": {
     "production": {
@@ -30,8 +35,8 @@
         },
       ],
       "vars": {
-        "TOKEN_COOKIE_NAME": "__Host-token"
-      }
+        "TOKEN_COOKIE_NAME": "__Host-token",
+      },
     },
   },
 }
