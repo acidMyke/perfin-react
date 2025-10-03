@@ -115,6 +115,9 @@ function CreateEditExpensePageComponent() {
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
       form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), { keepDefaultValues: true });
+      const { amountCents, items } = existingExpenseQuery.data;
+      const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
+      form.setFieldMeta('amountCents', meta => ({ ...meta, isDirty: totalCents !== amountCents }));
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
 
