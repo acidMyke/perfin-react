@@ -1,6 +1,6 @@
 import z from 'zod';
 import { FormInputError, protectedProcedure } from '../trpc';
-import { subjectsTable } from '../../db/schema';
+import { accountsTable, categoriesTable } from '../../db/schema';
 import { and, asc, eq } from 'drizzle-orm';
 import { SUBJECT_TYPES_TUPLE } from '../../db/enum';
 import { TRPCError } from '@trpc/server';
@@ -33,14 +33,19 @@ const listSubjectsProcedure = protectedProcedure
   .query(async ({ ctx, input }) => {
     const { db, user } = ctx;
     const { subjectType } = input;
+    const subjectsTable = {
+      account: accountsTable,
+      category: categoriesTable,
+    }[subjectType];
 
     return await db
       .select({
         id: subjectsTable.id,
         name: subjectsTable.name,
+        isDeleted: subjectsTable.isDeleted,
       })
       .from(subjectsTable)
-      .where(and(eq(subjectsTable.type, subjectType), eq(subjectsTable.belongsToId, user.id)))
+      .where(and(eq(subjectsTable.belongsToId, user.id)))
       .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
   });
 
@@ -54,6 +59,10 @@ const saveSubjectListProcedure = protectedProcedure
   .mutation(async ({ ctx, input }) => {
     const { db, user } = ctx;
     const { subjectType, subjects } = input;
+    const subjectsTable = {
+      account: accountsTable,
+      category: categoriesTable,
+    }[subjectType];
 
     const existingSubjects = await db
       .select({
@@ -62,7 +71,7 @@ const saveSubjectListProcedure = protectedProcedure
         description: subjectsTable.description,
       })
       .from(subjectsTable)
-      .where(and(eq(subjectsTable.type, subjectType), eq(subjectsTable.belongsToId, user.id)))
+      .where(and(eq(subjectsTable.belongsToId, user.id)))
       .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
 
     if (existingSubjects.length != subjects.length) {

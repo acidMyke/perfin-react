@@ -65,7 +65,7 @@ const getTrendProcedure = protectedProcedure
 
     const trendData = await db
       .select({
-        tick: sql<string>`strftime('${strf}', datetime(${expensesTable.billedAt}, 'unixepoch', '-8 hours')) as label`,
+        tick: sql<string>`strftime('${strf}', datetime(${expensesTable.billedAt}, 'unixepoch', '+8 hours')) as label`,
         amount: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
       })
       .from(expensesTable)
