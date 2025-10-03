@@ -15,6 +15,34 @@
       "when": 1756005642030,
       "tag": "0001_chunky_jubilee",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1758804558592,
+      "tag": "0002_foamy_living_mummy",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1758934359959,
+      "tag": "0003_careless_zarda",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1759150536439,
+      "tag": "0004_glamorous_stranger",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1759233183010,
+      "tag": "0005_tiny_jimmy_woo",
+      "breakpoints": true
     }
   ]
 }

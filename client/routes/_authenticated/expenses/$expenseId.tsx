@@ -1,16 +1,17 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc, type RouterOutputs } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
-import { DollarSign } from 'lucide-react';
+import { Cross, ExternalLink, Plus, X } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
-import { useAppForm } from '../../../components/Form';
+import { useAppForm, withFieldGroup, withForm } from '../../../components/Form';
+import { formOptions, useStore } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
-  component: RouteComponent,
+  component: CreateEditExpensePageComponent,
   notFoundComponent: ExpenseNotFoundComponent,
   loader: ({ params }) => {
     const isCreate = params.expenseId === 'create';
@@ -26,7 +27,44 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
-function RouteComponent() {
+function mapExpenseDetailToForm(
+  detail?: RouterOutputs['expense']['loadDetail'],
+  options?: RouterOutputs['expense']['loadOptions'],
+) {
+  if (detail && options) {
+    const { accountOptions, categoryOptions } = options;
+    const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
+    const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
+    const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+    return {
+      billedAt: new Date(billedAt),
+      account,
+      category,
+      geolocation:
+        latitude !== null && longitude !== null && geoAccuracy !== null
+          ? { latitude, longitude, accuracy: geoAccuracy }
+          : undefined,
+      ...rest,
+    };
+  } else {
+    return {
+      description: undefined,
+      amountCents: 0,
+      billedAt: new Date(),
+      account: undefined,
+      category: undefined,
+      geolocation: undefined,
+      shopName: undefined,
+      shopMall: undefined,
+      items: [] as Exclude<typeof detail, undefined>['items'],
+    };
+  }
+}
+
+const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
+const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
+
+function CreateEditExpensePageComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
@@ -35,21 +73,18 @@ function RouteComponent() {
   const existingExpenseQuery = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useAppForm({
-    defaultValues: {
-      description: undefined as undefined | null | string,
-      amountCents: 0.0,
-      billedAt: new Date(),
-      account: undefined as undefined | (typeof accountOptions)[number],
-      category: undefined as undefined | (typeof categoryOptions)[number],
-    },
+    ...createEditExpenseFormOptions,
     validators: {
-      onSubmitAsync: async ({ value, signal }) => {
-        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
-        const { billedAt, ...otherValues } = value;
+      onSubmitAsync: async ({ value, signal }): Promise<any> => {
+        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
+        const { billedAt, geolocation, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
             ...otherValues,
+            latitude: geolocation?.latitude ?? null,
+            longitude: geolocation?.longitude ?? null,
+            geoAccuracy: geolocation?.accuracy ?? null,
             billedAt: billedAt.toISOString(),
           }),
         );
@@ -62,72 +97,112 @@ function RouteComponent() {
         navigate({ to: '/expenses' });
       },
     },
+    listeners: {
+      onChange: ({ fieldApi, formApi }) => {
+        const fieldInfo = fieldApi.getInfo();
+        if (fieldInfo?.instance?.name.startsWith('items')) {
+          const isBillAmountDirty = formApi.state.fieldMeta.amountCents.isDirty;
+          if (!isBillAmountDirty) {
+            const items = formApi.getFieldValue('items');
+            const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
+            formApi.setFieldValue('amountCents', totalCents, { dontUpdateMeta: false });
+          }
+        }
+      },
+    },
   });
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      const { billedAt, accountId, categoryId, ...rest } = existingExpenseQuery.data;
-      const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
-      const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
-      form.reset(
-        {
-          billedAt: new Date(billedAt),
-          account,
-          category,
-          ...rest,
-        },
-        { keepDefaultValues: true },
-      );
+      form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), { keepDefaultValues: true });
+      const { amountCents, items } = existingExpenseQuery.data;
+      const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
+      form.setFieldMeta('amountCents', meta => ({ ...meta, isDirty: totalCents !== amountCents }));
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
 
+  useEffect(() => {
+    if (isCreate && navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          const { latitude, longitude, accuracy } = coords;
+          form.setFieldValue('geolocation', { latitude, longitude, accuracy });
+        },
+        () => {
+          form.setFieldMeta('geolocation', meta => ({ ...meta, isTouched: true, isDirty: true }));
+        },
+      );
+    }
+  }, []);
+
   return (
-    <form
-      className='mx-auto max-w-md'
-      onSubmit={e => {
-        e.preventDefault();
-        e.stopPropagation();
-      }}
-    >
+    <div className='mx-auto max-w-md'>
       <form.AppForm>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
-        <form.Field name='amountCents'>
+        <div className='h-4'></div>
+        {/* @ts-expect-errors */}
+        <ShopDetailSubForm form={form} />
+        <form.Field name='items' mode='array'>
           {field => (
-            <label htmlFor={field.name} className='floating-label mt-8'>
-              <span>Amount</span>
-              <label className='input input-primary input-lg w-full'>
-                <DollarSign size='1em' />
-                <input
-                  autoFocus
-                  type='number'
-                  id={field.name}
-                  name={field.name}
-                  placeholder='Amount'
-                  value={(field.state.value / 100).toFixed(2)}
-                  onChange={e =>
-                    !isNaN(e.target.valueAsNumber) &&
-                    field.handleChange(Math.floor(e.target.valueAsNumber * 1000) % 1000_000_000_00)
-                  }
-                  onKeyDown={e => {
-                    if (e.key === 'Backspace') field.handleChange(v => v / 10);
-                    else if (e.key === '.') field.handleChange(v => v * 100);
-                    else return;
-                    e.preventDefault();
-                  }}
+            <ul className='mt-8 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-1 pr-2 pl-4'>
+              {field.state.value.map(({ id }, itemIndex) => (
+                <ItemDetailFieldGroup
+                  key={id + itemIndex}
+                  form={form}
+                  fields={`items[${itemIndex}]`}
+                  onLocalRemove={() => field.removeValue(itemIndex)}
                 />
-              </label>
-              <FieldError field={field} />
-            </label>
+              ))}
+              <li key='Create'>
+                <button
+                  className='btn-soft btn-primary btn w-2/3 justify-start'
+                  onClick={() =>
+                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
+                  }
+                >
+                  <Plus />
+                  Add item
+                </button>
+              </li>
+            </ul>
           )}
         </form.Field>
-        <form.AppField name='description'>
-          {({ TextInput }) => (
-            <TextInput type='text' label='Description' containerCn='mt-2' inputCn='input-lg' transform='uppercase' />
+        <form.AppField name='amountCents'>
+          {({ NumericInput }) => (
+            <NumericInput
+              min={0}
+              max={1000}
+              label='Amount'
+              containerCn='mt-4'
+              inputCn='input-lg'
+              transforms={['amountInCents']}
+              numberFormat={currencyNumberFormat}
+            />
           )}
         </form.AppField>
+        <form.Subscribe selector={state => [state.values.geolocation]}>
+          {([geolocation]) =>
+            geolocation ? (
+              <p>
+                Location: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
+                  target='_blank'
+                  className='link'
+                >
+                  Open in maps
+                  <ExternalLink className='ml-2 inline-block' size='1em' />
+                </a>
+                )
+              </p>
+            ) : (
+              <p>Location: {isCreate ? 'Unable to retrieve your location' : 'Unsepcified'}</p>
+            )
+          }
+        </form.Subscribe>
         <form.Field name='billedAt'>
           {field => (
-            <label htmlFor={field.name} className='floating-label mt-2'>
+            <label htmlFor={field.name} className='floating-label mt-4'>
               <span>Date</span>
               <input
                 type='datetime-local'
@@ -152,10 +227,10 @@ function RouteComponent() {
           )}
         </form.Field>
         <form.AppField name='category'>
-          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} />}
+          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-4' />}
         </form.AppField>
         <form.AppField name='account'>
-          {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-4' />}
+          {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-8' />}
         </form.AppField>
         <form.Subscribe selector={state => [state.isPristine, state.canSubmit, state.isSubmitting]}>
           {([isPristine, canSubmit, isSubmitting]) => (
@@ -171,7 +246,7 @@ function RouteComponent() {
           )}
         </form.Subscribe>
       </form.AppForm>
-    </form>
+    </div>
   );
 }
 
@@ -192,3 +267,160 @@ function ExpenseNotFoundComponent() {
     </div>
   );
 }
+
+const ShopDetailSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+
+    return (
+      <div className='mt-4 flex flex-row justify-between gap-2'>
+        <form.AppField
+          name='shopName'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value !== null && value.length > 1) {
+                shopNameSuggestionMutation.mutateAsync({
+                  type: 'shopName',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Shop name'
+              containerCn='flex-grow-1'
+              options={shopNameSuggestionMutation.data?.suggestions ?? []}
+            />
+          )}
+        </form.AppField>
+        <form.AppField
+          name='shopMall'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value !== null && value.length > 1) {
+                shopMallSuggestionMutation.mutateAsync({
+                  type: 'shopMall',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Mall'
+              containerCn='flex-grow-1'
+              options={shopMallSuggestionMutation.data?.suggestions ?? []}
+            />
+          )}
+        </form.AppField>
+      </div>
+    );
+  },
+});
+
+const ItemDetailFieldGroup = withFieldGroup({
+  defaultValues: {
+    id: '',
+    name: '',
+    quantity: 1,
+    priceCents: 0.0,
+    isDeleted: false,
+  },
+  props: {
+    onLocalRemove: () => {},
+  },
+  render({ group, onLocalRemove }) {
+    const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const id = useStore(group.store, state => state.values.id);
+    const isDeleted = useStore(group.store, state => state.values.isDeleted);
+
+    return (
+      <li
+        className='grid auto-cols-auto grid-flow-col place-items-center gap-4 shadow-lg data-[deleted=true]:*:line-through'
+        data-deleted={isDeleted}
+      >
+        <group.AppField
+          name='name'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value && value.length > 1) {
+                itenNameSuggestionMutation.mutateAsync({
+                  type: 'itemName',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Name'
+              containerCn='col-span-4 w-full'
+              options={itenNameSuggestionMutation.data?.suggestions ?? []}
+              readOnly={isDeleted}
+            />
+          )}
+        </group.AppField>
+        <group.AppField name='priceCents'>
+          {({ NumericInput }) => (
+            <NumericInput
+              label='Price'
+              transforms={['amountInCents']}
+              numberFormat={currencyNumberFormat}
+              inputCn='input-lg'
+              innerInputCn='read-only:line-through'
+              containerCn='mt-0 col-span-2 w-56 '
+              readOnly={isDeleted}
+            />
+          )}
+        </group.AppField>
+        <group.AppField name='quantity'>
+          {({ NumericInput }) => (
+            <NumericInput
+              label='Quantity'
+              inputCn='input-lg'
+              innerInputCn='read-only:line-through'
+              containerCn='mt-0 w-full'
+              readOnly={isDeleted}
+            />
+          )}
+        </group.AppField>
+        {isDeleted ? (
+          <button
+            className='btn-ghost btn col-start-4 row-start-2 mb-[1em] w-16'
+            onClick={() => group.setFieldValue('isDeleted', false)}
+          >
+            Undo remove
+          </button>
+        ) : (
+          <button
+            className='btn-ghost btn col-start-4 row-start-2 mb-[1em] w-16'
+            onClick={() => {
+              if (id === 'create') onLocalRemove();
+              else group.setFieldValue('isDeleted', true);
+            }}
+          >
+            Remove
+          </button>
+        )}
+      </li>
+    );
+  },
+});
