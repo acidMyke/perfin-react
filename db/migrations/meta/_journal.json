@@ -43,6 +43,13 @@
       "when": 1759233183010,
       "tag": "0005_tiny_jimmy_woo",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1759550139108,
+      "tag": "0006_open_valkyrie",
+      "breakpoints": true
     }
   ]
 }

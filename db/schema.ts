@@ -58,6 +58,14 @@ export const loginAttemptsTable = sqliteTable('login_attempts', {
   userAgent: text(),
 });
 
+export const loginAttemptsRelations = relations(loginAttemptsTable, ({ one, many }) => ({
+  attemptedFor: one(usersTable, {
+    fields: [loginAttemptsTable.attemptedForId],
+    references: [usersTable.id],
+  }),
+  session: many(sessionsTable),
+}));
+
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
   name: text(),
@@ -66,6 +74,7 @@ export const usersTable = sqliteTable('users', {
   requireNewPassword: integer({ mode: 'boolean' }).default(true),
   failedAttempts: integer().notNull().default(0),
   releasedAfter: integer({ mode: 'timestamp' }),
+  email: text().notNull(),
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
@@ -78,12 +87,17 @@ export const sessionsTable = sqliteTable('sessions', {
   userId: idColumn().references(() => usersTable.id),
   lastUsedAt: dateColumn(),
   expiresAt: dateColumn(),
+  loginInAttemptId: idColumn(),
 });
 
 export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [sessionsTable.userId],
     references: [usersTable.id],
+  }),
+  loginAttempts: one(loginAttemptsTable, {
+    fields: [sessionsTable.loginInAttemptId],
+    references: [loginAttemptsTable.id],
   }),
 }));
 
