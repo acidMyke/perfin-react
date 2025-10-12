@@ -1,7 +1,6 @@
 import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
-import { PERIOD_TYPES_TUPLE, SUBJECT_TYPES_TUPLE } from './enum';
 
 export const generateId = () => nanoid(8);
 const nullableIdColumn = () => text({ length: 8 });
@@ -46,7 +45,7 @@ export const loginAttemptsTable = sqliteTable('login_attempts', {
     .primaryKey()
     .$defaultFn(() => nanoid(16)),
   timestamp: createdAtColumn(),
-  attemptedForId: idColumn().references(() => usersTable.id),
+  attemptedForId: nullableIdColumn().references(() => usersTable.id),
   isSuccess: integer({ mode: 'boolean' }).notNull(),
 
   ip: text().notNull(),
@@ -87,7 +86,7 @@ export const sessionsTable = sqliteTable('sessions', {
   userId: idColumn().references(() => usersTable.id),
   lastUsedAt: dateColumn(),
   expiresAt: dateColumn(),
-  loginInAttemptId: idColumn(),
+  loginAttemptId: idColumn(),
 });
 
 export const sessionRelations = relations(sessionsTable, ({ one }) => ({
@@ -96,7 +95,7 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
     references: [usersTable.id],
   }),
   loginAttempts: one(loginAttemptsTable, {
-    fields: [sessionsTable.loginInAttemptId],
+    fields: [sessionsTable.loginAttemptId],
     references: [loginAttemptsTable.id],
   }),
 }));

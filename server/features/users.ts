@@ -120,8 +120,11 @@ const signInProcedure = publicProcedure
         userId: user?.id,
       };
     } catch (error: unknown) {
-      // if error, execution must be at least 2 seconds
-      await sleep(2000 - (Date.now() - timeStart));
+      await Promise.all([
+        // if error, execution must be at least 2 seconds
+        sleep(2000 - (Date.now() - timeStart)),
+        sessions.saveLoginAttempt(ctx, false, user?.id ?? null),
+      ]);
       throw error;
     }
   });
@@ -176,8 +179,11 @@ const signUpProcedure = publicProcedure
         userId: user?.id,
       };
     } catch (error: unknown) {
-      // if error, execution must be at least 2 seconds
-      await sleep(2000 - (Date.now() - timeStart));
+      await Promise.all([
+        // if error, execution must be at least 2 seconds
+        sleep(2000 - (Date.now() - timeStart)),
+        sessions.saveLoginAttempt(ctx, false, user?.id ?? null),
+      ]);
       throw error;
     }
   });

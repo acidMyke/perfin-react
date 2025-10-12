@@ -19,11 +19,14 @@ export function generateTokenParam() {
 async function create(ctx: Context, userId: string) {
   const { db, env, resHeaders } = ctx;
   const { token, expiresAt, maxAge } = generateTokenParam();
+
+  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
   await db.insert(schema.sessionsTable).values({
     token,
     expiresAt,
     userId,
     lastUsedAt: new Date(),
+    loginAttemptId,
   });
 
   resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
@@ -78,7 +81,7 @@ function getTokenFromHeader(ctx: Context) {
   return { token: undefined, failureReason: 'Missing token' };
 }
 
-async function refreshToken(ctx: Context, existingToken: string, userId: string) {
+async function refreshToken(ctx: Context, existingToken: string, userId: string, loginAttemptId: string) {
   const { db, env, resHeaders, wctx } = ctx;
   const { token, expiresAt, maxAge } = generateTokenParam();
   await db.insert(schema.sessionsTable).values({
@@ -86,6 +89,7 @@ async function refreshToken(ctx: Context, existingToken: string, userId: string)
     expiresAt,
     userId,
     lastUsedAt: new Date(),
+    loginAttemptId,
   });
   resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
     httpOnly: true,
@@ -109,21 +113,16 @@ async function resolve(ctx: Context, allowUnauthicated = false) {
   if (token) {
     const session = await db.query.sessionsTable.findFirst({
       where: (session, { eq, gt, and }) => and(eq(session.token, token), gt(session.expiresAt, new Date())),
-      columns: { id: true, createdAt: true, expiresAt: true, lastUsedAt: true },
+      columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
       with: { user: { columns: { id: true, name: true } } },
     });
 
     if (session) {
       let promises: Promise<any>[] = [];
-      const sessionUpdatePr = db
-        .update(schema.sessionsTable)
-        .set({ lastUsedAt: new Date() })
-        .where(eq(schema.sessionsTable.id, session.id));
-      promises.push(sessionUpdatePr);
 
       // Refresh token if its created more than 2 days ago.
       if (differenceInDays(new Date(), session.createdAt) > 2) {
-        const refreshTokenPr = refreshToken(ctx, token, session.user.id);
+        const refreshTokenPr = refreshToken(ctx, token, session.user.id, session.loginAttemptId);
         promises.push(refreshTokenPr);
       }
 
@@ -151,7 +150,7 @@ async function resolve(ctx: Context, allowUnauthicated = false) {
   throw new TRPCError({ code: 'UNAUTHORIZED' });
 }
 
-async function getTelemetry(ctx: Context) {
+async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId: string | null = null) {
   const { db, req } = ctx;
   const cf = req.cf;
   const headers = req.headers;
@@ -159,24 +158,34 @@ async function getTelemetry(ctx: Context) {
   const parsedUa = new UAParser(ua).getResult();
   const userAgent = `${parsedUa.browser.name} ${parsedUa.browser.version} / ${parsedUa.os.name} ${parsedUa.os.version}`;
 
-  const telemetry: Omit<typeof schema.loginAttemptsTable.$inferInsert, 'isSuccess' | 'attemptedForId'> = {
+  const attempt: typeof schema.loginAttemptsTable.$inferInsert = {
     ip: headers.get('cf-connecting-ip') ?? '',
     userAgent,
+    isSuccess,
+    attemptedForId,
   };
 
   const cfKeys = ['asn', 'city', 'region', 'country', 'colo'];
   for (const key of cfKeys) {
     if (cf?.[key]) {
       // @ts-expect-error
-      telemetry[key] = cf?.[key];
+      attempt[key] = cf?.[key];
     }
   }
+
+  const [{ id: loginAttemptId }] = await db
+    .insert(schema.loginAttemptsTable)
+    .values(attempt)
+    .returning({ id: schema.loginAttemptsTable.id });
+
+  return loginAttemptId;
 }
 
 export const sessions = {
   create,
   resolve,
   revoke,
+  saveLoginAttempt,
 };
 
 export default sessions;
