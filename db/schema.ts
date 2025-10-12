@@ -40,6 +40,15 @@ export const historiesTable = sqliteTable('histories', {
   wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
 });
 
+export const emailCodesTable = sqliteTable('email_codes', {
+  ...baseColumns(),
+  email: text().notNull(),
+  emailCode: text({ length: 16 }).notNull(),
+  requestType: text().notNull(),
+  validUntil: dateColumn(),
+  userId: nullableIdColumn(), // Null for sign up
+});
+
 export const loginAttemptsTable = sqliteTable('login_attempts', {
   id: text({ length: 16 })
     .primaryKey()
@@ -67,17 +76,34 @@ export const loginAttemptsRelations = relations(loginAttemptsTable, ({ one, many
 
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
-  name: text(),
+  name: text().unique().notNull(),
+  email: text().unique().notNull(),
   passSalt: blob({ mode: 'buffer' }),
   passKey: blob({ mode: 'buffer' }),
-  requireNewPassword: integer({ mode: 'boolean' }).default(true),
   failedAttempts: integer().notNull().default(0),
   releasedAfter: integer({ mode: 'timestamp' }),
-  email: text().notNull(),
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
+  passkeys: many(passkeysTable),
+}));
+
+export const passkeysTable = sqliteTable('passkeys', {
+  id: text().primaryKey(),
+  userId: idColumn().references(() => usersTable.id),
+  publicKey: blob({ mode: 'buffer' }),
+  signCount: integer().notNull(),
+  challenge: text(),
+  challengedAt: integer({ mode: 'timestamp' }),
+  createdAt: createdAtColumn(),
+});
+
+export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [passkeysTable.userId],
+    references: [usersTable.id],
+  }),
 }));
 
 export const sessionsTable = sqliteTable('sessions', {

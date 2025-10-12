@@ -50,6 +50,13 @@
       "when": 1759550139108,
       "tag": "0006_open_valkyrie",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1760260612697,
+      "tag": "0007_fast_lady_mastermind",
+      "breakpoints": true
     }
   ]
 }
