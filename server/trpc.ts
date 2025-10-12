@@ -22,6 +22,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
       req,
       env, // Cloudflare workers enviroment
       wctx: ctx, // Cloudflare workers context
+      url: new URL(req.url),
       resHeaders,
     };
   };

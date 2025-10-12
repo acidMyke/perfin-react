@@ -1,12 +1,14 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 import { FormInputError, protectedProcedure, publicProcedure } from '../trpc';
-import { eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib/utils';
 import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 import { addSeconds, isBefore } from 'date-fns';
+import z from 'zod';
+import { createEmailCode, sendSignUpVerificationEmail } from '../lib/email';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -129,6 +131,39 @@ const signInProcedure = publicProcedure
     }
   });
 
+const signUpEmailProcedure = publicProcedure
+  .input(
+    z.object({
+      name: z.string().min(5),
+      email: z.email(),
+    }),
+  )
+  .mutation(async ({ ctx, input }) => {
+    const { db } = ctx;
+    const existingUser = await db.query.usersTable.findFirst({
+      where: or(eq(usersTable.email, input.email), eq(usersTable.name, input.name)),
+    });
+
+    if (existingUser) {
+      if (existingUser.email === input.email) {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          cause: new FormInputError({ fieldErrors: { email: ['Email used'] } }),
+        });
+      } else {
+        throw new TRPCError({
+          code: 'BAD_REQUEST',
+          cause: new FormInputError({ fieldErrors: { name: ['Name used'] } }),
+        });
+      }
+    }
+
+    const { verificationUrl } = await createEmailCode(ctx, 'signup', input.email);
+    verificationUrl.searchParams.set('username', input.name);
+    const recipient = { addr: input.email, name: input.name };
+    await sendSignUpVerificationEmail(ctx, recipient, verificationUrl.toString());
+  });
+
 const signUpProcedure = publicProcedure
   .input(signUpValidator)
   .mutation(async ({ input: { username, password }, ctx }) => {
@@ -212,6 +247,7 @@ export const usersProcedures = {
   session: {
     signIn: signInProcedure,
     signUp: signUpProcedure,
+    signUpEmail: signUpEmailProcedure,
     signOut: signOutProcedure,
   },
 } as const;

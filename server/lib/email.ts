@@ -1,6 +1,10 @@
 import { createMimeMessage, MIMEMessage, type MailboxAddrObject } from 'mimetext';
 import type { Context } from '../trpc';
 import { EmailMessage } from 'cloudflare:email';
+import { nanoid } from 'nanoid';
+import { emailCodesTable } from '../../db/schema';
+import { addSeconds } from 'date-fns';
+import { and, eq, gt } from 'drizzle-orm';
 
 type Recipient = MailboxAddrObject & {
   name: string;
@@ -148,4 +152,59 @@ Perfin System`;
 <p>Cheers,<br>Perfin System</p>`;
 
   return sendEmail(ctx, recipient, addTextAndHtml(msg, text, html));
+}
+
+type EmailCodeRequestType = 'signup';
+
+type CreateEmailCodeOption = {
+  /**
+   * in seconds
+   * @default 300 (5mins)
+   */
+  expiresIn?: number;
+};
+
+export async function createEmailCode(
+  ctx: Context,
+  requestType: EmailCodeRequestType,
+  email: string,
+  options?: CreateEmailCodeOption,
+) {
+  const { db, url } = ctx;
+  const { expiresIn = 300 } = options ?? {};
+
+  const code = nanoid(16);
+  await db.insert(emailCodesTable).values({
+    email,
+    emailCode: code,
+    requestType,
+    validUntil: addSeconds(new Date(), expiresIn),
+  });
+
+  const verificationUrl = new URL(`/verify/${code}`, url.origin);
+
+  return {
+    code,
+    verificationUrl,
+  };
+}
+
+export async function verifyEmailCode(ctx: Context, code: string) {
+  const { db } = ctx;
+  const emailCode = await db.query.emailCodesTable.findFirst({
+    where: and(eq(emailCodesTable.emailCode, code), gt(emailCodesTable.validUntil, new Date())),
+  });
+
+  if (emailCode) {
+    await db.update(emailCodesTable).set({ validUntil: new Date() }).where(eq(emailCodesTable.emailCode, code));
+    return {
+      isValid: true,
+      requestType: emailCode.requestType as EmailCodeRequestType,
+      email: emailCode.email,
+    };
+  } else {
+    return {
+      isValid: false,
+    };
+  }
 }
