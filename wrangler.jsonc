@@ -15,12 +15,6 @@
       "migrations_dir": "./db/migrations",
     },
   ],
-  "send_email": [
-    {
-      "name": "email",
-      "allowed_sender_addresses": ["no-reply@perfin.acidmyke.link"],
-    },
-  ],
   "vars": {
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Pefin",
@@ -35,12 +29,6 @@
           "database_id": "1452e603-0196-4cd4-a9e2-33a2ec927411",
           "preview_database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
           "migrations_dir": "./db/migrations",
-        },
-      ],
-      "send_email": [
-        {
-          "name": "email",
-          "allowed_sender_addresses": ["no-reply@perfin.acidmyke.link"],
         },
       ],
       "vars": {
