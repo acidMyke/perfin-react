@@ -8,7 +8,7 @@ import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 import { addSeconds, isBefore } from 'date-fns';
 import z from 'zod';
-import { createEmailCode, sendSignUpVerificationEmail } from '../lib/email';
+import { createEmailCode, signUpVerificationEmail } from '../lib/email';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -160,8 +160,9 @@ const signUpEmailProcedure = publicProcedure
 
     const { verificationUrl } = await createEmailCode(ctx, 'signup', input.email);
     verificationUrl.searchParams.set('username', input.name);
-    const recipient = { addr: input.email, name: input.name };
-    await sendSignUpVerificationEmail(ctx, recipient, verificationUrl.toString());
+    await signUpVerificationEmail(input.name, verificationUrl.toString())
+      .addRecipient(input.email, input.name)
+      .send(ctx);
   });
 
 const signUpProcedure = publicProcedure
