@@ -8,7 +8,7 @@ import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 import { addSeconds, isBefore } from 'date-fns';
 import z from 'zod';
-import { createEmailCode, signUpVerificationEmail } from '../lib/email';
+import { createEmailCode, signUpVerificationEmail, verifyEmailCode } from '../lib/email';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -61,7 +61,7 @@ const signInProcedure = publicProcedure
         id: true,
         name: true,
         passSalt: true,
-        passKey: true,
+        passDigest: true,
         failedAttempts: true,
         releasedAfter: true,
       },
@@ -90,7 +90,7 @@ const signInProcedure = publicProcedure
         });
       }
 
-      if (!user.passKey || !user.passSalt || !(await verifyPassword(password, user.passKey, user.passSalt))) {
+      if (!user.passDigest || !user.passSalt || !(await verifyPassword(password, user.passDigest, user.passSalt))) {
         const failedAttempts = user.failedAttempts;
         let releasedAfter: Date | null = null;
         if (failedAttempts >= 3) {
@@ -158,70 +158,82 @@ const signUpEmailProcedure = publicProcedure
       }
     }
 
-    const { verificationUrl } = await createEmailCode(ctx, 'signup', input.email);
-    verificationUrl.searchParams.set('username', input.name);
-    await signUpVerificationEmail(input.name, verificationUrl.toString())
+    const { verificationUrl } = await createEmailCode(ctx, 'signup/verify', input.email, {
+      redirectTo: '/signup/verify',
+    });
+    verificationUrl!.searchParams.set('username', input.name);
+    await signUpVerificationEmail(input.name, verificationUrl!.toString())
       .addRecipient(input.email, input.name)
       .send(ctx);
+    return { success: true };
   });
 
-const signUpProcedure = publicProcedure
-  .input(signUpValidator)
-  .mutation(async ({ input: { username, password }, ctx }) => {
-    const timeStart = Date.now();
-    const user = await ctx.db.query.usersTable.findFirst({
-      where: eq(usersTable.name, username),
-      columns: {
-        id: true,
-        name: true,
-        passSalt: true,
-        passKey: true,
-      },
+const signUpVerifyProcedure = publicProcedure.input(z.object({ code: z.string() })).mutation(async ({ ctx, input }) => {
+  const { code } = input;
+  const { isValid, requestType, email } = await verifyEmailCode(ctx, code);
+  if (!isValid || requestType != 'signup/verify') {
+    throw new TRPCError({
+      code: 'UNPROCESSABLE_CONTENT',
+      message: 'Invalid Code',
     });
+  }
 
-    try {
-      if (!user) {
-        throw new TRPCError({
-          code: 'NOT_FOUND',
-          cause: new FormInputError({
-            fieldErrors: {
-              username: ['Unable to find username'],
-            },
-          }),
-        });
-      }
+  // Issue another code for the validated email with longer duration, this code is not sent in email
+  const { code: newCode } = await createEmailCode(ctx, 'signup/finalize', email, { expiresIn: 600 }); // 10 minutes
+  return { code: newCode, email };
+});
 
-      if (user.passKey || user.passSalt) {
-        throw new TRPCError({
-          code: 'BAD_REQUEST',
-          cause: new FormInputError({
-            fieldErrors: {
-              username: ['Username in-used'],
-            },
-          }),
-        });
-      }
+const signUpFinalizeProcedure = publicProcedure
+  .input(signUpValidator.extend({ code: z.string() }))
+  .mutation(async ({ input: { username, password, code }, ctx }) => {
+    const [{ isValid, requestType, email }, inUsedUsername] = await Promise.all([
+      verifyEmailCode(ctx, code),
+      ctx.db.$count(usersTable, eq(usersTable.name, username)).then(count => count > 0),
+    ]);
 
-      const salt = generateSalt();
-      const hash = await hashPassword(password, salt);
-
-      await ctx.db.update(usersTable).set({ passSalt: salt, passKey: hash }).where(eq(usersTable.id, user.id));
-
-      // Create session
-      await sessions.create(ctx, user.id);
-
-      return {
-        userName: user?.name,
-        userId: user?.id,
-      };
-    } catch (error: unknown) {
-      await Promise.all([
-        // if error, execution must be at least 2 seconds
-        sleep(2000 - (Date.now() - timeStart)),
-        sessions.saveLoginAttempt(ctx, false, user?.id ?? null),
-      ]);
-      throw error;
+    if (!isValid || requestType != 'signup/finalize') {
+      throw new TRPCError({
+        code: 'UNPROCESSABLE_CONTENT',
+        message: 'Invalid Code',
+      });
     }
+
+    if (inUsedUsername) {
+      throw new TRPCError({
+        code: 'UNPROCESSABLE_CONTENT',
+        cause: new FormInputError({ fieldErrors: { name: ['Name used'] } }),
+      });
+    }
+
+    const passSalt = generateSalt();
+    const passDigest = await hashPassword(password, passSalt);
+    const [user] = await ctx.db
+      .insert(usersTable)
+      .values({
+        name: username,
+        email,
+        passDigest,
+        passSalt,
+      })
+      .returning({
+        id: usersTable.id,
+        name: usersTable.name,
+      });
+
+    if (!user) {
+      throw new TRPCError({
+        code: 'INTERNAL_SERVER_ERROR',
+        message: 'Sign up successful but unable to sign in. Please try again later',
+      });
+    }
+
+    // Create session
+    await sessions.create(ctx, user.id);
+
+    return {
+      userName: user?.name,
+      userId: user?.id,
+    };
   });
 
 const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
@@ -247,8 +259,9 @@ export const usersProcedures = {
   whoami: whoamiProcedure,
   session: {
     signIn: signInProcedure,
-    signUp: signUpProcedure,
-    signUpEmail: signUpEmailProcedure,
     signOut: signOutProcedure,
+    signUpEmail: signUpEmailProcedure,
+    signUpVerify: signUpVerifyProcedure,
+    signUpFinalize: signUpFinalizeProcedure,
   },
 } as const;
