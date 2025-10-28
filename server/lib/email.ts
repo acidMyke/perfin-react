@@ -232,7 +232,7 @@ The Team`;
   return new MailjetMessage().setSubject('Account Temporarily Locked').setText(text).setHtml(html);
 }
 
-type EmailCodeRequestType = 'signup/verify' | 'signup/finalize';
+type EmailCodePurpose = 'signup/verify' | 'signup/finalize';
 
 type CreateEmailCodeOption = {
   /**
@@ -240,31 +240,26 @@ type CreateEmailCodeOption = {
    * @default 300 (5mins)
    */
   expiresIn?: number;
-  redirectTo?: string;
 };
 
 export async function createEmailCode(
   ctx: Context,
-  requestType: EmailCodeRequestType,
+  purpose: EmailCodePurpose,
   email: string,
   options?: CreateEmailCodeOption,
 ) {
   const { db, url } = ctx;
-  const { expiresIn = 300, redirectTo } = options ?? {};
+  const { expiresIn = 300 } = options ?? {};
 
   const code = nanoid(16);
   await db.insert(emailCodesTable).values({
     email,
-    emailCode: code,
-    requestType,
+    code,
+    purpose,
     validUntil: addSeconds(new Date(), expiresIn),
   });
 
-  if (!redirectTo) {
-    return { code };
-  }
-
-  const verificationUrl = new URL(redirectTo, url.origin);
+  const verificationUrl = new URL('/' + purpose, url.origin);
   verificationUrl.searchParams.set('code', code);
   return { code, verificationUrl };
 }
@@ -272,13 +267,13 @@ export async function createEmailCode(
 export async function verifyEmailCode(ctx: Context, code: string) {
   const { db } = ctx;
   const emailCode = await db.query.emailCodesTable.findFirst({
-    where: and(eq(emailCodesTable.emailCode, code), gt(emailCodesTable.validUntil, new Date())),
+    where: and(eq(emailCodesTable.code, code), gt(emailCodesTable.validUntil, new Date())),
   });
 
   if (emailCode) {
     return {
       isValid: true,
-      requestType: emailCode.requestType as EmailCodeRequestType,
+      purpose: emailCode.purpose as EmailCodePurpose,
       email: emailCode.email,
     } as const;
   } else {

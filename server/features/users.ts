@@ -158,9 +158,7 @@ const signUpEmailProcedure = publicProcedure
       }
     }
 
-    const { verificationUrl } = await createEmailCode(ctx, 'signup/verify', input.email, {
-      redirectTo: '/signup/verify',
-    });
+    const { verificationUrl } = await createEmailCode(ctx, 'signup/verify', input.email);
     verificationUrl!.searchParams.set('username', input.name);
     await signUpVerificationEmail(input.name, verificationUrl!.toString())
       .addRecipient(input.email, input.name)
@@ -169,9 +167,8 @@ const signUpEmailProcedure = publicProcedure
   });
 
 const signUpVerifyProcedure = publicProcedure.input(z.object({ code: z.string() })).mutation(async ({ ctx, input }) => {
-  const { code } = input;
-  const { isValid, requestType, email } = await verifyEmailCode(ctx, code);
-  if (!isValid || requestType != 'signup/verify') {
+  const { isValid, purpose, email } = await verifyEmailCode(ctx, input.code);
+  if (!isValid || purpose != 'signup/verify') {
     throw new TRPCError({
       code: 'UNPROCESSABLE_CONTENT',
       message: 'Invalid Code',
@@ -179,19 +176,19 @@ const signUpVerifyProcedure = publicProcedure.input(z.object({ code: z.string() 
   }
 
   // Issue another code for the validated email with longer duration, this code is not sent in email
-  const { code: newCode } = await createEmailCode(ctx, 'signup/finalize', email, { expiresIn: 600 }); // 10 minutes
-  return { code: newCode, email };
+  const { code } = await createEmailCode(ctx, 'signup/finalize', email, { expiresIn: 600 }); // 10 minutes
+  return { code, email };
 });
 
 const signUpFinalizeProcedure = publicProcedure
   .input(signUpValidator.extend({ code: z.string() }))
   .mutation(async ({ input: { username, password, code }, ctx }) => {
-    const [{ isValid, requestType, email }, inUsedUsername] = await Promise.all([
+    const [{ isValid, purpose, email }, inUsedUsername] = await Promise.all([
       verifyEmailCode(ctx, code),
       ctx.db.$count(usersTable, eq(usersTable.name, username)).then(count => count > 0),
     ]);
 
-    if (!isValid || requestType != 'signup/finalize') {
+    if (!isValid || purpose != 'signup/finalize') {
       throw new TRPCError({
         code: 'UNPROCESSABLE_CONTENT',
         message: 'Invalid Code',
@@ -231,8 +228,8 @@ const signUpFinalizeProcedure = publicProcedure
     await sessions.create(ctx, user.id);
 
     return {
-      userName: user?.name,
-      userId: user?.id,
+      userName: user.name,
+      userId: user.id,
     };
   });
 

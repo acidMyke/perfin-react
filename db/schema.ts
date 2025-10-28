@@ -43,10 +43,9 @@ export const historiesTable = sqliteTable('histories', {
 export const emailCodesTable = sqliteTable('email_codes', {
   ...baseColumns(),
   email: text().notNull(),
-  emailCode: text({ length: 16 }).notNull(),
-  requestType: text().notNull(),
+  code: text({ length: 16 }).notNull(),
+  purpose: text().notNull(),
   validUntil: dateColumn(),
-  userId: nullableIdColumn(), // Null for sign up
 });
 
 export const loginAttemptsTable = sqliteTable('login_attempts', {
