@@ -78,7 +78,7 @@ export const usersTable = sqliteTable('users', {
   name: text().unique().notNull(),
   email: text().unique().notNull(),
   passSalt: blob({ mode: 'buffer' }).notNull(),
-  passDigest: blob('passkey', { mode: 'buffer' }).notNull(),
+  passDigest: blob({ mode: 'buffer' }).notNull(),
   failedAttempts: integer().notNull().default(0),
   releasedAfter: integer({ mode: 'timestamp' }),
 });
