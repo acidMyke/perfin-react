@@ -14,6 +14,7 @@ import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupIndexRouteImport } from './routes/signup/index'
+import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
@@ -42,6 +43,11 @@ const IndexRoute = IndexRouteImport.update({
 const SignupIndexRoute = SignupIndexRouteImport.update({
   id: '/signup/',
   path: '/signup/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupVerifyRoute = SignupVerifyRouteImport.update({
+  id: '/signup/verify',
+  path: '/signup/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -79,6 +85,7 @@ export interface FileRoutesByFullPath {
   '/signin': typeof SigninRoute
   '/verify': typeof VerifyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
@@ -90,6 +97,7 @@ export interface FileRoutesByTo {
   '/signin': typeof SigninRoute
   '/verify': typeof VerifyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
@@ -103,6 +111,7 @@ export interface FileRoutesById {
   '/signin': typeof SigninRoute
   '/verify': typeof VerifyRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
   '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
@@ -116,6 +125,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/verify'
     | '/dashboard'
+    | '/signup/verify'
     | '/signup'
     | '/expenses/$expenseId'
     | '/settings/manage-subjects'
@@ -127,6 +137,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/verify'
     | '/dashboard'
+    | '/signup/verify'
     | '/signup'
     | '/expenses/$expenseId'
     | '/settings/manage-subjects'
@@ -139,6 +150,7 @@ export interface FileRouteTypes {
     | '/signin'
     | '/verify'
     | '/_authenticated/dashboard'
+    | '/signup/verify'
     | '/signup/'
     | '/_authenticated/expenses/$expenseId'
     | '/_authenticated/settings/manage-subjects'
@@ -151,6 +163,7 @@ export interface RootRouteChildren {
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   SigninRoute: typeof SigninRoute
   VerifyRoute: typeof VerifyRoute
+  SignupVerifyRoute: typeof SignupVerifyRoute
   SignupIndexRoute: typeof SignupIndexRoute
 }
 
@@ -189,6 +202,13 @@ declare module '@tanstack/react-router' {
       path: '/signup'
       fullPath: '/signup'
       preLoaderRoute: typeof SignupIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup/verify': {
+      id: '/signup/verify'
+      path: '/signup/verify'
+      fullPath: '/signup/verify'
+      preLoaderRoute: typeof SignupVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard': {
@@ -255,6 +275,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   SigninRoute: SigninRoute,
   VerifyRoute: VerifyRoute,
+  SignupVerifyRoute: SignupVerifyRoute,
   SignupIndexRoute: SignupIndexRoute,
 }
 export const routeTree = rootRouteImport

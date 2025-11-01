@@ -7,21 +7,12 @@ import z from 'zod';
 
 export const Route = createFileRoute('/signup/')({
   component: RouteComponent,
-  validateSearch(search) {
-    return {
-      redirect: search.redirect as string | undefined,
-    };
-  },
-  async beforeLoad({ search }) {
+  async beforeLoad() {
     const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
     if (!isAuthenticated) {
       return;
     }
-    if (search.redirect) {
-      throw redirect({ href: search.redirect });
-    } else {
-      throw redirect({ to: '/dashboard' });
-    }
+    throw redirect({ to: '/dashboard' });
   },
 });
 
@@ -30,8 +21,7 @@ function RouteComponent() {
   const form = useAppForm({
     defaultValues: { name: '', email: '' },
     validators: {
-      onSubmitAsync: ({ value, signal }) => {
-        signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
+      onSubmitAsync: ({ value }) => {
         return handleFormMutateAsync(signUpEmail.mutateAsync(value));
       },
     },
