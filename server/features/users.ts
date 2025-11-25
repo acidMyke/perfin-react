@@ -8,7 +8,7 @@ import sessions from '../lib/sessions';
 import { signInValidator, signUpValidator } from '../validators';
 import { addSeconds, isBefore } from 'date-fns';
 import z from 'zod';
-import { createEmailCode, signUpVerificationEmail, verifyEmailCode } from '../lib/email';
+import { createEmailCode, invalidateEmailCode, signUpVerificationEmail, verifyEmailCode } from '../lib/email';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -191,7 +191,7 @@ const signUpFinalizeProcedure = publicProcedure
     if (!isValid || purpose != 'signup/finalize') {
       throw new TRPCError({
         code: 'UNPROCESSABLE_CONTENT',
-        message: 'Invalid Code',
+        message: 'Code expired, please retry',
       });
     }
 
@@ -216,6 +216,8 @@ const signUpFinalizeProcedure = publicProcedure
         id: usersTable.id,
         name: usersTable.name,
       });
+
+    await invalidateEmailCode(ctx, { email });
 
     if (!user) {
       throw new TRPCError({

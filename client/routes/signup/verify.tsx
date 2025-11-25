@@ -4,6 +4,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useAppForm } from '../../components/Form';
 import { sleep } from '../../../server/lib/utils';
+import z from 'zod';
+import { signUpValidator } from '../../../server/validators';
 
 export const Route = createFileRoute('/signup/verify')({
   component: RouteComponent,
@@ -30,6 +32,7 @@ function RouteComponent() {
       },
       onError() {
         form.resetField('password');
+        form.resetField('confirmPassword');
       },
     }),
   );
@@ -78,10 +81,10 @@ function RouteComponent() {
             />
           </label>
           <form.AppForm>
-            <form.AppField name='username'>
+            <form.AppField name='username' validators={{ onChange: signUpValidator.shape.username }}>
               {({ TextInput }) => <TextInput type='text' label='Username' />}
             </form.AppField>
-            <form.AppField name='password'>
+            <form.AppField name='password' validators={{ onChange: signUpValidator.shape.password }}>
               {({ TextInput }) => <TextInput type='password' label='Password' />}
             </form.AppField>
             <form.AppField
@@ -101,6 +104,13 @@ function RouteComponent() {
             <form.StatusMessage />
             <form.SubmitButton label='Submit' inProgressLabel='Submitting' doneLabel='Submitted' />
           </form.AppForm>
+        </div>
+      );
+    } else {
+      return (
+        <div className='mx-auto max-w-md'>
+          <h1 className='mt-20 text-center text-3xl font-black'>Sign Up</h1>
+          <p className='mt-20 text-center'>Creating account...</p>
         </div>
       );
     }

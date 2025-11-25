@@ -311,7 +311,11 @@ function StatusMessage({ takeOne }: StatusMessageProps) {
     } else if (typeof err === 'string') {
       errMsgs.push(err);
     } else if (typeof err === 'object') {
-      if ('message' in err) {
+      if (Array.isArray(err)) {
+        if (err.length > 0) {
+          errMsgs.push(err.join(', '));
+        }
+      } else if ('message' in err) {
         errMsgs.push(err.message);
       } else if (import.meta.env.DEV) {
         errMsgs.push('[' + JSON.stringify(err) + ']');

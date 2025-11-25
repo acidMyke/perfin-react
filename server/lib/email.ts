@@ -4,7 +4,7 @@ import type { Context } from '../trpc';
 import { nanoid } from 'nanoid';
 import { emailCodesTable } from '../../db/schema';
 import { addSeconds } from 'date-fns';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, SQL } from 'drizzle-orm';
 
 export interface MailjetAddrObject {
   Email: string;
@@ -281,4 +281,23 @@ export async function verifyEmailCode(ctx: Context, code: string) {
       isValid: false,
     } as const;
   }
+}
+
+type EmailInvalidationOption = {
+  email?: string;
+  purpose?: string;
+  code?: string;
+};
+
+export async function invalidateEmailCode(ctx: Context, option: EmailInvalidationOption) {
+  const { db } = ctx;
+  const conditions: SQL[] = [gt(emailCodesTable.validUntil, new Date())];
+  if (option.email) conditions.push(eq(emailCodesTable.email, option.email));
+  if (option.purpose) conditions.push(eq(emailCodesTable.purpose, option.purpose));
+  if (option.code) conditions.push(eq(emailCodesTable.code, option.code));
+
+  await db
+    .update(emailCodesTable)
+    .set({ validUntil: addSeconds(new Date(), 5) })
+    .where(and(...conditions));
 }
