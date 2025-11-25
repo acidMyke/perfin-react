@@ -2,7 +2,7 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, throwIfNotFound, trpc, type RouterOutputs } from '../../../trpc';
 import { useMutation, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { FieldError } from '../../../components/FieldError';
-import { Cross, ExternalLink, Plus, X } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { PageHeader } from '../../../components/PageHeader';
@@ -105,7 +105,7 @@ function CreateEditExpensePageComponent() {
           if (!isBillAmountDirty) {
             const items = formApi.getFieldValue('items');
             const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
-            formApi.setFieldValue('amountCents', totalCents, { dontUpdateMeta: false });
+            formApi.setFieldValue('amountCents', totalCents, { dontUpdateMeta: true });
           }
         }
       },
