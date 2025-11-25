@@ -9,19 +9,21 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as SignupRouteImport } from './routes/signup'
+import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as SignupIndexRouteImport } from './routes/signup/index'
+import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
 import { Route as AuthenticatedExpensesExpenseIdRouteImport } from './routes/_authenticated/expenses/$expenseId'
 
-const SignupRoute = SignupRouteImport.update({
-  id: '/signup',
-  path: '/signup',
+const VerifyRoute = VerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SigninRoute = SigninRouteImport.update({
@@ -36,6 +38,16 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupIndexRoute = SignupIndexRouteImport.update({
+  id: '/signup/',
+  path: '/signup/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SignupVerifyRoute = SignupVerifyRouteImport.update({
+  id: '/signup/verify',
+  path: '/signup/verify',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
@@ -71,8 +83,10 @@ const AuthenticatedExpensesExpenseIdRoute =
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/signin': typeof SigninRoute
-  '/signup': typeof SignupRoute
+  '/verify': typeof VerifyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
+  '/signup': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
@@ -81,8 +95,10 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/signin': typeof SigninRoute
-  '/signup': typeof SignupRoute
+  '/verify': typeof VerifyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
+  '/signup': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
@@ -93,8 +109,10 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/signin': typeof SigninRoute
-  '/signup': typeof SignupRoute
+  '/verify': typeof VerifyRoute
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
+  '/signup/verify': typeof SignupVerifyRoute
+  '/signup/': typeof SignupIndexRoute
   '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -105,8 +123,10 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/signin'
-    | '/signup'
+    | '/verify'
     | '/dashboard'
+    | '/signup/verify'
+    | '/signup'
     | '/expenses/$expenseId'
     | '/settings/manage-subjects'
     | '/expenses'
@@ -115,8 +135,10 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/signin'
-    | '/signup'
+    | '/verify'
     | '/dashboard'
+    | '/signup/verify'
+    | '/signup'
     | '/expenses/$expenseId'
     | '/settings/manage-subjects'
     | '/expenses'
@@ -126,8 +148,10 @@ export interface FileRouteTypes {
     | '/'
     | '/_authenticated'
     | '/signin'
-    | '/signup'
+    | '/verify'
     | '/_authenticated/dashboard'
+    | '/signup/verify'
+    | '/signup/'
     | '/_authenticated/expenses/$expenseId'
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/expenses/'
@@ -138,16 +162,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   SigninRoute: typeof SigninRoute
-  SignupRoute: typeof SignupRoute
+  VerifyRoute: typeof VerifyRoute
+  SignupVerifyRoute: typeof SignupVerifyRoute
+  SignupIndexRoute: typeof SignupIndexRoute
 }
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/signup': {
-      id: '/signup'
-      path: '/signup'
-      fullPath: '/signup'
-      preLoaderRoute: typeof SignupRouteImport
+    '/verify': {
+      id: '/verify'
+      path: '/verify'
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/signin': {
@@ -169,6 +195,20 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup/': {
+      id: '/signup/'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/signup/verify': {
+      id: '/signup/verify'
+      path: '/signup/verify'
+      fullPath: '/signup/verify'
+      preLoaderRoute: typeof SignupVerifyRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard': {
@@ -234,7 +274,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   SigninRoute: SigninRoute,
-  SignupRoute: SignupRoute,
+  VerifyRoute: VerifyRoute,
+  SignupVerifyRoute: SignupVerifyRoute,
+  SignupIndexRoute: SignupIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

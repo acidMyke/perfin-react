@@ -5,6 +5,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CreatableSelect from 'react-select/creatable';
 import { twMerge } from '../twMerge';
 import { FieldError } from './FieldError';
+import { TriangleAlert } from 'lucide-react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
@@ -293,11 +294,56 @@ function SubmitButton(props: SubmitButtonProps) {
   );
 }
 
+type StatusMessageProps = {
+  takeOne?: boolean;
+};
+
+function StatusMessage({ takeOne }: StatusMessageProps) {
+  const form = useFormContext();
+  const errors = form.state.errors;
+  const errMsgs = [];
+
+  for (const err of errors) {
+    if (typeof err === 'undefined') {
+      if (import.meta.env.DEV) {
+        errMsgs.push('[undefined]');
+      }
+    } else if (typeof err === 'string') {
+      errMsgs.push(err);
+    } else if (typeof err === 'object') {
+      if (Array.isArray(err)) {
+        if (err.length > 0) {
+          errMsgs.push(err.join(', '));
+        }
+      } else if ('message' in err) {
+        errMsgs.push(err.message);
+      } else if (import.meta.env.DEV) {
+        errMsgs.push('[' + JSON.stringify(err) + ']');
+      }
+    } else {
+      errMsgs.push('[unknown]');
+    }
+    if (takeOne && errMsgs.length > 0) break;
+  }
+
+  return (
+    <div className='flex w-full flex-col gap-6'>
+      {errMsgs.map(msg => (
+        <div role='alert' className='alert alert-error'>
+          <TriangleAlert />
+          <span>{msg}</span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export const { useAppForm, withForm, withFieldGroup } = createFormHook({
   formContext,
   fieldContext,
   formComponents: {
     SubmitButton,
+    StatusMessage,
   },
   fieldComponents: {
     TextInput,

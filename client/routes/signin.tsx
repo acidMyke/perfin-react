@@ -1,10 +1,11 @@
 import { useMutation } from '@tanstack/react-query';
-import { createFileRoute, useRouter, redirect } from '@tanstack/react-router';
+import { createFileRoute, useRouter, redirect, Link } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
 import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
 import { sleep } from '../../server/lib/utils';
 import { signInValidator } from '../../server/validators';
 import { useAppForm } from '../components/Form';
+import { ChevronRight } from 'lucide-react';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
@@ -64,7 +65,7 @@ function RouteComponent() {
         e.stopPropagation();
       }}
     >
-      <h1 className='mt-20 text-center text-3xl font-black'>Perfin Sign In</h1>
+      <h1 className='mt-20 text-center text-3xl font-black'>Sign In</h1>
       <form.AppForm>
         <form.AppField name='username'>{({ TextInput }) => <TextInput type='text' label='Username' />}</form.AppField>
         <form.AppField name='password'>
@@ -76,6 +77,10 @@ function RouteComponent() {
           doneLabel={`Welcome, ${signInMutation.data?.userName}`}
         />
       </form.AppForm>
+      <p className='mt-4 text-center'>Don't have an account?</p>
+      <Link to='/signup' className='link block w-full text-center'>
+        Sign up here <ChevronRight className='inline-block' />
+      </Link>
     </form>
   );
 }

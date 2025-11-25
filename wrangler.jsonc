@@ -16,7 +16,9 @@
     },
   ],
   "vars": {
-    "TOKEN_COOKIE_NAME": "token"
+    "TOKEN_COOKIE_NAME": "token",
+    "EMAIL_SENDER_NAME": "PreProd-Pefin",
+    "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
   },
   "env": {
     "production": {
@@ -30,8 +32,10 @@
         },
       ],
       "vars": {
-        "TOKEN_COOKIE_NAME": "__Host-token"
-      }
+        "TOKEN_COOKIE_NAME": "__Host-token",
+        "EMAIL_SENDER_NAME": "Pefin",
+        "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+      },
     },
   },
 }

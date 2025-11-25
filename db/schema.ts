@@ -1,7 +1,6 @@
 import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
-import { PERIOD_TYPES_TUPLE, SUBJECT_TYPES_TUPLE } from './enum';
 
 export const generateId = () => nanoid(8);
 const nullableIdColumn = () => text({ length: 8 });
@@ -41,16 +40,69 @@ export const historiesTable = sqliteTable('histories', {
   wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
 });
 
+export const emailCodesTable = sqliteTable('email_codes', {
+  ...baseColumns(),
+  email: text().notNull(),
+  code: text({ length: 16 }).notNull(),
+  purpose: text().notNull(),
+  validUntil: dateColumn(),
+});
+
+export const loginAttemptsTable = sqliteTable('login_attempts', {
+  id: text({ length: 16 })
+    .primaryKey()
+    .$defaultFn(() => nanoid(16)),
+  timestamp: createdAtColumn(),
+  attemptedForId: nullableIdColumn().references(() => usersTable.id),
+  isSuccess: integer({ mode: 'boolean' }).notNull(),
+
+  ip: text().notNull(),
+  asn: integer(),
+  city: text(),
+  region: text(),
+  country: text({ length: 2 }),
+  colo: text({ length: 3 }),
+  userAgent: text(),
+});
+
+export const loginAttemptsRelations = relations(loginAttemptsTable, ({ one, many }) => ({
+  attemptedFor: one(usersTable, {
+    fields: [loginAttemptsTable.attemptedForId],
+    references: [usersTable.id],
+  }),
+  session: many(sessionsTable),
+}));
+
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
-  name: text(),
-  passSalt: blob({ mode: 'buffer' }),
-  passKey: blob({ mode: 'buffer' }),
-  requireNewPassword: integer({ mode: 'boolean' }).default(true),
+  name: text().unique().notNull(),
+  email: text().unique().notNull(),
+  passSalt: blob({ mode: 'buffer' }).notNull(),
+  passDigest: blob({ mode: 'buffer' }).notNull(),
+  failedAttempts: integer().notNull().default(0),
+  releasedAfter: integer({ mode: 'timestamp' }),
 });
 
 export const usersRelations = relations(usersTable, ({ many }) => ({
   sessions: many(sessionsTable),
+  passkeys: many(passkeysTable),
+}));
+
+export const passkeysTable = sqliteTable('passkeys', {
+  id: text().primaryKey(),
+  userId: idColumn().references(() => usersTable.id),
+  publicKey: blob({ mode: 'buffer' }),
+  signCount: integer().notNull(),
+  challenge: text(),
+  challengedAt: integer({ mode: 'timestamp' }),
+  createdAt: createdAtColumn(),
+});
+
+export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
+  user: one(usersTable, {
+    fields: [passkeysTable.userId],
+    references: [usersTable.id],
+  }),
 }));
 
 export const sessionsTable = sqliteTable('sessions', {
@@ -59,12 +111,17 @@ export const sessionsTable = sqliteTable('sessions', {
   userId: idColumn().references(() => usersTable.id),
   lastUsedAt: dateColumn(),
   expiresAt: dateColumn(),
+  loginAttemptId: idColumn(),
 });
 
 export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   user: one(usersTable, {
     fields: [sessionsTable.userId],
     references: [usersTable.id],
+  }),
+  loginAttempts: one(loginAttemptsTable, {
+    fields: [sessionsTable.loginAttemptId],
+    references: [loginAttemptsTable.id],
   }),
 }));
 
