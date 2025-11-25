@@ -55,33 +55,19 @@ function RouteComponent() {
       <form.AppForm>
         <form.Field name='subjects' mode='array'>
           {field => (
-            <ul className='list bg-base-100 rounded-box shadow-md'>
+            <ul className='list bg-base-100 rounded-box mt-4 shadow-md'>
               {field.state.value.map(({ id }, subjectIndex, { length }) => (
-                <li key={id} className='list-row'>
+                <li key={id} className='list-row p-2'>
                   <div className='list-col-grow'>
                     <form.AppField
                       name={`subjects[${subjectIndex}].name`}
                       validators={{ onChange: v => (v.value == '' ? 'Cannot be empty' : '') }}
                     >
                       {({ TextInput }) => (
-                        <TextInput type='text' containerCn='mt-0' inputCn='input-sm input-neutral' label='Name' />
+                        <TextInput type='text' containerCn='mt-0' inputCn='input-md input-neutral' label='Name' />
                       )}
                     </form.AppField>
                   </div>
-                  <button
-                    className='btn btn-square btn-ghost'
-                    onClick={() => {
-                      form.setFieldValue(`subjects[${subjectIndex}].name`, originalSubjectMap.get(id)!.name);
-                      form.setFieldMeta(`subjects[${subjectIndex}].name`, meta => ({
-                        ...meta,
-                        isTouched: true,
-                        errorMap: {},
-                        errorSourceMap: {},
-                      }));
-                    }}
-                  >
-                    <Undo />
-                  </button>
                   <button
                     className='btn btn-square btn-ghost'
                     disabled={subjectIndex === 0}
