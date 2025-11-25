@@ -1,9 +1,10 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, trpc } from '../../trpc';
 import { whoamiQueryOptions } from '../../queryOptions';
 import { useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../components/Form';
 import z from 'zod';
+import { ChevronRight } from 'lucide-react';
 
 export const Route = createFileRoute('/signup/')({
   component: RouteComponent,
@@ -40,6 +41,10 @@ function RouteComponent() {
             {({ TextInput }) => <TextInput type='text' label='Username' />}
           </form.AppField>
           <form.SubmitButton label='Sign me up' inProgressLabel='Checking...' />
+          <p className='mt-4 text-center'>Already have an account?</p>
+          <Link to='/signin' search={{ redirect: undefined }} className='link block w-full text-center'>
+            Sign in here <ChevronRight className='inline-block' />
+          </Link>
         </form.AppForm>
       )}
     </div>

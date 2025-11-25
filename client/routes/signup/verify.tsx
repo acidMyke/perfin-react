@@ -66,6 +66,7 @@ function RouteComponent() {
         <div className='mx-auto max-w-md'>
           <h1 className='mt-20 text-center text-3xl font-black'>Sign Up</h1>
           <label htmlFor='' className='floating-label mt-8'>
+            <span>Email</span>
             <input
               type='text'
               name='email'
@@ -73,6 +74,7 @@ function RouteComponent() {
               className='input input-primary input-lg w-full'
               value={verificationMutation.data.email}
               readOnly
+              disabled
             />
           </label>
           <form.AppForm>
