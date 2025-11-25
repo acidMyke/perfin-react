@@ -56,7 +56,15 @@ function mapExpenseDetailToForm(
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
-      items: [] as Exclude<typeof detail, undefined>['items'],
+      items: [
+        {
+          id: 'create',
+          name: '',
+          isDeleted: false,
+          priceCents: 0,
+          quantity: 1,
+        },
+      ] satisfies Exclude<typeof detail, undefined>['items'],
     };
   }
 }
@@ -144,7 +152,7 @@ function CreateEditExpensePageComponent() {
         <ShopDetailSubForm form={form} />
         <form.Field name='items' mode='array'>
           {field => (
-            <ul className='mt-8 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-1 pr-2 pl-4'>
+            <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
               {field.state.value.map(({ id }, itemIndex) => (
                 <ItemDetailFieldGroup
                   key={id + itemIndex}

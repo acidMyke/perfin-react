@@ -114,6 +114,10 @@ html {
   @apply bg-base-300;
 }
 
+label.floating-label:has(div.react-select-lg__control) > span {
+  @apply text-lg;
+}
+
 /* Rechart outline removal */
 .recharts-wrapper > svg {
   outline: none;
