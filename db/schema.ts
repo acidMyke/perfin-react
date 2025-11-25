@@ -37,7 +37,7 @@ export const historiesTable = sqliteTable('histories', {
   valuesWere: text({ mode: 'json' }).notNull(),
   versionWas: integer().notNull(),
   wasUpdatedAt: dateColumn(),
-  wasUpdatedBy: nullableIdColumn().references(() => usersTable.id),
+  wasUpdatedBy: nullableIdColumn(),
 });
 
 export const emailCodesTable = sqliteTable('email_codes', {
@@ -53,7 +53,7 @@ export const loginAttemptsTable = sqliteTable('login_attempts', {
     .primaryKey()
     .$defaultFn(() => nanoid(16)),
   timestamp: createdAtColumn(),
-  attemptedForId: nullableIdColumn().references(() => usersTable.id),
+  attemptedForId: nullableIdColumn(),
   isSuccess: integer({ mode: 'boolean' }).notNull(),
 
   ip: text().notNull(),
@@ -90,7 +90,7 @@ export const usersRelations = relations(usersTable, ({ many }) => ({
 
 export const passkeysTable = sqliteTable('passkeys', {
   id: text().primaryKey(),
-  userId: idColumn().references(() => usersTable.id),
+  userId: idColumn(),
   publicKey: blob({ mode: 'buffer' }),
   signCount: integer().notNull(),
   challenge: text(),
@@ -108,7 +108,7 @@ export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
 export const sessionsTable = sqliteTable('sessions', {
   ...baseColumns(),
   token: text({ length: 16 }).notNull(),
-  userId: idColumn().references(() => usersTable.id),
+  userId: idColumn(),
   lastUsedAt: dateColumn(),
   expiresAt: dateColumn(),
   loginAttemptId: idColumn(),
@@ -127,7 +127,7 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
 
 export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
-  belongsToId: idColumn().references(() => usersTable.id),
+  belongsToId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -136,7 +136,7 @@ export const accountsTable = sqliteTable('accounts', {
 
 export const categoriesTable = sqliteTable('categories', {
   ...baseColumns(),
-  belongsToId: idColumn().references(() => usersTable.id),
+  belongsToId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -147,10 +147,10 @@ export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
   amountCents: centsColumn(),
   billedAt: dateColumn(),
-  belongsToId: idColumn().references(() => usersTable.id),
-  accountId: nullableIdColumn().references(() => accountsTable.id),
-  categoryId: nullableIdColumn().references(() => categoriesTable.id),
-  updatedBy: idColumn().references(() => usersTable.id),
+  belongsToId: idColumn(),
+  accountId: nullableIdColumn(),
+  categoryId: nullableIdColumn(),
+  updatedBy: idColumn(),
   latitude: real(),
   longitude: real(),
   geoAccuracy: real(),
@@ -181,8 +181,8 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   name: text().notNull(),
   quantity: integer().default(1).notNull(),
   priceCents: centsColumn(),
-  expenseId: idColumn().references(() => expensesTable.id),
-  categoryId: nullableIdColumn().references(() => categoriesTable.id),
+  expenseId: idColumn(),
+  categoryId: nullableIdColumn(),
   isDeleted: boolean().notNull().default(false),
 });
 
