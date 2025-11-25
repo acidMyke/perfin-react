@@ -4,7 +4,6 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { useAppForm } from '../../components/Form';
 import { sleep } from '../../../server/lib/utils';
-import z from 'zod';
 import { signUpValidator } from '../../../server/validators';
 
 export const Route = createFileRoute('/signup/verify')({
