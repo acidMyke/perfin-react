@@ -146,6 +146,7 @@ export const categoriesTable = sqliteTable('categories', {
 export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
   amountCents: centsColumn(),
+  amountCentsPreRefund: centsColumn(),
   billedAt: dateColumn(),
   belongsToId: idColumn(),
   accountId: nullableIdColumn(),
@@ -156,6 +157,8 @@ export const expensesTable = sqliteTable('expenses', {
   geoAccuracy: real(),
   shopName: text(),
   shopMall: text(),
+  excludedServiceCharge: integer(),
+  excludedGst: boolean(),
   isDeleted: boolean().notNull().default(false),
 });
 
@@ -173,6 +176,7 @@ export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
     references: [categoriesTable.id],
   }),
   items: many(expenseItemsTable),
+  refunds: many(expenseRefundsTable),
 }));
 
 export const expenseItemsTable = sqliteTable('expense_items', {
@@ -183,6 +187,7 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   priceCents: centsColumn(),
   expenseId: idColumn(),
   categoryId: nullableIdColumn(),
+  expenseRefundId: nullableIdColumn(),
   isDeleted: boolean().notNull().default(false),
 });
 
@@ -194,5 +199,33 @@ export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => (
   category: one(categoriesTable, {
     fields: [expenseItemsTable.categoryId],
     references: [categoriesTable.id],
+  }),
+  expenseRefund: one(expenseRefundsTable, {
+    fields: [expenseItemsTable.expenseRefundId],
+    references: [expenseRefundsTable.id],
+  }),
+}));
+
+export const expenseRefundsTable = sqliteTable('expense_refunds', {
+  ...baseColumns(),
+  expenseId: idColumn(),
+  expenseItemId: nullableIdColumn(),
+  expectedAmountCents: centsColumn(),
+  actualAmountCents: integer(),
+  confirmedAt: integer({ mode: 'timestamp' }),
+  source: text({ enum: ['friend', 'merchant'] }).notNull(),
+  note: text(),
+  sequence: integer().notNull(),
+  isDeleted: boolean().notNull().default(false),
+});
+
+export const expenseRefundsRelations = relations(expenseRefundsTable, ({ one }) => ({
+  expense: one(expensesTable, {
+    fields: [expenseRefundsTable.expenseId],
+    references: [expensesTable.id],
+  }),
+  expenseItem: one(expenseItemsTable, {
+    fields: [expenseRefundsTable.expenseItemId],
+    references: [expenseItemsTable.id],
   }),
 }));
