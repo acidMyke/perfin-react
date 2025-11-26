@@ -213,7 +213,7 @@ export const expenseRefundsTable = sqliteTable('expense_refunds', {
   expectedAmountCents: centsColumn(),
   actualAmountCents: integer(),
   confirmedAt: integer({ mode: 'timestamp' }),
-  source: text({ enum: ['friend', 'merchant'] }).notNull(),
+  source: text().notNull(),
   note: text(),
   sequence: integer().notNull(),
   isDeleted: boolean().notNull().default(false),

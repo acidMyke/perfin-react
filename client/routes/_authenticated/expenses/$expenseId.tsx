@@ -27,6 +27,17 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
+function defaultExpenseItem(): RouterOutputs['expense']['loadDetail']['items'][number] {
+  return {
+    id: 'create',
+    name: '',
+    isDeleted: false,
+    priceCents: 0,
+    quantity: 1,
+    expenseRefundId: null,
+  };
+}
+
 function mapExpenseDetailToForm(
   detail?: RouterOutputs['expense']['loadDetail'],
   options?: RouterOutputs['expense']['loadOptions'],
@@ -56,15 +67,7 @@ function mapExpenseDetailToForm(
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
-      items: [
-        {
-          id: 'create',
-          name: '',
-          isDeleted: false,
-          priceCents: 0,
-          quantity: 1,
-        },
-      ] satisfies Exclude<typeof detail, undefined>['items'],
+      items: [defaultExpenseItem()],
     };
   }
 }
@@ -164,9 +167,7 @@ function CreateEditExpensePageComponent() {
               <li key='Create'>
                 <button
                   className='btn-soft btn-primary btn w-2/3 justify-start'
-                  onClick={() =>
-                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
-                  }
+                  onClick={() => field.pushValue(defaultExpenseItem())}
                 >
                   <Plus />
                   Add item

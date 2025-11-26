@@ -1,5 +1,12 @@
 import { FormInputError, protectedProcedure, type ProtectedContext } from '../trpc';
-import { accountsTable, categoriesTable, expenseItemsTable, expensesTable, historiesTable } from '../../db/schema';
+import {
+  accountsTable,
+  categoriesTable,
+  expenseItemsTable,
+  expenseRefundsTable,
+  expensesTable,
+  historiesTable,
+} from '../../db/schema';
 import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -39,6 +46,7 @@ const loadExpenseDetailProcedure = protectedProcedure
       where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
       columns: {
         amountCents: true,
+        amountCentsPreRefund: true,
         billedAt: true,
         accountId: true,
         categoryId: true,
@@ -48,6 +56,8 @@ const loadExpenseDetailProcedure = protectedProcedure
         shopMall: true,
         shopName: true,
         version: true,
+        excludedGst: true,
+        excludedServiceCharge: true,
       },
       with: {
         items: {
@@ -59,6 +69,21 @@ const loadExpenseDetailProcedure = protectedProcedure
             quantity: true,
             priceCents: true,
             isDeleted: true,
+            expenseRefundId: true,
+          },
+        },
+        refunds: {
+          where: eq(expenseRefundsTable.isDeleted, false),
+          orderBy: asc(expenseRefundsTable.sequence),
+          columns: {
+            id: true,
+            source: true,
+            expectedAmountCents: true,
+            actualAmountCents: true,
+            confirmedAt: true,
+            note: true,
+            isDeleted: true,
+            expenseItemId: true,
           },
         },
       },
@@ -126,8 +151,39 @@ const saveExpenseProcedure = protectedProcedure
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
+          expenseRefundId: z
+            .string()
+            .nullish()
+            .transform(v => v ?? null),
         }),
       ),
+      refunds: z
+        .array(
+          z.object({
+            id: z.string(),
+            source: z.string(),
+            expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
+            actualAmountCents: z
+              .int()
+              .min(0, { error: 'Must be non-negative value' })
+              .nullish()
+              .transform(v => v ?? null),
+            confirmedAt: z.iso
+              .datetime({ error: 'Invalid date time' })
+              .nullish()
+              .transform(val => (val ? parseISO(val) : null)),
+            note: z
+              .string()
+              .nullish()
+              .transform(v => v ?? null),
+            isDeleted: z.boolean().optional().default(false),
+            expenseItemId: z
+              .string()
+              .nullish()
+              .transform(v => v ?? null),
+          }),
+        )
+        .default([]),
     }),
   )
   .mutation(async ({ input, ctx }) => {
