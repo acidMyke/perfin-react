@@ -64,6 +64,13 @@
       "when": 1761647696577,
       "tag": "0008_easy_komodo",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1764159225700,
+      "tag": "0009_worthless_havok",
+      "breakpoints": true
     }
   ]
 }
