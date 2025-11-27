@@ -5,12 +5,13 @@ import {
   expenseItemsTable,
   expenseRefundsTable,
   expensesTable,
-  historiesTable,
+  generateId,
 } from '../../db/schema';
-import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
+import { excluded } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -144,6 +145,8 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
+      excludedServiceCharge: z.number().nullable().default(null),
+      excludedGst: z.boolean().default(false),
       items: z.array(
         z.object({
           id: z.string(),
@@ -195,102 +198,136 @@ const saveExpenseProcedure = protectedProcedure
       input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
     ]);
 
-    const isCreate = input.expenseId === 'create';
-    const values = {
-      amountCents: input.amountCents,
-      accountId: accountId,
-      categoryId: categoryId,
-      billedAt: input.billedAt,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      geoAccuracy: input.geoAccuracy,
-      shopName: input.shopName,
-      shopMall: input.shopMall,
-    } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
+    const { items, refunds } = input;
 
-    if (isCreate) {
-      const insertReturns = await db
-        .insert(expensesTable)
-        .values({ ...values, belongsToId: userId, updatedBy: userId })
-        .returning({ id: expensesTable.id });
+    const itemsAmountSumCents = items.reduce(
+      (sumCents, { isDeleted, quantity, priceCents }) => (isDeleted ? sumCents : sumCents + quantity * priceCents),
+      0,
+    );
+    const refundsAmountSumCents = refunds?.reduce(
+      (sumCents, { isDeleted, expectedAmountCents, actualAmountCents }) =>
+        isDeleted ? sumCents : sumCents + Math.min(expectedAmountCents, actualAmountCents ?? 0),
+      0,
+    );
 
-      if (!insertReturns || insertReturns.length < 1) return;
-      const expenseId = insertReturns[0].id;
-      await db.batch([
-        db.insert(expenseItemsTable).values(
-          input.items.map(({ id, ...data }, sequence) => ({
-            ...data,
-            expenseId,
-            sequence,
-          })),
-        ),
-      ]);
-    } else {
-      const existing = await db.query.expensesTable.findFirst({
-        where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
-        with: { items: true },
-      });
+    const existing = await db.query.expensesTable.findFirst({
+      where: and(eq(expensesTable.id, input.expenseId)),
+      columns: {
+        belongsToId: true,
+        isDeleted: true,
+        version: true,
+      },
+    });
 
-      if (!existing || existing.isDeleted) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+    if (existing) {
+      if (existing.belongsToId !== userId) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
       }
-
       if (existing.version > input.version) {
         throw new TRPCError({ code: 'CONFLICT' });
       }
-
-      if (input.isDeleted) {
-        await db
-          .update(expensesTable)
-          .set({ isDeleted: true })
-          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)));
-        return;
-      }
-
-      const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
-      const valuesWere: Partial<typeof expensesTable.$inferInsert> = {};
-      for (const key in values) {
-        // @ts-ignore
-        valuesWere[key] = existing[key];
-      }
-
-      // @ts-ignore
-      valuesWere['items'] = existing.items;
-
-      await db.batch([
-        db
-          .update(expensesTable)
-          .set(values)
-          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
-        db.insert(historiesTable).values({
-          tableName: getTableName(expensesTable),
-          rowId,
-          valuesWere,
-          versionWas,
-          wasUpdatedAt,
-          wasUpdatedBy,
-        }),
-        db
-          .insert(expenseItemsTable)
-          .values(
-            input.items.map(({ id, ...data }, sequence) => ({
-              ...data,
-              id: id === 'create' ? undefined : id,
-              expenseId: input.expenseId,
-              sequence,
-            })),
-          )
-          .onConflictDoUpdate({
-            target: expenseItemsTable.id,
-            set: {
-              name: sql`excluded.name`,
-              priceCents: sql`excluded.price_cents`,
-              quantity: sql`excluded.quantity`,
-              isDeleted: sql`excluded.is_deleted`,
-            },
-          }),
-      ]);
     }
+
+    await db.batch([
+      db
+        .insert(expensesTable)
+        .values({
+          amountCents: itemsAmountSumCents - refundsAmountSumCents,
+          amountCentsPreRefund: itemsAmountSumCents,
+          billedAt: input.billedAt,
+          belongsToId: userId,
+          accountId: accountId,
+          categoryId: categoryId,
+          updatedBy: userId,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geoAccuracy: input.geoAccuracy,
+          shopName: input.shopName,
+          shopMall: input.shopMall,
+          excludedServiceCharge: input.excludedServiceCharge,
+          excludedGst: input.excludedGst,
+          isDeleted: input.isDeleted,
+        })
+        .onConflictDoUpdate({
+          target: expensesTable.id,
+          set: {
+            amountCents: excluded(expensesTable.amountCents),
+            amountCentsPreRefund: excluded(expensesTable.amountCentsPreRefund),
+            billedAt: excluded(expensesTable.billedAt),
+            accountId: excluded(expensesTable.accountId),
+            categoryId: excluded(expensesTable.categoryId),
+            updatedBy: excluded(expensesTable.updatedBy),
+            latitude: excluded(expensesTable.latitude),
+            longitude: excluded(expensesTable.longitude),
+            geoAccuracy: excluded(expensesTable.geoAccuracy),
+            shopName: excluded(expensesTable.shopName),
+            shopMall: excluded(expensesTable.shopMall),
+            excludedServiceCharge: excluded(expensesTable.excludedServiceCharge),
+            excludedGst: excluded(expensesTable.excludedGst),
+            isDeleted: excluded(expensesTable.isDeleted),
+          },
+        }),
+    ]);
+
+    return;
+
+    // if (isCreate) {
+    //   const expenseId = generateId();
+
+    //   await db.batch([
+    //     db.insert(expensesTable).values({ id: expenseId, ...values, belongsToId: userId, updatedBy: userId }),
+    //     db
+    //       .insert(expenseItemsTable)
+    //       .values(input.items.map(({ id, ...data }, sequence) => ({ ...data, expenseId, sequence }))),
+    //   ]);
+    // } else {
+    //   const existing = await db.query.expensesTable.findFirst({
+    //     where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+    //     with: { items: true },
+    //   });
+
+    //   if (!existing || existing.isDeleted) {
+    //     throw new TRPCError({ code: 'NOT_FOUND' });
+    //   }
+
+    //   if (existing.version > input.version) {
+    //     throw new TRPCError({ code: 'CONFLICT' });
+    //   }
+
+    //   if (input.isDeleted) {
+    //     await db
+    //       .update(expensesTable)
+    //       .set({ isDeleted: true })
+    //       .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)));
+    //     return;
+    //   }
+
+    //   await db.batch([
+    //     db
+    //       .update(expensesTable)
+    //       .set(values)
+    //       .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
+    //     db
+    //       .insert(expenseItemsTable)
+    //       .values(
+    //         input.items.map(({ id, ...data }, sequence) => ({
+    //           ...data,
+    //           id: id === 'create' ? undefined : id,
+    //           expenseId: input.expenseId,
+    //           sequence,
+    //         })),
+    //       )
+    //       .onConflictDoUpdate({
+    //         target: expenseItemsTable.id,
+    //         set: {
+    //           name: sql`excluded.name`,
+    //           priceCents: sql`excluded.price_cents`,
+    //           quantity: sql`excluded.quantity`,
+    //           isDeleted: sql`excluded.is_deleted`,
+    //         },
+    //       }),
+    //   ]);
+    // }
   });
 
 const listExpenseProcedure = protectedProcedure
