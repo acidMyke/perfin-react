@@ -1,17 +1,10 @@
 import { FormInputError, protectedProcedure, type ProtectedContext } from '../trpc';
-import {
-  accountsTable,
-  categoriesTable,
-  expenseItemsTable,
-  expenseRefundsTable,
-  expensesTable,
-  generateId,
-} from '../../db/schema';
+import { accountsTable, categoriesTable, expenseItemsTable, expenseRefundsTable, expensesTable } from '../../db/schema';
 import { and, asc, desc, eq, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { excluded } from '../lib/utils';
+import { excluded, excludedAll } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -146,7 +139,7 @@ const saveExpenseProcedure = protectedProcedure
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
       excludedServiceCharge: z.number().nullable().default(null),
-      excludedGst: z.boolean().default(false),
+      excludedGst: z.boolean().nullable().default(false),
       items: z.array(
         z.object({
           id: z.string(),
@@ -267,67 +260,35 @@ const saveExpenseProcedure = protectedProcedure
             isDeleted: excluded(expensesTable.isDeleted),
           },
         }),
+      db
+        .insert(expenseItemsTable)
+        .values(
+          input.items.map((item, idx) => ({
+            ...item,
+            sequence: idx,
+            expenseId: input.expenseId,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: expenseItemsTable.id,
+          set: excludedAll(expenseItemsTable),
+        }),
+      db
+        .insert(expenseRefundsTable)
+        .values(
+          input.refunds.map((refund, idx) => ({
+            ...refund,
+            sequence: idx,
+            expenseId: input.expenseId,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: expenseRefundsTable.id,
+          set: excludedAll(expenseRefundsTable),
+        }),
     ]);
 
     return;
-
-    // if (isCreate) {
-    //   const expenseId = generateId();
-
-    //   await db.batch([
-    //     db.insert(expensesTable).values({ id: expenseId, ...values, belongsToId: userId, updatedBy: userId }),
-    //     db
-    //       .insert(expenseItemsTable)
-    //       .values(input.items.map(({ id, ...data }, sequence) => ({ ...data, expenseId, sequence }))),
-    //   ]);
-    // } else {
-    //   const existing = await db.query.expensesTable.findFirst({
-    //     where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
-    //     with: { items: true },
-    //   });
-
-    //   if (!existing || existing.isDeleted) {
-    //     throw new TRPCError({ code: 'NOT_FOUND' });
-    //   }
-
-    //   if (existing.version > input.version) {
-    //     throw new TRPCError({ code: 'CONFLICT' });
-    //   }
-
-    //   if (input.isDeleted) {
-    //     await db
-    //       .update(expensesTable)
-    //       .set({ isDeleted: true })
-    //       .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)));
-    //     return;
-    //   }
-
-    //   await db.batch([
-    //     db
-    //       .update(expensesTable)
-    //       .set(values)
-    //       .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
-    //     db
-    //       .insert(expenseItemsTable)
-    //       .values(
-    //         input.items.map(({ id, ...data }, sequence) => ({
-    //           ...data,
-    //           id: id === 'create' ? undefined : id,
-    //           expenseId: input.expenseId,
-    //           sequence,
-    //         })),
-    //       )
-    //       .onConflictDoUpdate({
-    //         target: expenseItemsTable.id,
-    //         set: {
-    //           name: sql`excluded.name`,
-    //           priceCents: sql`excluded.price_cents`,
-    //           quantity: sql`excluded.quantity`,
-    //           isDeleted: sql`excluded.is_deleted`,
-    //         },
-    //       }),
-    //   ]);
-    // }
   });
 
 const listExpenseProcedure = protectedProcedure
