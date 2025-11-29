@@ -1,5 +1,12 @@
 import { FormInputError, protectedProcedure, type ProtectedContext } from '../trpc';
-import { accountsTable, categoriesTable, expenseItemsTable, expenseRefundsTable, expensesTable } from '../../db/schema';
+import {
+  accountsTable,
+  categoriesTable,
+  expenseItemsTable,
+  expenseRefundsTable,
+  expensesTable,
+  generateId,
+} from '../../db/schema';
 import { and, asc, desc, eq, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -203,28 +210,32 @@ const saveExpenseProcedure = protectedProcedure
       0,
     );
 
-    const existing = await db.query.expensesTable.findFirst({
-      where: and(eq(expensesTable.id, input.expenseId)),
-      columns: {
-        belongsToId: true,
-        isDeleted: true,
-        version: true,
-      },
-    });
+    if (input.expenseId !== 'create') {
+      const existing = await db.query.expensesTable.findFirst({
+        where: and(eq(expensesTable.id, input.expenseId)),
+        columns: {
+          belongsToId: true,
+          isDeleted: true,
+          version: true,
+        },
+      });
 
-    if (existing) {
-      if (existing.belongsToId !== userId) {
+      if (existing?.belongsToId !== userId) {
         throw new TRPCError({ code: 'FORBIDDEN' });
       }
+
       if (existing.version > input.version) {
         throw new TRPCError({ code: 'CONFLICT' });
       }
+    } else {
+      input.expenseId = generateId();
     }
 
     await db.batch([
       db
         .insert(expensesTable)
         .values({
+          id: input.expenseId,
           amountCents: itemsAmountSumCents - refundsAmountSumCents,
           amountCentsPreRefund: itemsAmountSumCents,
           billedAt: input.billedAt,
@@ -243,22 +254,7 @@ const saveExpenseProcedure = protectedProcedure
         })
         .onConflictDoUpdate({
           target: expensesTable.id,
-          set: {
-            amountCents: excluded(expensesTable.amountCents),
-            amountCentsPreRefund: excluded(expensesTable.amountCentsPreRefund),
-            billedAt: excluded(expensesTable.billedAt),
-            accountId: excluded(expensesTable.accountId),
-            categoryId: excluded(expensesTable.categoryId),
-            updatedBy: excluded(expensesTable.updatedBy),
-            latitude: excluded(expensesTable.latitude),
-            longitude: excluded(expensesTable.longitude),
-            geoAccuracy: excluded(expensesTable.geoAccuracy),
-            shopName: excluded(expensesTable.shopName),
-            shopMall: excluded(expensesTable.shopMall),
-            excludedServiceCharge: excluded(expensesTable.excludedServiceCharge),
-            excludedGst: excluded(expensesTable.excludedGst),
-            isDeleted: excluded(expensesTable.isDeleted),
-          },
+          set: excludedAll(expensesTable, ['belongsToId']),
         }),
       db
         .insert(expenseItemsTable)
@@ -287,8 +283,6 @@ const saveExpenseProcedure = protectedProcedure
           set: excludedAll(expenseRefundsTable),
         }),
     ]);
-
-    return;
   });
 
 const listExpenseProcedure = protectedProcedure
