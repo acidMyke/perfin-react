@@ -9,6 +9,7 @@ import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
 import { useAppForm, withFieldGroup, withForm } from '../../../components/Form';
 import { formOptions, useStore } from '@tanstack/react-form';
+import { generateId } from '../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: CreateEditExpensePageComponent,
@@ -29,7 +30,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
 
 function defaultExpenseItem(): RouterOutputs['expense']['loadDetail']['items'][number] {
   return {
-    id: 'create',
+    id: generateId(),
     name: '',
     isDeleted: false,
     priceCents: 0,
