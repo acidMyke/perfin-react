@@ -12,6 +12,7 @@ import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
+import { calculateExpense } from '../lib/expenseHelper';
 
 type Option = {
   label: string;
@@ -57,8 +58,8 @@ const loadExpenseDetailProcedure = protectedProcedure
         shopMall: true,
         shopName: true,
         version: true,
-        excludedGst: true,
-        excludedServiceCharge: true,
+        isGstExcluded: true,
+        additionalServiceChargePercent: true,
       },
       with: {
         items: {
@@ -145,8 +146,8 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
-      excludedServiceCharge: z.number().nullable().default(null),
-      excludedGst: z.boolean().nullable().default(false),
+      additionalServiceChargePercent: z.number().nullable().default(null),
+      isGstExcluded: z.boolean().nullable().default(false),
       items: z.array(
         z.object({
           id: z.string(),
@@ -193,23 +194,6 @@ const saveExpenseProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [accountId, categoryId] = await Promise.all([
-      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
-      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
-    ]);
-
-    const { items, refunds } = input;
-
-    const itemsAmountSumCents = items.reduce(
-      (sumCents, { isDeleted, quantity, priceCents }) => (isDeleted ? sumCents : sumCents + quantity * priceCents),
-      0,
-    );
-    const refundsAmountSumCents = refunds?.reduce(
-      (sumCents, { isDeleted, expectedAmountCents, actualAmountCents }) =>
-        isDeleted ? sumCents : sumCents + Math.min(expectedAmountCents, actualAmountCents ?? 0),
-      0,
-    );
-
     if (input.expenseId !== 'create') {
       const existing = await db.query.expensesTable.findFirst({
         where: and(eq(expensesTable.id, input.expenseId)),
@@ -231,13 +215,20 @@ const saveExpenseProcedure = protectedProcedure
       input.expenseId = generateId();
     }
 
+    const [accountId, categoryId] = await Promise.all([
+      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
+      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
+    ]);
+
+    const { amountCents, itemCostSumCents } = calculateExpense(input);
+
     await db.batch([
       db
         .insert(expensesTable)
         .values({
           id: input.expenseId,
-          amountCents: itemsAmountSumCents - refundsAmountSumCents,
-          amountCentsPreRefund: itemsAmountSumCents,
+          amountCents,
+          amountCentsPreRefund: itemCostSumCents,
           billedAt: input.billedAt,
           belongsToId: userId,
           accountId: accountId,
@@ -248,8 +239,8 @@ const saveExpenseProcedure = protectedProcedure
           geoAccuracy: input.geoAccuracy,
           shopName: input.shopName,
           shopMall: input.shopMall,
-          excludedServiceCharge: input.excludedServiceCharge,
-          excludedGst: input.excludedGst,
+          additionalServiceChargePercent: input.additionalServiceChargePercent,
+          isGstExcluded: input.isGstExcluded,
           isDeleted: input.isDeleted,
         })
         .onConflictDoUpdate({

@@ -1,12 +1,8 @@
-import {
-  formOptions,
-  type AppFieldExtendedReactFormApi,
-  type FormOptions,
-  type ReactFormApi,
-} from '@tanstack/react-form';
-import type { RouterOutputs } from '../../../../trpc';
+import { formOptions, useStore, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
+import { queryClient, trpc, type RouterOutputs } from '../../../../trpc';
 import { generateId } from '../../../../utils';
-import { useAppForm, useFormContext } from '../../../../components/Form';
+import { useAppForm, useFormContext, withFieldGroup } from '../../../../components/Form';
+import { useMutation } from '@tanstack/react-query';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
@@ -63,7 +59,10 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
+      additionalServiceChargePercent: null,
+      isGstExcluded: null,
       items: [defaultExpenseItem()],
+      refunds: [],
     };
   }
 }
@@ -71,7 +70,6 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
 export const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
 export const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
 
-type TUseAppForm = ReturnType<typeof useAppForm>;
 type TExpenseForm =
   typeof createEditExpenseFormOptions extends FormOptions<
     infer TFormData,

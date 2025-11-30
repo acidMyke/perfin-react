@@ -155,8 +155,8 @@ export const expensesTable = sqliteTable('expenses', {
   geoAccuracy: real(),
   shopName: text(),
   shopMall: text(),
-  excludedServiceCharge: integer(),
-  excludedGst: boolean(),
+  additionalServiceChargePercent: integer(),
+  isGstExcluded: boolean(),
   isDeleted: boolean().notNull().default(false),
 });
 
