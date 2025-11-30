@@ -19,7 +19,8 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
-import { Route as AuthenticatedExpensesExpenseIdRouteImport } from './routes/_authenticated/expenses/$expenseId'
+import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './routes/_authenticated/expenses/$expenseId/route'
+import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
 
 const VerifyRoute = VerifyRouteImport.update({
   id: '/verify',
@@ -73,11 +74,17 @@ const AuthenticatedSettingsManageSubjectsRoute =
     path: '/settings/manage-subjects',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedExpensesExpenseIdRoute =
-  AuthenticatedExpensesExpenseIdRouteImport.update({
+const AuthenticatedExpensesExpenseIdRouteRoute =
+  AuthenticatedExpensesExpenseIdRouteRouteImport.update({
     id: '/expenses/$expenseId',
     path: '/expenses/$expenseId',
     getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedExpensesExpenseIdIndexRoute =
+  AuthenticatedExpensesExpenseIdIndexRouteImport.update({
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
 
 export interface FileRoutesByFullPath {
@@ -87,10 +94,11 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
-  '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
+  '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -99,10 +107,10 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
-  '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -113,10 +121,11 @@ export interface FileRoutesById {
   '/_authenticated/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
-  '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRoute
+  '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
@@ -131,6 +140,7 @@ export interface FileRouteTypes {
     | '/settings/manage-subjects'
     | '/expenses'
     | '/settings'
+    | '/expenses/$expenseId/'
   fileRoutesByTo: FileRoutesByTo
   to:
     | '/'
@@ -139,10 +149,10 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/signup/verify'
     | '/signup'
-    | '/expenses/$expenseId'
     | '/settings/manage-subjects'
     | '/expenses'
     | '/settings'
+    | '/expenses/$expenseId'
   id:
     | '__root__'
     | '/'
@@ -156,6 +166,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/expenses/'
     | '/_authenticated/settings/'
+    | '/_authenticated/expenses/$expenseId/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -243,15 +254,37 @@ declare module '@tanstack/react-router' {
       id: '/_authenticated/expenses/$expenseId'
       path: '/expenses/$expenseId'
       fullPath: '/expenses/$expenseId'
-      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdRouteImport
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdRouteRouteImport
       parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/expenses/$expenseId/': {
+      id: '/_authenticated/expenses/$expenseId/'
+      path: '/'
+      fullPath: '/expenses/$expenseId/'
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdIndexRouteImport
+      parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
   }
 }
 
+interface AuthenticatedExpensesExpenseIdRouteRouteChildren {
+  AuthenticatedExpensesExpenseIdIndexRoute: typeof AuthenticatedExpensesExpenseIdIndexRoute
+}
+
+const AuthenticatedExpensesExpenseIdRouteRouteChildren: AuthenticatedExpensesExpenseIdRouteRouteChildren =
+  {
+    AuthenticatedExpensesExpenseIdIndexRoute:
+      AuthenticatedExpensesExpenseIdIndexRoute,
+  }
+
+const AuthenticatedExpensesExpenseIdRouteRouteWithChildren =
+  AuthenticatedExpensesExpenseIdRouteRoute._addFileChildren(
+    AuthenticatedExpensesExpenseIdRouteRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
-  AuthenticatedExpensesExpenseIdRoute: typeof AuthenticatedExpensesExpenseIdRoute
+  AuthenticatedExpensesExpenseIdRouteRoute: typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
   AuthenticatedSettingsManageSubjectsRoute: typeof AuthenticatedSettingsManageSubjectsRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
@@ -259,7 +292,8 @@ interface AuthenticatedRouteChildren {
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
-  AuthenticatedExpensesExpenseIdRoute: AuthenticatedExpensesExpenseIdRoute,
+  AuthenticatedExpensesExpenseIdRouteRoute:
+    AuthenticatedExpensesExpenseIdRouteRouteWithChildren,
   AuthenticatedSettingsManageSubjectsRoute:
     AuthenticatedSettingsManageSubjectsRoute,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,

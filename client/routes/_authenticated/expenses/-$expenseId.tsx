@@ -28,7 +28,10 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
-function defaultExpenseItem(): RouterOutputs['expense']['loadDetail']['items'][number] {
+type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
+type ExpenseItem = ExpenseDetail['items'][number];
+
+function defaultExpenseItem(): ExpenseItem {
   return {
     id: generateId(),
     name: '',
@@ -39,10 +42,7 @@ function defaultExpenseItem(): RouterOutputs['expense']['loadDetail']['items'][n
   };
 }
 
-function mapExpenseDetailToForm(
-  detail?: RouterOutputs['expense']['loadDetail'],
-  options?: RouterOutputs['expense']['loadOptions'],
-) {
+function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: RouterOutputs['expense']['loadOptions']) {
   if (detail && options) {
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
@@ -342,13 +342,7 @@ const ShopDetailSubForm = withForm({
 });
 
 const ItemDetailFieldGroup = withFieldGroup({
-  defaultValues: {
-    id: '',
-    name: '',
-    quantity: 1,
-    priceCents: 0.0,
-    isDeleted: false,
-  },
+  defaultValues: defaultExpenseItem(),
   props: {
     onLocalRemove: () => {},
   },

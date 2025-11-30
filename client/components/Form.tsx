@@ -8,7 +8,7 @@ import { FieldError } from './FieldError';
 import { TriangleAlert } from 'lucide-react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
-const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
+export const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
 
 const NumericTransformers = {
   amountInCents: {
