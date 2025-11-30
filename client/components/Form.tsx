@@ -259,6 +259,7 @@ function ComboBox(props: CreatableSelectProps) {
         }}
         isDisabled={readOnly}
       />
+      <FieldError field={field} />
     </label>
   );
 }

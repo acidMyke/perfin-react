@@ -38,7 +38,7 @@ function defaultExpenseItem(): ExpenseItem {
     isDeleted: false,
     priceCents: 0,
     quantity: 1,
-    expenseRefundId: null,
+    expenseRefund: null,
   };
 }
 

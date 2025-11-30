@@ -5,6 +5,7 @@ import {
   createEditExpenseFormOptions,
   currencyNumberFormat,
   defaultExpenseItem,
+  defaultExpenseRefund,
   useExpenseForm,
 } from './-expense.common';
 import { calculateExpense } from '../../../../../server/lib/expenseHelper';
@@ -57,7 +58,7 @@ function RouteComponent() {
         {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-4' />}
       </form.AppField>
       <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-8' />}
+        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-4' />}
       </form.AppField>
       <form.Subscribe selector={state => [state.values]}>
         {([values]) => {
@@ -95,14 +96,14 @@ const ItemsDetailsSubForm = withForm({
       <form.Field name='items' mode='array'>
         {field => (
           <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
-            {field.state.value.map(({ id, isDeleted }, itemIndex) => {
+            {field.state.value.map(({ id }, itemIndex) => {
               if (isItemsSubpage) {
-                return <>Subpages {itemIndex} </>;
+                return <>Subpages {itemIndex}</>;
               }
 
               const itenNameSuggestionMutation = nameSuggestionMutations[itemIndex];
               return (
-                <div key={id} className='grid auto-cols-auto grid-flow-col place-items-center gap-4 shadow-lg'>
+                <li key={id} className='grid grid-flow-row grid-cols-6 place-items-center gap-4 shadow-lg'>
                   <form.AppField
                     name={`items[${itemIndex}].name`}
                     validators={{
@@ -123,13 +124,32 @@ const ItemsDetailsSubForm = withForm({
                       <field.ComboBox
                         suggestionMode
                         placeholder=''
-                        label={`Item ${itemIndex + 1} name `}
+                        label={`Item ${itemIndex + 1} name`}
                         containerCn='col-span-4 w-full'
                         options={itenNameSuggestionMutation.data?.suggestions ?? []}
-                        readOnly={isDeleted}
                       />
                     )}
                   </form.AppField>
+                  <form.Field name={`items[${itemIndex}].expenseRefund`}>
+                    {checkboxField => (
+                      <label className='label col-span-2 mb-4 w-full'>
+                        Refund:
+                        <input
+                          type='checkbox'
+                          className='toggle'
+                          checked={!!checkboxField.state.value}
+                          onChange={e => {
+                            if (e.target.checked && !checkboxField.state.value) {
+                              form.setFieldValue(`items[${itemIndex}].expenseRefund`, defaultExpenseRefund());
+                            } else if (!e.target.checked && checkboxField.state.value) {
+                              form.setFieldValue(`items[${itemIndex}].expenseRefund`, null);
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                  </form.Field>
+
                   <form.AppField name={`items[${itemIndex}].priceCents`}>
                     {({ NumericInput }) => (
                       <NumericInput
@@ -137,17 +157,17 @@ const ItemsDetailsSubForm = withForm({
                         transforms={['amountInCents']}
                         numberFormat={currencyNumberFormat}
                         inputCn='input-lg'
-                        containerCn='mt-0 row-start-2 col-span-2 w-56'
+                        containerCn='mt-2 col-span-3'
                       />
                     )}
                   </form.AppField>
                   <form.AppField name={`items[${itemIndex}].quantity`}>
                     {({ NumericInput }) => (
-                      <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-0 row-start-2 w-full' />
+                      <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' />
                     )}
                   </form.AppField>
                   <button
-                    className='btn-ghost btn btn-sm col-start-4 row-start-2 mb-[1em]'
+                    className='btn-ghost btn btn-sm mb-1'
                     disabled={field.state.value.length === 1}
                     onClick={() => {
                       if (field.state.value.length <= 3) {
@@ -159,7 +179,52 @@ const ItemsDetailsSubForm = withForm({
                   >
                     <X />
                   </button>
-                </div>
+                  <form.Field name={`items[${itemIndex}].expenseRefund`}>
+                    {field =>
+                      field.state.value && (
+                        <>
+                          <form.AppField
+                            name={`items[${itemIndex}].expenseRefund.source`}
+                            validators={{
+                              onChangeAsyncDebounceMs: 500,
+                              onChangeAsync: ({ value, signal }) => {
+                                signal.onabort = () =>
+                                  queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+                                if (value && value.length > 1) {
+                                  itenNameSuggestionMutation.mutateAsync({
+                                    type: 'itemName',
+                                    search: value,
+                                  });
+                                }
+                              },
+                            }}
+                          >
+                            {field => (
+                              <field.ComboBox
+                                suggestionMode
+                                placeholder='None'
+                                label='Refund source'
+                                containerCn='row-start-3 col-start-1 col-span-3 w-full'
+                                options={itenNameSuggestionMutation.data?.suggestions ?? []}
+                              />
+                            )}
+                          </form.AppField>
+                          <form.AppField name={`items[${itemIndex}].expenseRefund.actualAmountCents`}>
+                            {({ NumericInput }) => (
+                              <NumericInput
+                                label='Refunded amount'
+                                transforms={['amountInCents']}
+                                numberFormat={currencyNumberFormat}
+                                inputCn='input-lg'
+                                containerCn='mt-0 col-span-3'
+                              />
+                            )}
+                          </form.AppField>
+                        </>
+                      )
+                    }
+                  </form.Field>
+                </li>
               );
             })}
             <li key='Create'>

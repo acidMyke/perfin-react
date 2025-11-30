@@ -7,7 +7,7 @@ import {
   expensesTable,
   generateId,
 } from '../../db/schema';
-import { and, asc, desc, eq, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, isNotNull, isNull, like, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -71,11 +71,20 @@ const loadExpenseDetailProcedure = protectedProcedure
             quantity: true,
             priceCents: true,
             isDeleted: true,
-            expenseRefundId: true,
+          },
+          with: {
+            expenseRefund: {
+              columns: {
+                id: true,
+                source: true,
+                expectedAmountCents: true,
+                actualAmountCents: true,
+              },
+            },
           },
         },
         refunds: {
-          where: eq(expenseRefundsTable.isDeleted, false),
+          where: and(eq(expenseRefundsTable.isDeleted, false), isNull(expenseRefundsTable.expenseItemId)),
           orderBy: asc(expenseRefundsTable.sequence),
           columns: {
             id: true,

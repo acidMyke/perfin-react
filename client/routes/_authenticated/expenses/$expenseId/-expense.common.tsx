@@ -1,6 +1,5 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
 import { type RouterOutputs } from '../../../../trpc';
-import { generateId } from '../../../../utils';
 import { useAppForm, useFormContext } from '../../../../components/Form';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
@@ -10,18 +9,18 @@ export type ExpenseRefund = ExpenseDetail['refunds'][number];
 
 export function defaultExpenseItem(): ExpenseItem {
   return {
-    id: generateId(),
+    id: 'create',
     name: '',
     isDeleted: false,
     priceCents: 0,
     quantity: 1,
-    expenseRefundId: null,
+    expenseRefund: null,
   };
 }
 
 export function defaultExpenseRefund(): ExpenseRefund {
   return {
-    id: generateId(),
+    id: 'create',
     source: '',
     expectedAmountCents: 0,
     isDeleted: false,
