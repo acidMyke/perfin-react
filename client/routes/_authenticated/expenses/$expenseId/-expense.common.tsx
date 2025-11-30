@@ -1,8 +1,7 @@
-import { formOptions, useStore, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
-import { queryClient, trpc, type RouterOutputs } from '../../../../trpc';
+import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
+import { type RouterOutputs } from '../../../../trpc';
 import { generateId } from '../../../../utils';
-import { useAppForm, useFormContext, withFieldGroup } from '../../../../components/Form';
-import { useMutation } from '@tanstack/react-query';
+import { useAppForm, useFormContext } from '../../../../components/Form';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
@@ -39,7 +38,20 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
     const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
     const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+
+    let isItemsSubpage = detail.items.length > 2;
+    if (!isItemsSubpage) {
+      for (const refund of detail.refunds) {
+        if (refund.expenseItemId !== null) {
+          isItemsSubpage = true;
+        }
+      }
+    }
+
     return {
+      ui: {
+        isItemsSubpage,
+      },
       billedAt: new Date(billedAt),
       account,
       category,
@@ -51,6 +63,9 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
     };
   } else {
     return {
+      ui: {
+        isItemsSubpage: false,
+      },
       description: undefined,
       amountCents: 0,
       billedAt: new Date(),

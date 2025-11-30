@@ -37,7 +37,7 @@ function RouteComponent() {
         console.log({ ...value });
         return;
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ...otherValues } = value;
+        const { billedAt, geolocation, ui, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
@@ -55,19 +55,6 @@ function RouteComponent() {
           queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter());
         }
         navigate({ to: '/expenses' });
-      },
-    },
-    listeners: {
-      onChange: ({ fieldApi, formApi }) => {
-        const fieldInfo = fieldApi.getInfo();
-        if (fieldInfo?.instance?.name.startsWith('items')) {
-          const isBillAmountDirty = formApi.state.fieldMeta.amountCents.isDirty;
-          if (!isBillAmountDirty) {
-            const items = formApi.getFieldValue('items');
-            const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
-            formApi.setFieldValue('amountCents', totalCents, { dontUpdateMeta: true });
-          }
-        }
       },
     },
   });

@@ -1,11 +1,19 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { trpc } from '../../../../trpc';
-import { currencyNumberFormat, useExpenseForm } from './-expense.common';
+import { queryClient, trpc } from '../../../../trpc';
+import {
+  createEditExpenseFormOptions,
+  currencyNumberFormat,
+  defaultExpenseItem,
+  useExpenseForm,
+} from './-expense.common';
 import { calculateExpense } from '../../../../../server/lib/expenseHelper';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
+import { withForm } from '../../../../components/Form';
+import { useStore } from '@tanstack/react-form';
+import { Plus, X } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -18,6 +26,7 @@ function RouteComponent() {
 
   return (
     <>
+      <ItemsDetailsSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
           <label htmlFor={field.name} className='floating-label mt-4'>
@@ -50,7 +59,6 @@ function RouteComponent() {
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-8' />}
       </form.AppField>
-
       <form.Subscribe selector={state => [state.values]}>
         {([values]) => {
           const { itemCostSum, expectedRefundSum, amount } = calculateExpense(values);
@@ -74,3 +82,103 @@ function RouteComponent() {
     </>
   );
 }
+
+const ItemsDetailsSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const item0NameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const item1NameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const nameSuggestionMutations = [item0NameSuggestionMutation, item1NameSuggestionMutation];
+    const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
+
+    return (
+      <form.Field name='items' mode='array'>
+        {field => (
+          <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
+            {field.state.value.map(({ id, isDeleted }, itemIndex) => {
+              if (isItemsSubpage) {
+                return <>Subpages {itemIndex} </>;
+              }
+
+              const itenNameSuggestionMutation = nameSuggestionMutations[itemIndex];
+              return (
+                <div key={id} className='grid auto-cols-auto grid-flow-col place-items-center gap-4 shadow-lg'>
+                  <form.AppField
+                    name={`items[${itemIndex}].name`}
+                    validators={{
+                      onChangeAsyncDebounceMs: 500,
+                      onChangeAsync: ({ value, signal }) => {
+                        signal.onabort = () =>
+                          queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+                        if (value && value.length > 1) {
+                          itenNameSuggestionMutation.mutateAsync({
+                            type: 'itemName',
+                            search: value,
+                          });
+                        }
+                      },
+                    }}
+                  >
+                    {field => (
+                      <field.ComboBox
+                        suggestionMode
+                        placeholder=''
+                        label={`Item ${itemIndex + 1} name `}
+                        containerCn='col-span-4 w-full'
+                        options={itenNameSuggestionMutation.data?.suggestions ?? []}
+                        readOnly={isDeleted}
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name={`items[${itemIndex}].priceCents`}>
+                    {({ NumericInput }) => (
+                      <NumericInput
+                        label='Price'
+                        transforms={['amountInCents']}
+                        numberFormat={currencyNumberFormat}
+                        inputCn='input-lg'
+                        containerCn='mt-0 row-start-2 col-span-2 w-56'
+                      />
+                    )}
+                  </form.AppField>
+                  <form.AppField name={`items[${itemIndex}].quantity`}>
+                    {({ NumericInput }) => (
+                      <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-0 row-start-2 w-full' />
+                    )}
+                  </form.AppField>
+                  <button
+                    className='btn-ghost btn btn-sm col-start-4 row-start-2 mb-[1em]'
+                    disabled={field.state.value.length === 1}
+                    onClick={() => {
+                      if (field.state.value.length <= 3) {
+                        form.setFieldValue('ui.isItemsSubpage', false);
+                      }
+
+                      field.removeValue(itemIndex);
+                    }}
+                  >
+                    <X />
+                  </button>
+                </div>
+              );
+            })}
+            <li key='Create'>
+              <button
+                className='btn-soft btn-primary btn w-2/3 justify-start'
+                onClick={() => {
+                  if (field.state.value.length >= 2) {
+                    form.setFieldValue('ui.isItemsSubpage', true);
+                  }
+                  field.pushValue(defaultExpenseItem());
+                }}
+              >
+                <Plus />
+                Add item
+              </button>
+            </li>
+          </ul>
+        )}
+      </form.Field>
+    );
+  },
+});
