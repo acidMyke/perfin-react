@@ -44,6 +44,12 @@ function RouteComponent() {
           </label>
         )}
       </form.Field>
+      <form.AppField name='category'>
+        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-4' />}
+      </form.AppField>
+      <form.AppField name='account'>
+        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-8' />}
+      </form.AppField>
 
       <form.Subscribe selector={state => [state.values]}>
         {([values]) => {
