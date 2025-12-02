@@ -27,7 +27,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
-      <li className='grid grid-flow-row grid-cols-8 place-items-center gap-2 shadow-lg'>
+      <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 shadow-lg'>
         <group.AppField
           name={`name`}
           validators={{

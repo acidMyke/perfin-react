@@ -1,6 +1,6 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { trpc } from '../../../../trpc';
+import { queryClient, trpc } from '../../../../trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
@@ -8,13 +8,12 @@ import {
   defaultExpenseItem,
   useExpenseForm,
 } from './-expense.common';
-import { calculateExpense } from '../../../../../server/lib/expenseHelper';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { Plus } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
@@ -29,9 +28,10 @@ function RouteComponent() {
   return (
     <>
       <ItemsDetailsSubForm form={form} />
+      <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-4'>
+          <label htmlFor={field.name} className='floating-label mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -56,10 +56,10 @@ function RouteComponent() {
         )}
       </form.Field>
       <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-4' />}
+        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
       </form.AppField>
       <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-4' />}
+        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-2' />}
       </form.AppField>
       <form.AppField name='ui.calculateResult'>
         {field => {
@@ -135,6 +135,93 @@ const ItemsDetailsSubForm = withForm({
           </ul>
         )}
       </form.Field>
+    );
+  },
+});
+
+const ShopDetailSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+
+    return (
+      <>
+        <form.AppField name='geolocation'>
+          {field => {
+            const geolocation = field.state.value;
+            const isCreate = form.getFieldValue('ui.isCreate');
+            if (!geolocation) {
+              return (
+                <p className='mt-2 mb-4'>Coordinate: {isCreate ? 'Unable to retrieve your location' : 'Unspecified'}</p>
+              );
+            } else {
+              <p className='mt-2 mb-4'>
+                Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
+                <a
+                  href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
+                  target='_blank'
+                  className='link'
+                >
+                  Open in maps
+                  <ExternalLink className='ml-2 inline-block' size='1em' />
+                </a>
+                )
+              </p>;
+            }
+          }}
+        </form.AppField>
+        <form.AppField
+          name='shopName'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value !== null && value.length > 1) {
+                shopNameSuggestionMutation.mutateAsync({
+                  type: 'shopName',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Shop name'
+              containerCn='mt-2'
+              options={shopNameSuggestionMutation.data?.suggestions ?? []}
+            />
+          )}
+        </form.AppField>
+        <form.AppField
+          name='shopMall'
+          validators={{
+            onChangeAsyncDebounceMs: 500,
+            onChangeAsync: ({ value, signal }) => {
+              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+              if (value !== null && value.length > 1) {
+                shopMallSuggestionMutation.mutateAsync({
+                  type: 'shopMall',
+                  search: value,
+                });
+              }
+            },
+          }}
+        >
+          {field => (
+            <field.ComboBox
+              suggestionMode
+              placeholder=''
+              label='Mall'
+              containerCn='mt-2'
+              options={shopMallSuggestionMutation.data?.suggestions ?? []}
+            />
+          )}
+        </form.AppField>
+      </>
     );
   },
 });

@@ -61,6 +61,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
 
     return {
       ui: {
+        isCreate: false,
         isItemsSubpage,
         calculateResult: calculateExpense(rest),
       },
@@ -76,6 +77,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
   } else {
     return {
       ui: {
+        isCreate: true,
         isItemsSubpage: false,
         calculateResult: calculateExpense({
           items: [],
