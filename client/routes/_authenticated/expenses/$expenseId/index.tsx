@@ -1,11 +1,10 @@
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../../../trpc';
+import { trpc } from '../../../../trpc';
 import {
   createEditExpenseFormOptions,
   currencyNumberFormat,
   defaultExpenseItem,
-  defaultExpenseRefund,
   useExpenseForm,
 } from './-expense.common';
 import { calculateExpense } from '../../../../../server/lib/expenseHelper';
@@ -14,7 +13,8 @@ import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
+import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -87,144 +87,31 @@ function RouteComponent() {
 const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
-    const item0NameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const item1NameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const nameSuggestionMutations = [item0NameSuggestionMutation, item1NameSuggestionMutation];
     const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
 
     return (
       <form.Field name='items' mode='array'>
         {field => (
-          <ul className='*:even:bg-base-content/5 mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4 *:even:pt-4'>
-            {field.state.value.map(({ id }, itemIndex) => {
+          <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4 *:even:pt-4'>
+            {field.state.value.map((_, itemIndex) => {
               if (isItemsSubpage) {
                 return <>Subpages {itemIndex}</>;
               }
 
-              const itenNameSuggestionMutation = nameSuggestionMutations[itemIndex];
               return (
-                <li key={id} className='grid grid-flow-row grid-cols-6 place-items-center gap-4 shadow-lg'>
-                  <form.AppField
-                    name={`items[${itemIndex}].name`}
-                    validators={{
-                      onChangeAsyncDebounceMs: 500,
-                      onChangeAsync: ({ value, signal }) => {
-                        signal.onabort = () =>
-                          queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                        if (value && value.length > 1) {
-                          itenNameSuggestionMutation.mutateAsync({
-                            type: 'itemName',
-                            search: value,
-                          });
-                        }
-                      },
-                    }}
-                  >
-                    {field => (
-                      <field.ComboBox
-                        suggestionMode
-                        placeholder=''
-                        label={`Item ${itemIndex + 1} name`}
-                        containerCn='col-span-4 w-full'
-                        options={itenNameSuggestionMutation.data?.suggestions ?? []}
-                      />
-                    )}
-                  </form.AppField>
-                  <form.Field name={`items[${itemIndex}].expenseRefund`}>
-                    {checkboxField => (
-                      <label className='label col-span-2 mb-4 w-full'>
-                        Refund:
-                        <input
-                          type='checkbox'
-                          className='toggle'
-                          checked={!!checkboxField.state.value}
-                          onChange={e => {
-                            if (e.target.checked && !checkboxField.state.value) {
-                              form.setFieldValue(`items[${itemIndex}].expenseRefund`, defaultExpenseRefund());
-                            } else if (!e.target.checked && checkboxField.state.value) {
-                              form.setFieldValue(`items[${itemIndex}].expenseRefund`, null);
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
-                  </form.Field>
-
-                  <form.AppField name={`items[${itemIndex}].priceCents`}>
-                    {({ NumericInput }) => (
-                      <NumericInput
-                        label='Price'
-                        transforms={['amountInCents']}
-                        numberFormat={currencyNumberFormat}
-                        inputCn='input-lg'
-                        containerCn='mt-2 col-span-3'
-                      />
-                    )}
-                  </form.AppField>
-                  <form.AppField name={`items[${itemIndex}].quantity`}>
-                    {({ NumericInput }) => (
-                      <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' />
-                    )}
-                  </form.AppField>
-                  <button
-                    className='btn-ghost btn btn-sm mb-1'
-                    disabled={field.state.value.length === 1}
-                    onClick={() => {
-                      if (field.state.value.length <= 3) {
-                        form.setFieldValue('ui.isItemsSubpage', false);
-                      }
-
-                      field.removeValue(itemIndex);
-                    }}
-                  >
-                    <X />
-                  </button>
-                  <form.Field name={`items[${itemIndex}].expenseRefund`}>
-                    {field =>
-                      field.state.value && (
-                        <>
-                          <form.AppField
-                            name={`items[${itemIndex}].expenseRefund.source`}
-                            validators={{
-                              onChangeAsyncDebounceMs: 500,
-                              onChangeAsync: ({ value, signal }) => {
-                                signal.onabort = () =>
-                                  queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                                if (value && value.length > 1) {
-                                  itenNameSuggestionMutation.mutateAsync({
-                                    type: 'itemName',
-                                    search: value,
-                                  });
-                                }
-                              },
-                            }}
-                          >
-                            {field => (
-                              <field.ComboBox
-                                suggestionMode
-                                placeholder='None'
-                                label='Refund source'
-                                containerCn='row-start-3 col-start-1 col-span-3 w-full'
-                                options={itenNameSuggestionMutation.data?.suggestions ?? []}
-                              />
-                            )}
-                          </form.AppField>
-                          <form.AppField name={`items[${itemIndex}].expenseRefund.actualAmountCents`}>
-                            {({ NumericInput }) => (
-                              <NumericInput
-                                label='Refunded amount'
-                                transforms={['amountInCents']}
-                                numberFormat={currencyNumberFormat}
-                                inputCn='input-lg'
-                                containerCn='mt-0 col-span-3'
-                              />
-                            )}
-                          </form.AppField>
-                        </>
-                      )
+                <ItemDetailFieldGroup
+                  form={form}
+                  fields={`items[${itemIndex}]`}
+                  disableRemoveButton={field.state.value.length < 2}
+                  onRemoveClick={() => {
+                    if (field.state.value.length <= 3) {
+                      form.setFieldValue('ui.isItemsSubpage', false);
                     }
-                  </form.Field>
-                </li>
+
+                    field.removeValue(itemIndex);
+                  }}
+                  itemIndex={itemIndex}
+                />
               );
             })}
             <li key='Create'>
