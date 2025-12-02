@@ -13,8 +13,17 @@ export const ItemDetailFieldGroup = withFieldGroup({
     onRemoveClick: () => {},
     additionalServiceChargePercent: null as number | null | undefined,
     isGstExcluded: null as boolean | null | undefined,
+    onPricingChange: () => {},
   },
-  render({ group, itemIndex, disableRemoveButton, onRemoveClick, additionalServiceChargePercent, isGstExcluded }) {
+  render({
+    group,
+    itemIndex,
+    disableRemoveButton,
+    onRemoveClick,
+    additionalServiceChargePercent,
+    isGstExcluded,
+    onPricingChange,
+  }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -78,6 +87,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`priceCents`}
           listeners={{
             onChange: ({ value }) => {
+              onPricingChange();
               const hasRefund = group.getFieldValue('expenseRefund');
               if (!hasRefund) return;
               const quantity = group.getFieldValue('quantity');
@@ -103,6 +113,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`quantity`}
           listeners={{
             onChange: ({ value }) => {
+              onPricingChange();
               const hasRefund = group.getFieldValue('expenseRefund');
               if (!hasRefund) return;
               const priceCents = group.getFieldValue('priceCents');
@@ -153,7 +164,10 @@ export const ItemDetailFieldGroup = withFieldGroup({
                 </group.AppField>
                 <group.Subscribe selector={state => [state.values.expenseRefund?.expectedAmountCents]}>
                   {([expectedAmountCents]) => (
-                    <group.AppField name={`expenseRefund.actualAmountCents`}>
+                    <group.AppField
+                      name={`expenseRefund.actualAmountCents`}
+                      listeners={{ onChange: () => onPricingChange() }}
+                    >
                       {({ NumericInput }) => (
                         <NumericInput
                           label='Refunded amount'

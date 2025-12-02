@@ -2,6 +2,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { trpc } from '../../../../trpc';
 import {
+  calculateExpenseForm,
   createEditExpenseFormOptions,
   currencyNumberFormat,
   defaultExpenseItem,
@@ -60,17 +61,17 @@ function RouteComponent() {
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-4' />}
       </form.AppField>
-      <form.Subscribe selector={state => [state.values]}>
-        {([values]) => {
-          const { itemCostSum, expectedRefundSum, amount } = calculateExpense(values);
+      <form.AppField name='ui.calculateResult'>
+        {field => {
+          const { grossAmount, expectedRefundSum, amount } = field.state.value;
           return (
             <div className='border-t-base-content/20 mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
               <p>Gross amount:</p>
-              <p>{currencyNumberFormat.format(itemCostSum)}</p>
+              <p>{currencyNumberFormat.format(grossAmount)}</p>
               {expectedRefundSum > 0 && (
                 <>
                   <p>Expected total:</p>
-                  <p>{currencyNumberFormat.format(itemCostSum - expectedRefundSum)}</p>
+                  <p>{currencyNumberFormat.format(grossAmount - expectedRefundSum)}</p>
                 </>
               )}
               <p>Total paid:</p>
@@ -78,7 +79,7 @@ function RouteComponent() {
             </div>
           );
         }}
-      </form.Subscribe>
+      </form.AppField>
       <form.SubmitButton label='Submit' doneLabel='Submitted' inProgressLabel='Submitting...' />
     </>
   );
@@ -113,6 +114,7 @@ const ItemsDetailsSubForm = withForm({
                   itemIndex={itemIndex}
                   additionalServiceChargePercent={form.getFieldValue('additionalServiceChargePercent')}
                   isGstExcluded={form.getFieldValue('isGstExcluded')}
+                  onPricingChange={() => calculateExpenseForm(form)}
                 />
               );
             })}

@@ -62,6 +62,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
     return {
       ui: {
         isItemsSubpage,
+        calculateResult: calculateExpense(rest),
       },
       billedAt: new Date(billedAt),
       account,
@@ -76,6 +77,12 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
     return {
       ui: {
         isItemsSubpage: false,
+        calculateResult: calculateExpense({
+          items: [],
+          refunds: [],
+          additionalServiceChargePercent: null,
+          isGstExcluded: null,
+        }),
       },
       description: undefined,
       amountCents: 0,
@@ -164,4 +171,20 @@ type TExpenseForm =
 export function useExpenseForm() {
   const form = useFormContext();
   return form as unknown as TExpenseForm;
+}
+
+export function calculateExpenseForm(form: TExpenseForm) {
+  const items = form.getFieldValue('items');
+  const refunds = form.getFieldValue('refunds');
+  const additionalServiceChargePercent = form.getFieldValue('additionalServiceChargePercent');
+  const isGstExcluded = form.getFieldValue('isGstExcluded');
+
+  const result = calculateExpense({
+    items,
+    refunds,
+    additionalServiceChargePercent,
+    isGstExcluded,
+  });
+
+  form.setFieldValue('ui.calculateResult', result);
 }

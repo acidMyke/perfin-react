@@ -39,7 +39,6 @@ export type ExpenseDetailForCalculation = ExpenseSurchargeOption & {
 };
 
 export function calculateExpense(detail: ExpenseDetailForCalculation) {
-  console.info('Expense calculated');
   const { items, refunds } = detail;
   let { itemsSubtotalCents, itemBondedRefunds } = items.reduce(
     (result, { isDeleted, quantity, priceCents, expenseRefund }) => {
@@ -78,7 +77,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation) {
     gstCents,
 
     itemsSubtotal: itemsSubtotalCents / 100,
-    itemCostSum: grossAmountCents / 100,
+    grossAmount: grossAmountCents / 100,
     expectedRefundSum: expectedRefundSumCents / 100,
     minRefundSum: minRefundSumCents / 100,
     amount: (grossAmountCents - minRefundSumCents) / 100,
