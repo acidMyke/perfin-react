@@ -1,6 +1,12 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
 import { type RouterOutputs } from '../../../../trpc';
 import { useAppForm, useFormContext } from '../../../../components/Form';
+import {
+  calculateExpense,
+  calculateExpenseItem,
+  type ExpenseItemForCalculation,
+  type ExpenseSurchargeOption,
+} from '../../../../../server/lib/expenseHelper';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
@@ -18,11 +24,17 @@ export function defaultExpenseItem(): ExpenseItem {
   };
 }
 
-export function defaultExpenseRefund(): ExpenseRefund {
+type CalculateExpectedOption = ExpenseItemForCalculation & ExpenseSurchargeOption;
+
+export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseRefund {
+  let expectedAmountCents = 0;
+  if (option) {
+    expectedAmountCents = calculateExpenseItem(option, option).expectedAmountCents;
+  }
   return {
     id: 'create',
     source: '',
-    expectedAmountCents: 0,
+    expectedAmountCents,
     isDeleted: false,
     note: null,
     actualAmountCents: 0,

@@ -111,6 +111,8 @@ const ItemsDetailsSubForm = withForm({
                     field.removeValue(itemIndex);
                   }}
                   itemIndex={itemIndex}
+                  additionalServiceChargePercent={form.getFieldValue('additionalServiceChargePercent')}
+                  isGstExcluded={form.getFieldValue('isGstExcluded')}
                 />
               );
             })}

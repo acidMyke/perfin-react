@@ -3,6 +3,7 @@ import { withFieldGroup } from '../../../../components/Form';
 import { queryClient, trpc } from '../../../../trpc';
 import { currencyNumberFormat, defaultExpenseItem, defaultExpenseRefund } from './-expense.common';
 import { X } from 'lucide-react';
+import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 
 export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
@@ -10,8 +11,10 @@ export const ItemDetailFieldGroup = withFieldGroup({
     itemIndex: 0,
     disableRemoveButton: true,
     onRemoveClick: () => {},
+    additionalServiceChargePercent: null as number | null | undefined,
+    isGstExcluded: null as boolean | null | undefined,
   },
-  render({ group, itemIndex, disableRemoveButton, onRemoveClick }) {
+  render({ group, itemIndex, disableRemoveButton, onRemoveClick, additionalServiceChargePercent, isGstExcluded }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -51,7 +54,17 @@ export const ItemDetailFieldGroup = withFieldGroup({
                 checked={!!checkboxField.state.value}
                 onChange={e => {
                   if (e.target.checked && !checkboxField.state.value) {
-                    group.setFieldValue(`expenseRefund`, defaultExpenseRefund());
+                    group.setFieldValue(
+                      `expenseRefund`,
+                      defaultExpenseRefund({
+                        item: {
+                          priceCents: group.getFieldValue('priceCents'),
+                          quantity: group.getFieldValue('quantity'),
+                        },
+                        additionalServiceChargePercent,
+                        isGstExcluded,
+                      }),
+                    );
                   } else if (!e.target.checked && checkboxField.state.value) {
                     group.setFieldValue(`expenseRefund`, null);
                   }
@@ -61,7 +74,21 @@ export const ItemDetailFieldGroup = withFieldGroup({
           )}
         </group.Field>
 
-        <group.AppField name={`priceCents`}>
+        <group.AppField
+          name={`priceCents`}
+          listeners={{
+            onChange: ({ value }) => {
+              const hasRefund = group.getFieldValue('expenseRefund');
+              if (!hasRefund) return;
+              const quantity = group.getFieldValue('quantity');
+              const { expectedAmountCents } = calculateExpenseItem(
+                { item: { priceCents: value, quantity } },
+                { additionalServiceChargePercent, isGstExcluded },
+              );
+              group.setFieldValue('expenseRefund.expectedAmountCents', expectedAmountCents);
+            },
+          }}
+        >
           {({ NumericInput }) => (
             <NumericInput
               label='Price'
@@ -72,7 +99,21 @@ export const ItemDetailFieldGroup = withFieldGroup({
             />
           )}
         </group.AppField>
-        <group.AppField name={`quantity`}>
+        <group.AppField
+          name={`quantity`}
+          listeners={{
+            onChange: ({ value }) => {
+              const hasRefund = group.getFieldValue('expenseRefund');
+              if (!hasRefund) return;
+              const priceCents = group.getFieldValue('priceCents');
+              const { expectedAmountCents } = calculateExpenseItem(
+                { item: { priceCents, quantity: value } },
+                { additionalServiceChargePercent, isGstExcluded },
+              );
+              group.setFieldValue('expenseRefund.expectedAmountCents', expectedAmountCents);
+            },
+          }}
+        >
           {({ NumericInput }) => (
             <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' />
           )}
@@ -110,17 +151,26 @@ export const ItemDetailFieldGroup = withFieldGroup({
                     />
                   )}
                 </group.AppField>
-                <group.AppField name={`expenseRefund.actualAmountCents`}>
-                  {({ NumericInput }) => (
-                    <NumericInput
-                      label='Refunded amount'
-                      transforms={['amountInCents']}
-                      numberFormat={currencyNumberFormat}
-                      inputCn='input-lg'
-                      containerCn='mt-0 col-span-3'
-                    />
+                <group.Subscribe selector={state => [state.values.expenseRefund?.expectedAmountCents]}>
+                  {([expectedAmountCents]) => (
+                    <group.AppField name={`expenseRefund.actualAmountCents`}>
+                      {({ NumericInput }) => (
+                        <NumericInput
+                          label='Refunded amount'
+                          transforms={['amountInCents']}
+                          numberFormat={currencyNumberFormat}
+                          inputCn='input-lg'
+                          containerCn='mt-0 col-span-3'
+                          additionalSuffix={
+                            expectedAmountCents !== undefined
+                              ? `/ ${currencyNumberFormat.format(expectedAmountCents / 100)}`
+                              : undefined
+                          }
+                        />
+                      )}
+                    </group.AppField>
                   )}
-                </group.AppField>
+                </group.Subscribe>
               </>
             )
           }
