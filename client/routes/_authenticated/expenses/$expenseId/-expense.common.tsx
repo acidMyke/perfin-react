@@ -29,7 +29,7 @@ type CalculateExpectedOption = ExpenseItemForCalculation & ExpenseSurchargeOptio
 export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseRefund {
   let expectedAmountCents = 0;
   if (option) {
-    expectedAmountCents = calculateExpenseItem(option, option).expectedAmountCents;
+    expectedAmountCents = calculateExpenseItem(option, option).grossAmountCents;
   }
   return {
     id: 'create',

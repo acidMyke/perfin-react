@@ -81,11 +81,11 @@ export const ItemDetailFieldGroup = withFieldGroup({
               const hasRefund = group.getFieldValue('expenseRefund');
               if (!hasRefund) return;
               const quantity = group.getFieldValue('quantity');
-              const { expectedAmountCents } = calculateExpenseItem(
+              const { grossAmountCents } = calculateExpenseItem(
                 { item: { priceCents: value, quantity } },
                 { additionalServiceChargePercent, isGstExcluded },
               );
-              group.setFieldValue('expenseRefund.expectedAmountCents', expectedAmountCents);
+              group.setFieldValue('expenseRefund.expectedAmountCents', grossAmountCents);
             },
           }}
         >
@@ -106,11 +106,11 @@ export const ItemDetailFieldGroup = withFieldGroup({
               const hasRefund = group.getFieldValue('expenseRefund');
               if (!hasRefund) return;
               const priceCents = group.getFieldValue('priceCents');
-              const { expectedAmountCents } = calculateExpenseItem(
+              const { grossAmountCents } = calculateExpenseItem(
                 { item: { priceCents, quantity: value } },
                 { additionalServiceChargePercent, isGstExcluded },
               );
-              group.setFieldValue('expenseRefund.expectedAmountCents', expectedAmountCents);
+              group.setFieldValue('expenseRefund.expectedAmountCents', grossAmountCents);
             },
           }}
         >

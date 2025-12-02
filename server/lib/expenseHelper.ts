@@ -3,15 +3,18 @@ export type ExpenseSurchargeOption = {
   isGstExcluded?: boolean | null | undefined;
 };
 
-function applyExpenseSurcharge(amountCents: number, surchargeOption: ExpenseSurchargeOption) {
-  const { additionalServiceChargePercent, isGstExcluded } = surchargeOption;
-  if (additionalServiceChargePercent) {
-    amountCents = Math.floor(amountCents * (additionalServiceChargePercent / 100));
-  }
-  if (isGstExcluded) {
-    amountCents = Math.floor(amountCents * 0.09);
-  }
-  return amountCents;
+function applyExpenseSurcharge(netAmountCents: number, surchargeOption?: ExpenseSurchargeOption) {
+  const { additionalServiceChargePercent, isGstExcluded } = surchargeOption ?? {};
+  const serviceChargeCents = additionalServiceChargePercent
+    ? Math.floor(netAmountCents * (additionalServiceChargePercent / 100))
+    : 0;
+  const gstCents = isGstExcluded ? Math.floor(netAmountCents * 0.09) : 0;
+
+  return {
+    grossAmountCents: netAmountCents + serviceChargeCents + gstCents,
+    serviceChargeCents,
+    gstCents,
+  };
 }
 
 export type ExpenseDetailForCalculation = ExpenseSurchargeOption & {
@@ -19,6 +22,14 @@ export type ExpenseDetailForCalculation = ExpenseSurchargeOption & {
     isDeleted?: boolean | null | undefined;
     quantity: number;
     priceCents: number;
+    expenseRefund?:
+      | null
+      | undefined
+      | {
+          isDeleted?: boolean | null | undefined;
+          expectedAmountCents: number;
+          actualAmountCents: number | null | undefined;
+        };
   }[];
   refunds: {
     isDeleted?: boolean | null | undefined;
@@ -28,15 +39,23 @@ export type ExpenseDetailForCalculation = ExpenseSurchargeOption & {
 };
 
 export function calculateExpense(detail: ExpenseDetailForCalculation) {
+  console.info('Expense calculated');
   const { items, refunds } = detail;
-  let itemCostSumCents = items.reduce(
-    (sumCents, { isDeleted, quantity, priceCents }) => (isDeleted ? sumCents : sumCents + quantity * priceCents),
-    0,
+  let { itemsSubtotalCents, itemBondedRefunds } = items.reduce(
+    (result, { isDeleted, quantity, priceCents, expenseRefund }) => {
+      if (isDeleted) return result;
+
+      return {
+        itemsSubtotalCents: result.itemsSubtotalCents + quantity * priceCents,
+        itemBondedRefunds: expenseRefund ? [...result.itemBondedRefunds, expenseRefund] : result.itemBondedRefunds,
+      };
+    },
+    { itemsSubtotalCents: 0, itemBondedRefunds: [] as ExpenseDetailForCalculation['refunds'] },
   );
 
-  itemCostSumCents = applyExpenseSurcharge(itemCostSumCents, detail);
+  const { grossAmountCents, serviceChargeCents, gstCents } = applyExpenseSurcharge(itemsSubtotalCents, detail);
 
-  const { expectedRefundSumCents, minRefundSumCents } = refunds?.reduce(
+  const { expectedRefundSumCents, minRefundSumCents } = [...refunds, ...itemBondedRefunds].reduce(
     (result, { isDeleted, expectedAmountCents, actualAmountCents }) => {
       if (isDeleted) return result;
 
@@ -49,16 +68,22 @@ export function calculateExpense(detail: ExpenseDetailForCalculation) {
   );
 
   return {
-    itemCostSumCents,
+    itemsSubtotalCents,
+    grossAmountCents,
     expectedRefundSumCents,
     minRefundSumCents,
     /** For budgeting and dashboard reporting */
-    amountCents: itemCostSumCents - minRefundSumCents,
+    amountCents: grossAmountCents - minRefundSumCents,
+    serviceChargeCents,
+    gstCents,
 
-    itemCostSum: itemCostSumCents / 100,
+    itemsSubtotal: itemsSubtotalCents / 100,
+    itemCostSum: grossAmountCents / 100,
     expectedRefundSum: expectedRefundSumCents / 100,
     minRefundSum: minRefundSumCents / 100,
-    amount: (itemCostSumCents - minRefundSumCents) / 100,
+    amount: (grossAmountCents - minRefundSumCents) / 100,
+    serviceCharge: serviceChargeCents / 100,
+    gst: gstCents / 100,
   };
 }
 
@@ -69,13 +94,17 @@ export type ExpenseItemForCalculation = {
 
 export function calculateExpenseItem({ item }: ExpenseItemForCalculation, surchargeOption?: ExpenseSurchargeOption) {
   const { priceCents, quantity } = item;
-  const subtotalBeforeFeeCents = priceCents * quantity;
-  const subtotalCents = surchargeOption
-    ? applyExpenseSurcharge(subtotalBeforeFeeCents, surchargeOption)
-    : subtotalBeforeFeeCents;
+  const netAmountCents = priceCents * quantity;
+  const { grossAmountCents, serviceChargeCents, gstCents } = applyExpenseSurcharge(netAmountCents, surchargeOption);
 
   return {
-    expectedAmountCents: subtotalCents,
-    expectedAmount: subtotalCents / 100,
+    netAmountCents,
+    serviceChargeCents,
+    gstCents,
+
+    grossAmountCents,
+    grossAmount: grossAmountCents / 100,
+    serviceCharge: serviceChargeCents / 100,
+    gst: gstCents / 100,
   };
 }
