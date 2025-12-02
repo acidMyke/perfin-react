@@ -1,5 +1,5 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { queryClient, trpc } from '../../../../trpc';
 import {
   calculateExpenseForm,
@@ -89,14 +89,22 @@ const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
     const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
+    const { expenseId } = Route.useParams();
 
     return (
       <form.Field name='items' mode='array'>
         {field => (
-          <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4 *:even:pt-4'>
+          <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
             {field.state.value.map((_, itemIndex) => {
               if (isItemsSubpage) {
-                return <>Subpages {itemIndex}</>;
+                return (
+                  <Link
+                    to='/expenses/$expenseId/items/$indexStr'
+                    params={{ expenseId, indexStr: itemIndex.toString() }}
+                  >
+                    <button className='btn'>Item {itemIndex + 1}</button>
+                  </Link>
+                );
               }
 
               return (
