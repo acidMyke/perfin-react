@@ -31,7 +31,7 @@ function RouteComponent() {
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label mt-2'>
+          <label htmlFor={field.name} className='floating-label col-span-full mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -65,7 +65,7 @@ function RouteComponent() {
         {field => {
           const { grossAmount, expectedRefundSum, amount } = field.state.value;
           return (
-            <div className='border-t-base-content/20 mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
+            <div className='border-t-base-content/20 col-span-full mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
               <p>Gross amount:</p>
               <p>{currencyNumberFormat.format(grossAmount)}</p>
               {expectedRefundSum > 0 && (
@@ -80,7 +80,12 @@ function RouteComponent() {
           );
         }}
       </form.AppField>
-      <form.SubmitButton label='Submit' doneLabel='Submitted' inProgressLabel='Submitting...' />
+      <form.SubmitButton
+        buttonCn='col-span-full'
+        label='Submit'
+        doneLabel='Submitted'
+        inProgressLabel='Submitting...'
+      />
     </>
   );
 }
@@ -94,7 +99,7 @@ const ItemsDetailsSubForm = withForm({
     return (
       <form.Field name='items' mode='array'>
         {field => (
-          <ul className='mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
+          <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
             {field.state.value.map((_, itemIndex) => {
               if (isItemsSubpage) {
                 return (
@@ -161,10 +166,12 @@ const ShopDetailSubForm = withForm({
             const isCreate = form.getFieldValue('ui.isCreate');
             if (!geolocation) {
               return (
-                <p className='mt-2 mb-4'>Coordinate: {isCreate ? 'Unable to retrieve your location' : 'Unspecified'}</p>
+                <p className='col-span-full mt-2 mb-4'>
+                  Coordinate: {isCreate ? 'Unable to retrieve your location' : 'Unspecified'}
+                </p>
               );
             } else {
-              <p className='mt-2 mb-4'>
+              <p className='col-span-full mt-2 mb-4'>
                 Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
                 <a
                   href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
@@ -185,7 +192,7 @@ const ShopDetailSubForm = withForm({
             onChangeAsyncDebounceMs: 500,
             onChangeAsync: ({ value, signal }) => {
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value !== null && value.length > 1) {
+              if (value && value.length > 2) {
                 shopNameSuggestionMutation.mutateAsync({
                   type: 'shopName',
                   search: value,
@@ -210,7 +217,7 @@ const ShopDetailSubForm = withForm({
             onChangeAsyncDebounceMs: 500,
             onChangeAsync: ({ value, signal }) => {
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value !== null && value.length > 1) {
+              if (value && value.length > 2) {
                 shopMallSuggestionMutation.mutateAsync({
                   type: 'shopMall',
                   search: value,
