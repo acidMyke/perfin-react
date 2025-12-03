@@ -88,7 +88,7 @@ function RouteComponent() {
   }, []);
 
   return (
-    <div className='mx-auto grid max-w-md grid-cols-2 gap-x-2'>
+    <div className='mx-auto max-w-md'>
       <div className='col-span-full'>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
       </div>

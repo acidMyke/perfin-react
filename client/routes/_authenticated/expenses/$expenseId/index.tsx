@@ -15,6 +15,7 @@ import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
 import { ExternalLink, Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
+import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -26,7 +27,7 @@ function RouteComponent() {
   const { accountOptions, categoryOptions } = optionsData;
 
   return (
-    <>
+    <div className='grid grid-cols-2 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
@@ -86,7 +87,7 @@ function RouteComponent() {
         doneLabel='Submitted'
         inProgressLabel='Submitting...'
       />
-    </>
+    </div>
   );
 }
 
@@ -95,58 +96,95 @@ const ItemsDetailsSubForm = withForm({
   render({ form }) {
     const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
     const { expenseId } = Route.useParams();
+    const navigate = Route.useNavigate();
 
     return (
       <form.Field name='items' mode='array'>
-        {field => (
-          <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
-            {field.state.value.map((_, itemIndex) => {
-              if (isItemsSubpage) {
-                return (
-                  <Link
-                    to='/expenses/$expenseId/items/$indexStr'
-                    params={{ expenseId, indexStr: itemIndex.toString() }}
-                  >
-                    <button className='btn'>Item {itemIndex + 1}</button>
-                  </Link>
+        {field =>
+          isItemsSubpage ? (
+            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
+              {field.state.value.map((item, itemIndex) => {
+                const { name, quantity, expenseRefund } = item;
+                const { grossAmount } = calculateExpenseItem(
+                  { item },
+                  {
+                    additionalServiceChargePercent: form.getFieldValue('additionalServiceChargePercent'),
+                    isGstExcluded: form.getFieldValue('isGstExcluded'),
+                  },
                 );
-              }
 
-              return (
-                <ItemDetailFieldGroup
-                  form={form}
-                  fields={`items[${itemIndex}]`}
-                  disableRemoveButton={field.state.value.length < 2}
-                  onRemoveClick={() => {
-                    if (field.state.value.length <= 3) {
-                      form.setFieldValue('ui.isItemsSubpage', false);
+                return (
+                  <>
+                    <span className='col-start-1 w-full'>
+                      {name} {quantity > 1 && <span>x{quantity}</span>}
+                    </span>
+
+                    {expenseRefund && (
+                      <div className='badge badge-sm badge-neutral col-start-2'>
+                        {expenseRefund.actualAmountCents !== 0 ? 'Refunded' : 'Pend refund'}
+                      </div>
+                    )}
+
+                    <span className='col-start-3 self-center justify-self-end'>
+                      {currencyNumberFormat.format(grossAmount)}
+                    </span>
+                    <Link
+                      className='btn btn-sm btn-primary col-start-4'
+                      to='/expenses/$expenseId/items/$indexStr'
+                      params={{ expenseId, indexStr: itemIndex.toString() }}
+                    >
+                      Edit
+                    </Link>
+                  </>
+                );
+              })}
+            </ul>
+          ) : (
+            <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
+              {field.state.value.map((_, itemIndex) => {
+                return (
+                  <ItemDetailFieldGroup
+                    key={itemIndex}
+                    form={form}
+                    fields={`items[${itemIndex}]`}
+                    disableRemoveButton={field.state.value.length < 2}
+                    onRemoveClick={() => {
+                      if (field.state.value.length <= 3) {
+                        form.setFieldValue('ui.isItemsSubpage', false);
+                      }
+
+                      field.removeValue(itemIndex);
+                    }}
+                    itemIndex={itemIndex}
+                    additionalServiceChargePercent={form.getFieldValue('additionalServiceChargePercent')}
+                    isGstExcluded={form.getFieldValue('isGstExcluded')}
+                    onPricingChange={() => calculateExpenseForm(form)}
+                  />
+                );
+              })}
+              <li key='Create'>
+                <button
+                  className='btn-soft btn-primary btn w-2/3 justify-start'
+                  onClick={() => {
+                    if (field.state.value.length >= 2) {
+                      form.setFieldValue('ui.isItemsSubpage', true);
                     }
-
-                    field.removeValue(itemIndex);
+                    field.pushValue(defaultExpenseItem());
+                    if (isItemsSubpage) {
+                      navigate({
+                        to: '/expenses/$expenseId/items/$indexStr',
+                        params: { expenseId, indexStr: (field.state.value.length - 1).toString() },
+                      });
+                    }
                   }}
-                  itemIndex={itemIndex}
-                  additionalServiceChargePercent={form.getFieldValue('additionalServiceChargePercent')}
-                  isGstExcluded={form.getFieldValue('isGstExcluded')}
-                  onPricingChange={() => calculateExpenseForm(form)}
-                />
-              );
-            })}
-            <li key='Create'>
-              <button
-                className='btn-soft btn-primary btn w-2/3 justify-start'
-                onClick={() => {
-                  if (field.state.value.length >= 2) {
-                    form.setFieldValue('ui.isItemsSubpage', true);
-                  }
-                  field.pushValue(defaultExpenseItem());
-                }}
-              >
-                <Plus />
-                Add item
-              </button>
-            </li>
-          </ul>
-        )}
+                >
+                  <Plus />
+                  Add item
+                </button>
+              </li>
+            </ul>
+          )
+        }
       </form.Field>
     );
   },
