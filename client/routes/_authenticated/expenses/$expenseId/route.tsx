@@ -28,7 +28,12 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
   const isCreate = expenseId === 'create';
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
-  const existingExpenseQuery = useQuery(trpc.expense.loadDetail.queryOptions({ expenseId }, { enabled: !isCreate }));
+  const existingExpenseQuery = useQuery(
+    trpc.expense.loadDetail.queryOptions(
+      { expenseId },
+      { enabled: !isCreate, refetchOnMount: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
+    ),
+  );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
   const form = useAppForm({
     ...createEditExpenseFormOptions,
