@@ -229,7 +229,7 @@ const saveExpenseProcedure = protectedProcedure
       input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
     ]);
 
-    const { amountCents, itemCostSumCents } = calculateExpense(input);
+    const { amountCents, grossAmountCents } = calculateExpense(input);
 
     await db.batch([
       db
@@ -237,7 +237,7 @@ const saveExpenseProcedure = protectedProcedure
         .values({
           id: input.expenseId,
           amountCents,
-          amountCentsPreRefund: itemCostSumCents,
+          amountCentsPreRefund: grossAmountCents,
           billedAt: input.billedAt,
           belongsToId: userId,
           accountId: accountId,

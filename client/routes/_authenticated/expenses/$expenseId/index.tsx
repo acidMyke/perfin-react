@@ -105,13 +105,10 @@ const ItemsDetailsSubForm = withForm({
             <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
               {field.state.value.map((item, itemIndex) => {
                 const { name, quantity, expenseRefund } = item;
-                const { grossAmount } = calculateExpenseItem(
-                  { item },
-                  {
-                    additionalServiceChargePercent: form.getFieldValue('additionalServiceChargePercent'),
-                    isGstExcluded: form.getFieldValue('isGstExcluded'),
-                  },
-                );
+                const { grossAmount } = calculateExpenseItem(item, {
+                  additionalServiceChargePercent: form.getFieldValue('additionalServiceChargePercent'),
+                  isGstExcluded: form.getFieldValue('isGstExcluded'),
+                });
 
                 return (
                   <>

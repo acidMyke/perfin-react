@@ -4,7 +4,6 @@ import { useAppForm, useFormContext } from '../../../../components/Form';
 import {
   calculateExpense,
   calculateExpenseItem,
-  type ExpenseItemForCalculation,
   type ExpenseSurchargeOption,
 } from '../../../../../server/lib/expenseHelper';
 
@@ -24,12 +23,14 @@ export function defaultExpenseItem(): ExpenseItem {
   };
 }
 
-type CalculateExpectedOption = ExpenseItemForCalculation & ExpenseSurchargeOption;
+type CalculateExpectedOption = ExpenseSurchargeOption & {
+  item: Pick<ExpenseItem, 'priceCents' | 'quantity'>;
+};
 
 export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseRefund {
   let expectedAmountCents = 0;
   if (option) {
-    expectedAmountCents = calculateExpenseItem(option, option).grossAmountCents;
+    expectedAmountCents = calculateExpenseItem(option.item, option).grossAmountCents;
   }
   return {
     id: 'create',
