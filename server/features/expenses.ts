@@ -12,7 +12,7 @@ import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
-import { calculateExpense } from '../lib/expenseHelper';
+import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 
 type Option = {
   label: string;
@@ -79,6 +79,7 @@ const loadExpenseDetailProcedure = protectedProcedure
                 source: true,
                 expectedAmountCents: true,
                 actualAmountCents: true,
+                confirmedAt: true,
               },
             },
           },
@@ -140,7 +141,6 @@ const saveExpenseProcedure = protectedProcedure
       expenseId: z.string(),
       version: z.int().optional().default(0),
       isDeleted: z.boolean().optional().default(false),
-      amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
         .object({ value: z.string(), label: z.string() })
@@ -164,10 +164,23 @@ const saveExpenseProcedure = protectedProcedure
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
-          expenseRefundId: z
-            .string()
-            .nullish()
-            .transform(v => v ?? null),
+          expenseRefundId: z.string().optional(),
+          expenseRefund: z
+            .object({
+              id: z.string(),
+              source: z.string(),
+              expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
+              actualAmountCents: z
+                .int()
+                .min(0, { error: 'Must be non-negative value' })
+                .nullish()
+                .transform(v => v ?? null),
+              confirmedAt: z.iso
+                .datetime({ error: 'Invalid date time' })
+                .nullish()
+                .transform(val => (val ? parseISO(val) : null)),
+            })
+            .nullable(),
         }),
       ),
       refunds: z
@@ -188,8 +201,9 @@ const saveExpenseProcedure = protectedProcedure
             note: z
               .string()
               .nullish()
-              .transform(v => v ?? null),
-            isDeleted: z.boolean().optional().default(false),
+              .transform(v => v ?? null)
+              .optional(),
+            isDeleted: z.boolean().default(false).optional(),
             expenseItemId: z
               .string()
               .nullish()
@@ -222,6 +236,37 @@ const saveExpenseProcedure = protectedProcedure
       }
     } else {
       input.expenseId = generateId();
+    }
+
+    const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
+
+    for (const item of input.items) {
+      if (item.id === 'create') {
+        item.id = generateId();
+      }
+      if (item.expenseRefund) {
+        if (item.expenseRefund.id === 'create') {
+          item.expenseRefund.id = generateId();
+          item.expenseRefundId = item.expenseRefund.id;
+        }
+
+        const { grossAmountCents } = calculateExpenseItem(item, input);
+
+        refunds.push({
+          ...item.expenseRefund,
+          expectedAmountCents: grossAmountCents,
+          expenseItemId: item.id,
+        });
+      }
+    }
+
+    for (const refund of refunds) {
+      if (refund.id === 'create') {
+        refund.id = generateId();
+      }
+      if (refund.actualAmountCents && !refund.confirmedAt) {
+        refund.confirmedAt = new Date();
+      }
     }
 
     const [accountId, categoryId] = await Promise.all([
@@ -272,7 +317,7 @@ const saveExpenseProcedure = protectedProcedure
       db
         .insert(expenseRefundsTable)
         .values(
-          input.refunds.map((refund, idx) => ({
+          refunds.map((refund, idx) => ({
             ...refund,
             sequence: idx,
             expenseId: input.expenseId,

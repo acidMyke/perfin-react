@@ -88,7 +88,6 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
         }),
       },
       description: undefined,
-      amountCents: 0,
       billedAt: new Date(),
       account: undefined,
       category: undefined,
