@@ -7,7 +7,7 @@ import {
   expensesTable,
   generateId,
 } from '../../db/schema';
-import { and, asc, desc, eq, gte, isNotNull, isNull, like, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, notInArray, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -239,11 +239,13 @@ const saveExpenseProcedure = protectedProcedure
     }
 
     const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
+    const activeIds: string[] = [];
 
     for (const item of input.items) {
       if (item.id === 'create') {
         item.id = generateId();
       }
+      activeIds.push(item.id);
       if (item.expenseRefund) {
         if (item.expenseRefund.id === 'create') {
           item.expenseRefund.id = generateId();
@@ -264,6 +266,9 @@ const saveExpenseProcedure = protectedProcedure
       if (refund.id === 'create') {
         refund.id = generateId();
       }
+      if (refund.id) {
+        activeIds.push(refund.id);
+      }
       if (refund.actualAmountCents && !refund.confirmedAt) {
         refund.confirmedAt = new Date();
       }
@@ -276,45 +281,49 @@ const saveExpenseProcedure = protectedProcedure
 
     const { amountCents, grossAmountCents } = calculateExpense(input);
 
-    await db.batch([
-      db
-        .insert(expensesTable)
-        .values({
-          id: input.expenseId,
-          amountCents,
-          amountCentsPreRefund: grossAmountCents,
-          billedAt: input.billedAt,
-          belongsToId: userId,
-          accountId: accountId,
-          categoryId: categoryId,
-          updatedBy: userId,
-          latitude: input.latitude,
-          longitude: input.longitude,
-          geoAccuracy: input.geoAccuracy,
-          shopName: input.shopName,
-          shopMall: input.shopMall,
-          additionalServiceChargePercent: input.additionalServiceChargePercent,
-          isGstExcluded: input.isGstExcluded,
-          isDeleted: input.isDeleted,
-        })
-        .onConflictDoUpdate({
-          target: expensesTable.id,
-          set: excludedAll(expensesTable, ['belongsToId']),
-        }),
-      db
-        .insert(expenseItemsTable)
-        .values(
-          input.items.map((item, idx) => ({
-            ...item,
-            sequence: idx,
-            expenseId: input.expenseId,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: expenseItemsTable.id,
-          set: excludedAll(expenseItemsTable),
-        }),
-      db
+    await db
+      .insert(expensesTable)
+      .values({
+        id: input.expenseId,
+        amountCents,
+        amountCentsPreRefund: grossAmountCents,
+        billedAt: input.billedAt,
+        belongsToId: userId,
+        accountId: accountId,
+        categoryId: categoryId,
+        updatedBy: userId,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        geoAccuracy: input.geoAccuracy,
+        shopName: input.shopName,
+        shopMall: input.shopMall,
+        additionalServiceChargePercent: input.additionalServiceChargePercent,
+        isGstExcluded: input.isGstExcluded,
+        isDeleted: input.isDeleted,
+      })
+      .onConflictDoUpdate({
+        target: expensesTable.id,
+        set: excludedAll(expensesTable, ['belongsToId']),
+      });
+
+    await db
+      .insert(expenseItemsTable)
+      .values(
+        input.items.map((item, idx) => ({
+          ...item,
+          sequence: idx,
+          expenseId: input.expenseId,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: expenseItemsTable.id,
+        set: excludedAll(expenseItemsTable),
+      });
+
+    await db.update(expenseItemsTable).set({ isDeleted: true }).where(notInArray(expenseItemsTable.id, activeIds));
+
+    if (refunds.length > 0) {
+      await db
         .insert(expenseRefundsTable)
         .values(
           refunds.map((refund, idx) => ({
@@ -326,8 +335,10 @@ const saveExpenseProcedure = protectedProcedure
         .onConflictDoUpdate({
           target: expenseRefundsTable.id,
           set: excludedAll(expenseRefundsTable),
-        }),
-    ]);
+        });
+    }
+
+    await db.update(expenseRefundsTable).set({ isDeleted: true }).where(notInArray(expenseRefundsTable.id, activeIds));
   });
 
 const listExpenseProcedure = protectedProcedure

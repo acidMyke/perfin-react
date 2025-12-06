@@ -39,8 +39,6 @@ function RouteComponent() {
     ...createEditExpenseFormOptions,
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
-        console.log({ ...value });
-        return;
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
         const { billedAt, geolocation, ui, ...otherValues } = value;
         const formError = await handleFormMutateAsync(

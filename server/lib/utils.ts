@@ -1,9 +1,11 @@
 import { type AnyColumn, sql, Table, getTableColumns, SQL } from 'drizzle-orm';
 
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+export const sankeCaseFromCamelCase = (camelCase: string) =>
+  camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
 
 export function excluded<T extends AnyColumn>(column: T) {
-  return sql`excluded.${sql.identifier(column.name)}`.mapWith(column.mapFromDriverValue);
+  return sql`excluded.${sql.raw(sankeCaseFromCamelCase(column.name))}`;
 }
 
 export function excludedAll<T extends Table>(
