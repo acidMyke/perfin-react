@@ -27,7 +27,7 @@ function RouteComponent() {
   const { accountOptions, categoryOptions } = optionsData;
 
   return (
-    <div className='grid grid-cols-2 gap-x-2'>
+    <div className='mb-20 grid grid-cols-2 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>

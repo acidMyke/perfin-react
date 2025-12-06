@@ -249,8 +249,8 @@ const saveExpenseProcedure = protectedProcedure
       if (item.expenseRefund) {
         if (item.expenseRefund.id === 'create') {
           item.expenseRefund.id = generateId();
-          item.expenseRefundId = item.expenseRefund.id;
         }
+        item.expenseRefundId = item.expenseRefund.id;
 
         const { grossAmountCents } = calculateExpenseItem(item, input);
 
@@ -320,7 +320,10 @@ const saveExpenseProcedure = protectedProcedure
         set: excludedAll(expenseItemsTable),
       });
 
-    await db.update(expenseItemsTable).set({ isDeleted: true }).where(notInArray(expenseItemsTable.id, activeIds));
+    await db
+      .update(expenseItemsTable)
+      .set({ isDeleted: true })
+      .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds)));
 
     if (refunds.length > 0) {
       await db
@@ -338,7 +341,10 @@ const saveExpenseProcedure = protectedProcedure
         });
     }
 
-    await db.update(expenseRefundsTable).set({ isDeleted: true }).where(notInArray(expenseRefundsTable.id, activeIds));
+    await db
+      .update(expenseRefundsTable)
+      .set({ isDeleted: true })
+      .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
   });
 
 const listExpenseProcedure = protectedProcedure
