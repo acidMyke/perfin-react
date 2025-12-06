@@ -225,7 +225,8 @@ const ShopDetailSubForm = withForm({
           name='shopName'
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal }) => {
+            onChangeAsync: ({ value, signal, fieldApi }) => {
+              if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
               if (value && value.length > 2) {
                 shopNameSuggestionMutation.mutateAsync({
@@ -250,7 +251,8 @@ const ShopDetailSubForm = withForm({
           name='shopMall'
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal }) => {
+            onChangeAsync: ({ value, signal, fieldApi }) => {
+              if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
               if (value && value.length > 2) {
                 shopMallSuggestionMutation.mutateAsync({

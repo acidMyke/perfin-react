@@ -7,7 +7,22 @@ import {
   expensesTable,
   generateId,
 } from '../../db/schema';
-import { and, asc, desc, eq, gte, inArray, isNotNull, isNull, like, lt, notInArray, sql, SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  like,
+  lt,
+  notInArray,
+  sql,
+  SQL,
+  type AnyColumn,
+} from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -415,55 +430,90 @@ const getSuggestionsProcedure = protectedProcedure
           type: z.literal('itemName'),
           search: z.string().min(2),
         }),
+      )
+      .or(
+        z.object({
+          type: z.literal('refundSource'),
+          search: z.string().min(2),
+        }),
       ),
   )
   .mutation(async ({ input, ctx, signal }) => {
     const { db, userId } = ctx;
-    const likelyValue = '%' + input.search.split('').join('%') + '%';
+    const search = input.search.toUpperCase();
+    const fuzzyPattern =
+      '%' +
+      search
+        .replace(/(.)\1+/g, '$1')
+        .split('')
+        .join('%') +
+      '%';
+    const searchRanking = (column: AnyColumn) => sql<number>`CASE
+      WHEN ${column} = ${search} THEN 0
+      WHEN ${column} LIKE ${search + '%'} THEN 1
+      WHEN ${column} LIKE ${'%' + search + '%'} THEN 2
+      ELSE 3 END`;
+
     signal?.throwIfAborted();
 
     if (input.type === 'shopName') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expensesTable.shopName}`,
-        })
+        .select({ value: sql<string>`${expensesTable.shopName}` })
         .from(expensesTable)
         .where(
           and(
             eq(expensesTable.belongsToId, userId),
             isNotNull(expensesTable.shopName),
-            like(expensesTable.shopName, likelyValue),
+            like(expensesTable.shopName, fuzzyPattern),
           ),
-        );
+        )
+        .groupBy(expensesTable.shopName)
+        .orderBy(searchRanking(expensesTable.shopName), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),
       };
     } else if (input.type === 'shopMall') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expensesTable.shopMall}`,
-        })
+        .select({ value: sql<string>`${expensesTable.shopMall}` })
         .from(expensesTable)
         .where(
           and(
             eq(expensesTable.belongsToId, userId),
             isNotNull(expensesTable.shopMall),
-            like(expensesTable.shopMall, likelyValue),
+            like(expensesTable.shopMall, fuzzyPattern),
           ),
-        );
+        )
+        .groupBy(expensesTable.shopMall)
+        .orderBy(searchRanking(expensesTable.shopMall), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),
       };
     } else if (input.type === 'itemName') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expenseItemsTable.name}`,
-        })
+        .select({ value: sql<string>`${expenseItemsTable.name}` })
         .from(expenseItemsTable)
         .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, likelyValue)));
+        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, fuzzyPattern)))
+        .groupBy(expenseItemsTable.name)
+        .orderBy(searchRanking(expenseItemsTable.name), desc(count()))
+        .limit(5);
+      return {
+        ...input,
+        suggestions: suggestions.map(({ value }) => value),
+      };
+    } else if (input.type === 'refundSource') {
+      const suggestions = await db
+        .select({ value: sql<string>`${expenseRefundsTable.source}` })
+        .from(expenseRefundsTable)
+        .innerJoin(expensesTable, eq(expensesTable.id, expenseRefundsTable.expenseId))
+        .where(and(eq(expensesTable.belongsToId, userId), like(expenseRefundsTable.source, fuzzyPattern)))
+        .groupBy(expenseRefundsTable.source)
+        .orderBy(searchRanking(expenseRefundsTable.source), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),

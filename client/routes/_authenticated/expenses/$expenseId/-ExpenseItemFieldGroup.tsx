@@ -25,6 +25,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
     onPricingChange,
   }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const refundSourceSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 shadow-lg'>
@@ -32,7 +33,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`name`}
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal }) => {
+            onChangeAsync: ({ value, signal, fieldApi }) => {
+              if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
               if (value && value.length > 1) {
                 itenNameSuggestionMutation.mutateAsync({
@@ -138,12 +140,14 @@ export const ItemDetailFieldGroup = withFieldGroup({
                     name={`expenseRefund.source`}
                     validators={{
                       onChangeAsyncDebounceMs: 500,
-                      onChangeAsync: ({ value, signal }) => {
+                      onChangeAsync: ({ value, signal, fieldApi }) => {
+                        if (fieldApi.form.state.isSubmitting) return;
+
                         signal.onabort = () =>
                           queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
                         if (value && value.length > 1) {
-                          itenNameSuggestionMutation.mutateAsync({
-                            type: 'itemName',
+                          refundSourceSuggestionMutation.mutateAsync({
+                            type: 'refundSource',
                             search: value,
                           });
                         }
@@ -156,7 +160,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
                         placeholder='None'
                         label='Refund source'
                         containerCn='row-start-3 col-start-1 col-span-4 w-full'
-                        options={itenNameSuggestionMutation.data?.suggestions ?? []}
+                        options={refundSourceSuggestionMutation.data?.suggestions ?? []}
                       />
                     )}
                   </group.AppField>
