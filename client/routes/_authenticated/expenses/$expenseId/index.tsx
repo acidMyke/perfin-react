@@ -206,18 +206,20 @@ const ShopDetailSubForm = withForm({
                 </p>
               );
             } else {
-              <p className='col-span-full mt-2 mb-4'>
-                Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
-                <a
-                  href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
-                  target='_blank'
-                  className='link'
-                >
-                  Open in maps
-                  <ExternalLink className='ml-2 inline-block' size='1em' />
-                </a>
-                )
-              </p>;
+              return (
+                <p className='col-span-full mt-2 mb-4'>
+                  Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
+                  <a
+                    href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
+                    target='_blank'
+                    className='link'
+                  >
+                    Open in maps
+                    <ExternalLink className='ml-2 inline-block' size='1em' />
+                  </a>
+                  )
+                </p>
+              );
             }
           }}
         </form.AppField>
