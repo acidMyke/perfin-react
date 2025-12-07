@@ -10,20 +10,23 @@ import {
 import {
   and,
   asc,
+  between,
   count,
   desc,
   eq,
   gte,
+  inArray,
   isNotNull,
   isNull,
   like,
   lt,
+  max,
   notInArray,
   sql,
   SQL,
   type AnyColumn,
 } from 'drizzle-orm';
-import { TRPCError } from '@trpc/server';
+import { TRPCError, type inferProcedureOutput } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
@@ -523,10 +526,112 @@ const getSuggestionsProcedure = protectedProcedure
     }
   });
 
+const COORD_THRESHOLD = 0.00045; // ~50m
+
+const inferShopDetailsProcedure = protectedProcedure
+  .input(
+    z.object({
+      latitude: z.number().nullish(),
+      longitude: z.number().nullish(),
+
+      shopName: z.string().nullish(),
+      shopMall: z.string().nullish(),
+
+      itemNames: z.array(z.string()).optional(),
+    }),
+  )
+  .mutation(async ({ input, ctx }) => {
+    const { db, userId } = ctx;
+
+    const itemNames =
+      input.itemNames?.reduce((acc, name) => {
+        const trimmed = name.trim();
+        if (trimmed.length) acc.push(trimmed.toUpperCase());
+        return acc;
+      }, [] as string[]) ?? [];
+
+    // Infer shop / mall and shopdetails by coordinate
+    if (!input.shopName && input.latitude && input.longitude) {
+      const nearbyShopsColumns = {
+        shopName: expensesTable.shopName,
+        shopMall: expensesTable.shopMall,
+        additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
+        isGstExcluded: expensesTable.isGstExcluded,
+        categoryId: expensesTable.categoryId,
+        accountId: expensesTable.accountId,
+      };
+      const nearbyShopsCondition = and(
+        eq(expensesTable.belongsToId, userId),
+        between(expensesTable.latitude, input.latitude - COORD_THRESHOLD, input.latitude + COORD_THRESHOLD),
+        between(expensesTable.longitude, input.longitude - COORD_THRESHOLD, input.longitude + COORD_THRESHOLD),
+        isNotNull(expensesTable.shopName),
+      );
+
+      const distance = sql<number>`(${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
+                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude})`;
+
+      if (itemNames.length === 0) {
+        return await db
+          .selectDistinct(nearbyShopsColumns)
+          .from(expensesTable)
+          .where(nearbyShopsCondition)
+          .orderBy(distance, desc(expensesTable.billedAt))
+          .limit(3);
+      } else {
+        const hasMatchingItems = sql<number>`CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END`;
+        return await db
+          .selectDistinct(nearbyShopsColumns)
+          .from(expensesTable)
+          .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
+          .where(nearbyShopsCondition)
+          .orderBy(hasMatchingItems, distance, desc(expensesTable.billedAt))
+          .limit(3);
+      }
+    } else if (input.shopName) {
+      // Infer shop detail by shop name
+      return await db
+        .selectDistinct({
+          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
+          isGstExcluded: expensesTable.isGstExcluded,
+          categoryId: expensesTable.categoryId,
+          accountId: expensesTable.accountId,
+        })
+        .from(expensesTable)
+        .where(
+          and(eq(expensesTable.belongsToId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())),
+        )
+        .orderBy(desc(expensesTable.billedAt))
+        .limit(3);
+    }
+  });
+
+const inferItemPricesProcedure = protectedProcedure
+  .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
+  .mutation(({ input, ctx }) => {
+    const { db, userId } = ctx;
+    const itemName = input.itemName.trim().toUpperCase();
+    return db
+      .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
+      .from(expenseItemsTable)
+      .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
+      .where(
+        and(
+          eq(expensesTable.belongsToId, userId),
+          eq(expenseItemsTable.name, itemName),
+          input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
+        ),
+      )
+      .groupBy(expenseItemsTable.priceCents)
+      .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
+      .limit(3);
+  });
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
+  inferShopDetail: inferShopDetailsProcedure,
+  inferItemPrice: inferItemPricesProcedure,
 };
