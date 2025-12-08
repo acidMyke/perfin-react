@@ -108,6 +108,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
 export type ExpenseFormData = ReturnType<typeof mapExpenseDetailToForm>;
 export const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
 export const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
+export const percentageNumberFormat = new Intl.NumberFormat('en-SG', { style: 'percent', maximumFractionDigits: 2 });
 
 type TExpenseForm =
   typeof createEditExpenseFormOptions extends FormOptions<

@@ -3,8 +3,13 @@ import { PageHeader } from '../../../../components/PageHeader';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../../../../trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
-import { useEffect } from 'react';
-import { createEditExpenseFormOptions, mapExpenseDetailToForm, type ExpenseFormData } from './-expense.common';
+import { useEffect, useRef } from 'react';
+import {
+  createEditExpenseFormOptions,
+  mapExpenseDetailToForm,
+  percentageNumberFormat,
+  type ExpenseFormData,
+} from './-expense.common';
 import type { DeepKeys } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
@@ -36,7 +41,12 @@ function RouteComponent() {
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
-  const inferShopDetailMutation = useMutation(trpc.expense.inferShopDetail.mutationOptions());
+  const autocompleteSelectionDialogRef = useRef<HTMLDialogElement>(null);
+  const inferShopDetailMutation = useMutation(
+    trpc.expense.inferShopDetail.mutationOptions({
+      onSuccess: inferredResults => inferredResults?.length && autocompleteSelectionDialogRef.current?.showModal(),
+    }),
+  );
   const form = useAppForm({
     ...createEditExpenseFormOptions,
     listeners: {
@@ -56,6 +66,7 @@ function RouteComponent() {
             ) {
               const { geolocation, shopName, items } = formValues;
               const { latitude, longitude } = geolocation ?? {};
+              formApi.setFieldValue('ui.shouldInferShopDetail', false);
               inferShopDetailMutation.mutate({
                 latitude,
                 longitude,
@@ -123,6 +134,38 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
+        {/* Open the modal using document.getElementById('ID').showModal() method */}
+        <dialog className='modal' ref={autocompleteSelectionDialogRef}>
+          <div className='modal-box'>
+            <h3 className='text-lg font-bold'>You seem to have came here before!!</h3>
+            <div className='mt-2 flex flex-col gap-y-4'>
+              {inferShopDetailMutation.data?.map((shopDetail, idx) => (
+                <button
+                  key={idx}
+                  className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-auto grid-flow-row justify-start gap-x-2 p-2 *:text-left'
+                >
+                  {'shopMall' in shopDetail && (
+                    <>
+                      <h4 className='col-span-2 text-xl font-bold'>{shopDetail.shopName}</h4>
+                      <p className='col-start-1'>Mall:</p>
+                      <p className='col-start-2'>{shopDetail.shopMall}</p>
+                    </>
+                  )}
+                  <p className='col-start-1'>Service charge:</p>
+                  <p className='col-start-2'>
+                    {shopDetail.additionalServiceChargePercent
+                      ? percentageNumberFormat.format(shopDetail.additionalServiceChargePercent / 100)
+                      : 'N/A'}
+                  </p>
+                  <p className='col-start-1'>GST:</p>
+                  <div className='col-start-2'>{shopDetail.isGstExcluded ? 'Excluded' : 'Included'}</div>
+                </button>
+              ))}
+              <button className='btn btn-soft btn-warning w-full'>No, try again</button>
+              <button className='btn btn-soft btn-error w-full'>No, I have never been here, STOP ASKING</button>
+            </div>
+          </div>
+        </dialog>
       </form.AppForm>
     </div>
   );

@@ -558,7 +558,7 @@ const inferShopDetailsProcedure = protectedProcedure
         isGstExcluded: expensesTable.isGstExcluded,
         categoryId: expensesTable.categoryId,
         accountId: expensesTable.accountId,
-      };
+      } as const;
       const nearbyShopsCondition = and(
         eq(expensesTable.belongsToId, userId),
         between(expensesTable.latitude, input.latitude - COORD_THRESHOLD, input.latitude + COORD_THRESHOLD),
@@ -602,6 +602,7 @@ const inferShopDetailsProcedure = protectedProcedure
         .orderBy(desc(expensesTable.billedAt))
         .limit(3);
     }
+    throw new TRPCError({ code: 'BAD_REQUEST' });
   });
 
 const inferItemPricesProcedure = protectedProcedure
