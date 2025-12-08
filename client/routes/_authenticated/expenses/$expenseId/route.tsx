@@ -57,7 +57,7 @@ function RouteComponent() {
         if ([value.account?.value, value.category?.value].includes('create')) {
           queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter());
         }
-        navigate({ to: '/expenses' });
+        navigate({ to: '/expenses', search: { month: billedAt.getMonth(), year: billedAt.getFullYear() } });
       },
     },
   });

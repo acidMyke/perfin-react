@@ -102,7 +102,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           }}
         >
           {({ NumericInput }) => (
-            <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' />
+            <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' step={1} min={1} />
           )}
         </group.AppField>
 
