@@ -535,7 +535,6 @@ const inferShopDetailsProcedure = protectedProcedure
       longitude: z.number().nullish(),
 
       shopName: z.string().nullish(),
-      shopMall: z.string().nullish(),
 
       itemNames: z.array(z.string()).optional(),
     }),

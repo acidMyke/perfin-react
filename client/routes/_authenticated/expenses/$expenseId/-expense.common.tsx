@@ -11,6 +11,7 @@ export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
 export type ExpenseItem = ExpenseDetail['items'][number];
 export type ExpenseRefund = ExpenseDetail['refunds'][number];
+export type InferredShopDetail = RouterOutputs['expense']['inferShopDetail'];
 
 export function defaultExpenseItem(): ExpenseItem {
   return {
@@ -64,6 +65,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       ui: {
         isCreate: false,
         isItemsSubpage,
+        shouldInferShopDetail: false,
         calculateResult: calculateExpense(rest),
       },
       billedAt: new Date(billedAt),
@@ -80,6 +82,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       ui: {
         isCreate: true,
         isItemsSubpage: false,
+        shouldInferShopDetail: true,
         calculateResult: calculateExpense({
           items: [],
           refunds: [],
@@ -102,6 +105,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
   }
 }
 
+export type ExpenseFormData = ReturnType<typeof mapExpenseDetailToForm>;
 export const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
 export const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
 

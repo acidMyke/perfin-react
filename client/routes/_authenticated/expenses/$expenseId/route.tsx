@@ -4,7 +4,8 @@ import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../..
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
 import { useEffect } from 'react';
-import { createEditExpenseFormOptions, mapExpenseDetailToForm } from './-expense.common';
+import { createEditExpenseFormOptions, mapExpenseDetailToForm, type ExpenseFormData } from './-expense.common';
+import type { DeepKeys } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -35,8 +36,37 @@ function RouteComponent() {
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
+  const inferShopDetailMutation = useMutation(trpc.expense.inferShopDetail.mutationOptions());
   const form = useAppForm({
     ...createEditExpenseFormOptions,
+    listeners: {
+      onChangeDebounceMs: 500,
+      onChange: async ({ formApi, fieldApi }) => {
+        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        // Shop detail inference
+        if (/(geolocation.*)|(shopName)|(items[\d+].name)/.test(fieldName)) {
+          if (formApi.getFieldValue('ui.shouldInferShopDetail')) {
+            const formValues = formApi.state.values;
+            const { additionalServiceChargePercent, isGstExcluded, category, account } = formValues;
+            if (
+              additionalServiceChargePercent === null &&
+              isGstExcluded === null &&
+              category === undefined &&
+              account === undefined
+            ) {
+              const { geolocation, shopName, items } = formValues;
+              const { latitude, longitude } = geolocation ?? {};
+              inferShopDetailMutation.mutate({
+                latitude,
+                longitude,
+                shopName,
+                itemNames: items.map(({ name }) => name),
+              });
+            }
+          }
+        }
+      },
+    },
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
