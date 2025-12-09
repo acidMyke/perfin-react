@@ -3,7 +3,7 @@ import { PageHeader } from '../../../../components/PageHeader';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../../../../trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, type ReactElement } from 'react';
 import {
   createEditExpenseFormOptions,
   mapExpenseDetailToForm,
@@ -138,32 +138,85 @@ function RouteComponent() {
         <dialog className='modal' ref={autocompleteSelectionDialogRef}>
           <div className='modal-box'>
             <h3 className='text-lg font-bold'>You seem to have came here before!!</h3>
-            <div className='mt-2 flex flex-col gap-y-4'>
-              {inferShopDetailMutation.data?.map((shopDetail, idx) => (
+            <p className='indent-2 italic'>Select an option below to autocomplete the form</p>
+            {inferShopDetailMutation.data?.length && (
+              <div className='mt-2 flex flex-col gap-y-4'>
+                {inferShopDetailMutation.data.map((shopDetail, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if ('shopMall' in shopDetail) {
+                        form.setFieldValue('shopMall', shopDetail.shopMall);
+                        form.setFieldValue('shopName', shopDetail.shopName);
+                      }
+                      form.setFieldValue('additionalServiceChargePercent', shopDetail.additionalServiceChargePercent);
+                      form.setFieldValue('isGstExcluded', shopDetail.isGstExcluded);
+                      autocompleteSelectionDialogRef.current?.close();
+                    }}
+                    className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-auto grid-flow-row justify-start gap-x-2 p-2 *:text-left'
+                  >
+                    {'shopMall' in shopDetail ? (
+                      <>
+                        <h4 className='col-span-2 text-xl font-bold'>{shopDetail.shopName}</h4>
+                        <p className='col-start-1'>Mall:</p>
+                        <p className='col-start-2'>{shopDetail.shopMall}</p>
+                      </>
+                    ) : (
+                      <h4 className='col-span-2 text-xl font-bold'>{form.getFieldValue('shopName') ?? 'Unknown'}</h4>
+                    )}
+                    <p className='col-start-1'>Service charge:</p>
+                    <p className='col-start-2'>
+                      {shopDetail.additionalServiceChargePercent
+                        ? percentageNumberFormat.format(shopDetail.additionalServiceChargePercent / 100)
+                        : 'N/A'}
+                    </p>
+                    <p className='col-start-1'>GST:</p>
+                    <div className='col-start-2'>{shopDetail.isGstExcluded ? 'Excluded' : 'Included'}</div>
+                  </button>
+                ))}
+                {
+                  inferShopDetailMutation.data.reduce(
+                    (acc, shopDetail, idx) =>
+                      'shopMall' in shopDetail && shopDetail.shopMall && !acc.malls.includes(shopDetail.shopMall)
+                        ? {
+                            malls: [...acc.malls, shopDetail.shopMall],
+                            buttons: [
+                              ...acc.buttons,
+                              <button
+                                key={`mallonly${idx}`}
+                                className='btn btn-soft odd:btn-primary even:btn-secondary w-full'
+                                onClick={() => {
+                                  form.setFieldValue('shopMall', shopDetail.shopMall);
+                                  autocompleteSelectionDialogRef.current?.close();
+                                }}
+                              >
+                                Just the mall: {shopDetail.shopMall}
+                              </button>,
+                            ],
+                          }
+                        : acc,
+                    { malls: [], buttons: [] } as { malls: string[]; buttons: ReactElement[] },
+                  ).buttons
+                }
                 <button
-                  key={idx}
-                  className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-auto grid-flow-row justify-start gap-x-2 p-2 *:text-left'
+                  key='no0'
+                  className='btn btn-soft btn-warning w-full'
+                  onClick={() => {
+                    form.setFieldValue('ui.shouldInferShopDetail', true);
+                    autocompleteSelectionDialogRef.current?.close();
+                  }}
                 >
-                  {'shopMall' in shopDetail && (
-                    <>
-                      <h4 className='col-span-2 text-xl font-bold'>{shopDetail.shopName}</h4>
-                      <p className='col-start-1'>Mall:</p>
-                      <p className='col-start-2'>{shopDetail.shopMall}</p>
-                    </>
-                  )}
-                  <p className='col-start-1'>Service charge:</p>
-                  <p className='col-start-2'>
-                    {shopDetail.additionalServiceChargePercent
-                      ? percentageNumberFormat.format(shopDetail.additionalServiceChargePercent / 100)
-                      : 'N/A'}
-                  </p>
-                  <p className='col-start-1'>GST:</p>
-                  <div className='col-start-2'>{shopDetail.isGstExcluded ? 'Excluded' : 'Included'}</div>
+                  No, try again later
                 </button>
-              ))}
-              <button className='btn btn-soft btn-warning w-full'>No, try again</button>
-              <button className='btn btn-soft btn-error w-full'>No, I have never been here, STOP ASKING</button>
-            </div>
+                <button
+                  key='no1'
+                  className='btn btn-soft btn-error w-full'
+                  onClick={() => autocompleteSelectionDialogRef.current?.close()}
+                >
+                  No, I have never been here, STOP ASKING
+                </button>
+              </div>
+            )}
           </div>
         </dialog>
       </form.AppForm>

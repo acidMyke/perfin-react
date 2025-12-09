@@ -526,7 +526,7 @@ const getSuggestionsProcedure = protectedProcedure
     }
   });
 
-const COORD_THRESHOLD = 0.00045; // ~50m
+const COORD_THRESHOLD = 0.0009; // ~100m
 
 const inferShopDetailsProcedure = protectedProcedure
   .input(
@@ -575,7 +575,7 @@ const inferShopDetailsProcedure = protectedProcedure
           .from(expensesTable)
           .where(nearbyShopsCondition)
           .orderBy(distance, desc(expensesTable.billedAt))
-          .limit(3);
+          .limit(5);
       } else {
         const hasMatchingItems = sql<number>`CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END`;
         return await db
@@ -584,7 +584,7 @@ const inferShopDetailsProcedure = protectedProcedure
           .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
           .where(nearbyShopsCondition)
           .orderBy(hasMatchingItems, distance, desc(expensesTable.billedAt))
-          .limit(3);
+          .limit(5);
       }
     } else if (input.shopName) {
       // Infer shop detail by shop name
@@ -600,7 +600,7 @@ const inferShopDetailsProcedure = protectedProcedure
           and(eq(expensesTable.belongsToId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())),
         )
         .orderBy(desc(expensesTable.billedAt))
-        .limit(3);
+        .limit(5);
     }
     throw new TRPCError({ code: 'BAD_REQUEST' });
   });
