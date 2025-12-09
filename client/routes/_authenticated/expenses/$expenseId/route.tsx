@@ -3,7 +3,7 @@ import { PageHeader } from '../../../../components/PageHeader';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../../../../trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
-import { useEffect, useRef, type ReactElement } from 'react';
+import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import {
   createEditExpenseFormOptions,
   mapExpenseDetailToForm,
@@ -47,34 +47,43 @@ function RouteComponent() {
       onSuccess: inferredResults => inferredResults?.length && autocompleteSelectionDialogRef.current?.showModal(),
     }),
   );
+  const attemptShopDetailInference = useCallback(() => {
+    if (form.getFieldValue('ui.shouldInferShopDetail')) {
+      const formValues = form.state.values;
+      const { additionalServiceChargePercent, isGstExcluded, category, account } = formValues;
+      if (
+        additionalServiceChargePercent === null &&
+        isGstExcluded === null &&
+        category === undefined &&
+        account === undefined
+      ) {
+        const { geolocation, shopName, items } = formValues;
+        const { latitude, longitude } = geolocation ?? {};
+        form.setFieldValue('ui.shouldInferShopDetail', false);
+        inferShopDetailMutation.mutate({
+          latitude,
+          longitude,
+          shopName,
+          itemNames: items.map(({ name }) => name),
+        });
+      }
+    }
+  }, [inferShopDetailMutation]);
   const form = useAppForm({
     ...createEditExpenseFormOptions,
     listeners: {
-      onChangeDebounceMs: 500,
-      onChange: async ({ formApi, fieldApi }) => {
+      onChangeDebounceMs: 700,
+      onChange: ({ fieldApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        // Shop detail inference
-        if (/(geolocation.*)|(shopName)|(items[\d+].name)/.test(fieldName)) {
-          if (formApi.getFieldValue('ui.shouldInferShopDetail')) {
-            const formValues = formApi.state.values;
-            const { additionalServiceChargePercent, isGstExcluded, category, account } = formValues;
-            if (
-              additionalServiceChargePercent === null &&
-              isGstExcluded === null &&
-              category === undefined &&
-              account === undefined
-            ) {
-              const { geolocation, shopName, items } = formValues;
-              const { latitude, longitude } = geolocation ?? {};
-              formApi.setFieldValue('ui.shouldInferShopDetail', false);
-              inferShopDetailMutation.mutate({
-                latitude,
-                longitude,
-                shopName,
-                itemNames: items.map(({ name }) => name),
-              });
-            }
-          }
+        if (/(geolocation.*)|(shopName)/.test(fieldName)) {
+          attemptShopDetailInference();
+        }
+      },
+      onBlurDebounceMs: 200,
+      onBlur: ({ fieldApi }) => {
+        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        if (/(items\[\d+\].name)/.test(fieldName)) {
+          attemptShopDetailInference();
         }
       },
     },

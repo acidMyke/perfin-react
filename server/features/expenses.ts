@@ -577,12 +577,13 @@ const inferShopDetailsProcedure = protectedProcedure
           .orderBy(distance, desc(expensesTable.billedAt))
           .limit(5);
       } else {
-        const hasMatchingItems = sql<number>`CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END`;
+        const hasMatchingItems = sql<number>`MIN(CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END)`;
         return await db
-          .selectDistinct(nearbyShopsColumns)
+          .select(nearbyShopsColumns)
           .from(expensesTable)
           .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
           .where(nearbyShopsCondition)
+          .groupBy(...Object.values(nearbyShopsColumns))
           .orderBy(hasMatchingItems, distance, desc(expensesTable.billedAt))
           .limit(5);
       }
