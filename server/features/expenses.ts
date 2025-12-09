@@ -1,9 +1,33 @@
 import { FormInputError, protectedProcedure, type ProtectedContext } from '../trpc';
-import { accountsTable, categoriesTable, expenseItemsTable, expensesTable, historiesTable } from '../../db/schema';
-import { and, asc, desc, eq, getTableName, gte, isNotNull, like, lt, sql, SQL } from 'drizzle-orm';
+import {
+  accountsTable,
+  categoriesTable,
+  expenseItemsTable,
+  expenseRefundsTable,
+  expensesTable,
+  generateId,
+} from '../../db/schema';
+import {
+  and,
+  asc,
+  count,
+  desc,
+  eq,
+  gte,
+  isNotNull,
+  isNull,
+  like,
+  lt,
+  notInArray,
+  sql,
+  SQL,
+  type AnyColumn,
+} from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
+import { excludedAll } from '../lib/utils';
+import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 
 type Option = {
   label: string;
@@ -39,6 +63,7 @@ const loadExpenseDetailProcedure = protectedProcedure
       where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
       columns: {
         amountCents: true,
+        amountCentsPreRefund: true,
         billedAt: true,
         accountId: true,
         categoryId: true,
@@ -48,6 +73,8 @@ const loadExpenseDetailProcedure = protectedProcedure
         shopMall: true,
         shopName: true,
         version: true,
+        isGstExcluded: true,
+        additionalServiceChargePercent: true,
       },
       with: {
         items: {
@@ -59,6 +86,31 @@ const loadExpenseDetailProcedure = protectedProcedure
             quantity: true,
             priceCents: true,
             isDeleted: true,
+          },
+          with: {
+            expenseRefund: {
+              columns: {
+                id: true,
+                source: true,
+                expectedAmountCents: true,
+                actualAmountCents: true,
+                confirmedAt: true,
+              },
+            },
+          },
+        },
+        refunds: {
+          where: and(eq(expenseRefundsTable.isDeleted, false), isNull(expenseRefundsTable.expenseItemId)),
+          orderBy: asc(expenseRefundsTable.sequence),
+          columns: {
+            id: true,
+            source: true,
+            expectedAmountCents: true,
+            actualAmountCents: true,
+            confirmedAt: true,
+            note: true,
+            isDeleted: true,
+            expenseItemId: true,
           },
         },
       },
@@ -104,7 +156,6 @@ const saveExpenseProcedure = protectedProcedure
       expenseId: z.string(),
       version: z.int().optional().default(0),
       isDeleted: z.boolean().optional().default(false),
-      amountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
         .object({ value: z.string(), label: z.string() })
@@ -119,6 +170,8 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
+      additionalServiceChargePercent: z.number().nullable().default(null),
+      isGstExcluded: z.boolean().nullable().default(false),
       items: z.array(
         z.object({
           id: z.string(),
@@ -126,115 +179,187 @@ const saveExpenseProcedure = protectedProcedure
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
+          expenseRefundId: z.string().optional(),
+          expenseRefund: z
+            .object({
+              id: z.string(),
+              source: z.string(),
+              expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
+              actualAmountCents: z
+                .int()
+                .min(0, { error: 'Must be non-negative value' })
+                .nullish()
+                .transform(v => v ?? null),
+              confirmedAt: z.iso
+                .datetime({ error: 'Invalid date time' })
+                .nullish()
+                .transform(val => (val ? parseISO(val) : null)),
+            })
+            .nullable(),
         }),
       ),
+      refunds: z
+        .array(
+          z.object({
+            id: z.string(),
+            source: z.string(),
+            expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
+            actualAmountCents: z
+              .int()
+              .min(0, { error: 'Must be non-negative value' })
+              .nullish()
+              .transform(v => v ?? null),
+            confirmedAt: z.iso
+              .datetime({ error: 'Invalid date time' })
+              .nullish()
+              .transform(val => (val ? parseISO(val) : null)),
+            note: z
+              .string()
+              .nullish()
+              .transform(v => v ?? null)
+              .optional(),
+            isDeleted: z.boolean().default(false).optional(),
+            expenseItemId: z
+              .string()
+              .nullish()
+              .transform(v => v ?? null),
+          }),
+        )
+        .default([]),
     }),
   )
   .mutation(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [accountId, categoryId] = await Promise.all([
-      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
-      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
-    ]);
-
-    const isCreate = input.expenseId === 'create';
-    const values = {
-      amountCents: input.amountCents,
-      accountId: accountId,
-      categoryId: categoryId,
-      billedAt: input.billedAt,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      geoAccuracy: input.geoAccuracy,
-      shopName: input.shopName,
-      shopMall: input.shopMall,
-    } satisfies Omit<typeof expensesTable.$inferInsert, 'belongsToId' | 'updatedBy'>;
-
-    if (isCreate) {
-      const insertReturns = await db
-        .insert(expensesTable)
-        .values({ ...values, belongsToId: userId, updatedBy: userId })
-        .returning({ id: expensesTable.id });
-
-      if (!insertReturns || insertReturns.length < 1) return;
-      const expenseId = insertReturns[0].id;
-      await db.batch([
-        db.insert(expenseItemsTable).values(
-          input.items.map(({ id, ...data }, sequence) => ({
-            ...data,
-            expenseId,
-            sequence,
-          })),
-        ),
-      ]);
-    } else {
+    if (input.expenseId !== 'create') {
       const existing = await db.query.expensesTable.findFirst({
-        where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
-        with: { items: true },
+        where: and(eq(expensesTable.id, input.expenseId)),
+        columns: {
+          belongsToId: true,
+          isDeleted: true,
+          version: true,
+        },
       });
 
-      if (!existing || existing.isDeleted) {
-        throw new TRPCError({ code: 'NOT_FOUND' });
+      if (existing?.belongsToId !== userId) {
+        throw new TRPCError({ code: 'FORBIDDEN' });
       }
 
       if (existing.version > input.version) {
         throw new TRPCError({ code: 'CONFLICT' });
       }
-
-      if (input.isDeleted) {
-        await db
-          .update(expensesTable)
-          .set({ isDeleted: true })
-          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)));
-        return;
-      }
-
-      const { id: rowId, version: versionWas, updatedAt: wasUpdatedAt, updatedBy: wasUpdatedBy } = existing;
-      const valuesWere: Partial<typeof expensesTable.$inferInsert> = {};
-      for (const key in values) {
-        // @ts-ignore
-        valuesWere[key] = existing[key];
-      }
-
-      // @ts-ignore
-      valuesWere['items'] = existing.items;
-
-      await db.batch([
-        db
-          .update(expensesTable)
-          .set(values)
-          .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId))),
-        db.insert(historiesTable).values({
-          tableName: getTableName(expensesTable),
-          rowId,
-          valuesWere,
-          versionWas,
-          wasUpdatedAt,
-          wasUpdatedBy,
-        }),
-        db
-          .insert(expenseItemsTable)
-          .values(
-            input.items.map(({ id, ...data }, sequence) => ({
-              ...data,
-              id: id === 'create' ? undefined : id,
-              expenseId: input.expenseId,
-              sequence,
-            })),
-          )
-          .onConflictDoUpdate({
-            target: expenseItemsTable.id,
-            set: {
-              name: sql`excluded.name`,
-              priceCents: sql`excluded.price_cents`,
-              quantity: sql`excluded.quantity`,
-              isDeleted: sql`excluded.is_deleted`,
-            },
-          }),
-      ]);
+    } else {
+      input.expenseId = generateId();
     }
+
+    const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
+    const activeIds: string[] = [];
+
+    for (const item of input.items) {
+      if (item.id === 'create') {
+        item.id = generateId();
+      }
+      activeIds.push(item.id);
+      if (item.expenseRefund) {
+        if (item.expenseRefund.id === 'create') {
+          item.expenseRefund.id = generateId();
+        }
+        item.expenseRefundId = item.expenseRefund.id;
+
+        const { grossAmountCents } = calculateExpenseItem(item, input);
+
+        refunds.push({
+          ...item.expenseRefund,
+          expectedAmountCents: grossAmountCents,
+          expenseItemId: item.id,
+        });
+      }
+    }
+
+    for (const refund of refunds) {
+      if (refund.id === 'create') {
+        refund.id = generateId();
+      }
+      if (refund.id) {
+        activeIds.push(refund.id);
+      }
+      if (refund.actualAmountCents && !refund.confirmedAt) {
+        refund.confirmedAt = new Date();
+      }
+    }
+
+    const [accountId, categoryId] = await Promise.all([
+      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
+      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
+    ]);
+
+    const { amountCents, grossAmountCents } = calculateExpense(input);
+
+    await db
+      .insert(expensesTable)
+      .values({
+        id: input.expenseId,
+        amountCents,
+        amountCentsPreRefund: grossAmountCents,
+        billedAt: input.billedAt,
+        belongsToId: userId,
+        accountId: accountId,
+        categoryId: categoryId,
+        updatedBy: userId,
+        latitude: input.latitude,
+        longitude: input.longitude,
+        geoAccuracy: input.geoAccuracy,
+        shopName: input.shopName,
+        shopMall: input.shopMall,
+        additionalServiceChargePercent: input.additionalServiceChargePercent,
+        isGstExcluded: input.isGstExcluded,
+        isDeleted: input.isDeleted,
+      })
+      .onConflictDoUpdate({
+        target: expensesTable.id,
+        set: excludedAll(expensesTable, ['belongsToId']),
+      });
+
+    await db
+      .insert(expenseItemsTable)
+      .values(
+        input.items.map((item, idx) => ({
+          ...item,
+          sequence: idx,
+          expenseId: input.expenseId,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: expenseItemsTable.id,
+        set: excludedAll(expenseItemsTable),
+      });
+
+    await db
+      .update(expenseItemsTable)
+      .set({ isDeleted: true })
+      .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds)));
+
+    if (refunds.length > 0) {
+      await db
+        .insert(expenseRefundsTable)
+        .values(
+          refunds.map((refund, idx) => ({
+            ...refund,
+            sequence: idx,
+            expenseId: input.expenseId,
+          })),
+        )
+        .onConflictDoUpdate({
+          target: expenseRefundsTable.id,
+          set: excludedAll(expenseRefundsTable),
+        });
+    }
+
+    await db
+      .update(expenseRefundsTable)
+      .set({ isDeleted: true })
+      .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -305,55 +430,90 @@ const getSuggestionsProcedure = protectedProcedure
           type: z.literal('itemName'),
           search: z.string().min(2),
         }),
+      )
+      .or(
+        z.object({
+          type: z.literal('refundSource'),
+          search: z.string().min(2),
+        }),
       ),
   )
   .mutation(async ({ input, ctx, signal }) => {
     const { db, userId } = ctx;
-    const likelyValue = '%' + input.search.split('').join('%') + '%';
+    const search = input.search.toUpperCase();
+    const fuzzyPattern =
+      '%' +
+      search
+        .replace(/(.)\1+/g, '$1')
+        .split('')
+        .join('%') +
+      '%';
+    const searchRanking = (column: AnyColumn) => sql<number>`CASE
+      WHEN ${column} = ${search} THEN 0
+      WHEN ${column} LIKE ${search + '%'} THEN 1
+      WHEN ${column} LIKE ${'%' + search + '%'} THEN 2
+      ELSE 3 END`;
+
     signal?.throwIfAborted();
 
     if (input.type === 'shopName') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expensesTable.shopName}`,
-        })
+        .select({ value: sql<string>`${expensesTable.shopName}` })
         .from(expensesTable)
         .where(
           and(
             eq(expensesTable.belongsToId, userId),
             isNotNull(expensesTable.shopName),
-            like(expensesTable.shopName, likelyValue),
+            like(expensesTable.shopName, fuzzyPattern),
           ),
-        );
+        )
+        .groupBy(expensesTable.shopName)
+        .orderBy(searchRanking(expensesTable.shopName), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),
       };
     } else if (input.type === 'shopMall') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expensesTable.shopMall}`,
-        })
+        .select({ value: sql<string>`${expensesTable.shopMall}` })
         .from(expensesTable)
         .where(
           and(
             eq(expensesTable.belongsToId, userId),
             isNotNull(expensesTable.shopMall),
-            like(expensesTable.shopMall, likelyValue),
+            like(expensesTable.shopMall, fuzzyPattern),
           ),
-        );
+        )
+        .groupBy(expensesTable.shopMall)
+        .orderBy(searchRanking(expensesTable.shopMall), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),
       };
     } else if (input.type === 'itemName') {
       const suggestions = await db
-        .selectDistinct({
-          value: sql<string>`${expenseItemsTable.name}`,
-        })
+        .select({ value: sql<string>`${expenseItemsTable.name}` })
         .from(expenseItemsTable)
         .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, likelyValue)));
+        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, fuzzyPattern)))
+        .groupBy(expenseItemsTable.name)
+        .orderBy(searchRanking(expenseItemsTable.name), desc(count()))
+        .limit(5);
+      return {
+        ...input,
+        suggestions: suggestions.map(({ value }) => value),
+      };
+    } else if (input.type === 'refundSource') {
+      const suggestions = await db
+        .select({ value: sql<string>`${expenseRefundsTable.source}` })
+        .from(expenseRefundsTable)
+        .innerJoin(expensesTable, eq(expensesTable.id, expenseRefundsTable.expenseId))
+        .where(and(eq(expensesTable.belongsToId, userId), like(expenseRefundsTable.source, fuzzyPattern)))
+        .groupBy(expenseRefundsTable.source)
+        .orderBy(searchRanking(expenseRefundsTable.source), desc(count()))
+        .limit(5);
       return {
         ...input,
         suggestions: suggestions.map(({ value }) => value),

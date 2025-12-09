@@ -2,9 +2,13 @@ import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
-export const generateId = () => nanoid(8);
-const nullableIdColumn = () => text({ length: 8 });
+export const generateId = () => nanoid();
+const nullableIdColumn = () => text({ length: 21 });
 const idColumn = () => nullableIdColumn().notNull();
+const pkIdColumn = () =>
+  nullableIdColumn()
+    .primaryKey()
+    .$defaultFn(() => generateId());
 const versionColumn = () =>
   integer()
     .notNull()
@@ -17,9 +21,7 @@ const centsColumn = () => integer().notNull().default(0);
 const boolean = () => integer({ mode: 'boolean' });
 
 const baseColumns = () => ({
-  id: idColumn()
-    .primaryKey()
-    .$defaultFn(() => nanoid(8)),
+  id: pkIdColumn(),
   version: versionColumn(),
   createdAt: createdAtColumn(),
   updatedAt: updatedAtColumn(),
@@ -28,9 +30,7 @@ const baseColumns = () => ({
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
 export const historiesTable = sqliteTable('histories', {
-  id: text({ length: 16 })
-    .primaryKey()
-    .$defaultFn(() => nanoid(16)),
+  id: pkIdColumn(),
   tableName: text().notNull(),
   rowId: idColumn(),
   // Values extracted from source
@@ -49,9 +49,7 @@ export const emailCodesTable = sqliteTable('email_codes', {
 });
 
 export const loginAttemptsTable = sqliteTable('login_attempts', {
-  id: text({ length: 16 })
-    .primaryKey()
-    .$defaultFn(() => nanoid(16)),
+  id: pkIdColumn(),
   timestamp: createdAtColumn(),
   attemptedForId: nullableIdColumn(),
   isSuccess: integer({ mode: 'boolean' }).notNull(),
@@ -146,6 +144,7 @@ export const categoriesTable = sqliteTable('categories', {
 export const expensesTable = sqliteTable('expenses', {
   ...baseColumns(),
   amountCents: centsColumn(),
+  amountCentsPreRefund: centsColumn(),
   billedAt: dateColumn(),
   belongsToId: idColumn(),
   accountId: nullableIdColumn(),
@@ -156,6 +155,8 @@ export const expensesTable = sqliteTable('expenses', {
   geoAccuracy: real(),
   shopName: text(),
   shopMall: text(),
+  additionalServiceChargePercent: integer(),
+  isGstExcluded: boolean(),
   isDeleted: boolean().notNull().default(false),
 });
 
@@ -173,6 +174,7 @@ export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
     references: [categoriesTable.id],
   }),
   items: many(expenseItemsTable),
+  refunds: many(expenseRefundsTable),
 }));
 
 export const expenseItemsTable = sqliteTable('expense_items', {
@@ -183,6 +185,7 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   priceCents: centsColumn(),
   expenseId: idColumn(),
   categoryId: nullableIdColumn(),
+  expenseRefundId: nullableIdColumn(),
   isDeleted: boolean().notNull().default(false),
 });
 
@@ -194,5 +197,33 @@ export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => (
   category: one(categoriesTable, {
     fields: [expenseItemsTable.categoryId],
     references: [categoriesTable.id],
+  }),
+  expenseRefund: one(expenseRefundsTable, {
+    fields: [expenseItemsTable.expenseRefundId],
+    references: [expenseRefundsTable.id],
+  }),
+}));
+
+export const expenseRefundsTable = sqliteTable('expense_refunds', {
+  ...baseColumns(),
+  expenseId: idColumn(),
+  expenseItemId: nullableIdColumn(),
+  expectedAmountCents: centsColumn(),
+  actualAmountCents: integer(),
+  confirmedAt: integer({ mode: 'timestamp' }),
+  source: text().notNull(),
+  note: text(),
+  sequence: integer().notNull(),
+  isDeleted: boolean().notNull().default(false),
+});
+
+export const expenseRefundsRelations = relations(expenseRefundsTable, ({ one }) => ({
+  expense: one(expensesTable, {
+    fields: [expenseRefundsTable.expenseId],
+    references: [expensesTable.id],
+  }),
+  expenseItem: one(expenseItemsTable, {
+    fields: [expenseRefundsTable.expenseItemId],
+    references: [expenseItemsTable.id],
   }),
 }));

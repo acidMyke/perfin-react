@@ -8,7 +8,7 @@ import { FieldError } from './FieldError';
 import { TriangleAlert } from 'lucide-react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
-const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
+export const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
 
 const NumericTransformers = {
   amountInCents: {
@@ -26,6 +26,7 @@ type NumericInputProps = {
   nullIfZero?: boolean;
   transforms?: (keyof typeof NumericTransformers)[];
   numberFormat?: Intl.NumberFormat;
+  additionalSuffix?: string;
 
   min?: number;
   max?: number;
@@ -43,6 +44,7 @@ function NumericInput(props: NumericInputProps) {
     nullIfZero,
     transforms = [],
     numberFormat,
+    additionalSuffix,
     ...inputProps
   } = props;
   const formatOptions = useMemo(() => numberFormat?.resolvedOptions(), [numberFormat]);
@@ -133,6 +135,7 @@ function NumericInput(props: NumericInputProps) {
           onFocus={e => e.currentTarget.select()}
         />
         {postfix && <span>{postfix}</span>}
+        {additionalSuffix && <span>{additionalSuffix}</span>}
       </label>
       <FieldError field={field} />
     </label>
@@ -259,6 +262,7 @@ function ComboBox(props: CreatableSelectProps) {
         }}
         isDisabled={readOnly}
       />
+      <FieldError field={field} />
     </label>
   );
 }

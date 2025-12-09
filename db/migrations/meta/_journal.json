@@ -71,6 +71,27 @@
       "when": 1764159225700,
       "tag": "0009_worthless_havok",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1764165669207,
+      "tag": "0010_rare_karnak",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1764421119227,
+      "tag": "0011_soft_justin_hammer",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "6",
+      "when": 1764497201833,
+      "tag": "0012_spotty_colonel_america",
+      "breakpoints": true
     }
   ]
 }

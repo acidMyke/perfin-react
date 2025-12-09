@@ -9,6 +9,7 @@ import { PageHeader } from '../../../components/PageHeader';
 import { useEffect } from 'react';
 import { useAppForm, withFieldGroup, withForm } from '../../../components/Form';
 import { formOptions, useStore } from '@tanstack/react-form';
+import { generateId } from '../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: CreateEditExpensePageComponent,
@@ -27,10 +28,21 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
 });
 
-function mapExpenseDetailToForm(
-  detail?: RouterOutputs['expense']['loadDetail'],
-  options?: RouterOutputs['expense']['loadOptions'],
-) {
+type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
+type ExpenseItem = ExpenseDetail['items'][number];
+
+function defaultExpenseItem(): ExpenseItem {
+  return {
+    id: generateId(),
+    name: '',
+    isDeleted: false,
+    priceCents: 0,
+    quantity: 1,
+    expenseRefund: null,
+  };
+}
+
+function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: RouterOutputs['expense']['loadOptions']) {
   if (detail && options) {
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
@@ -56,15 +68,7 @@ function mapExpenseDetailToForm(
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
-      items: [
-        {
-          id: 'create',
-          name: '',
-          isDeleted: false,
-          priceCents: 0,
-          quantity: 1,
-        },
-      ] satisfies Exclude<typeof detail, undefined>['items'],
+      items: [defaultExpenseItem()],
     };
   }
 }
@@ -164,9 +168,7 @@ function CreateEditExpensePageComponent() {
               <li key='Create'>
                 <button
                   className='btn-soft btn-primary btn w-2/3 justify-start'
-                  onClick={() =>
-                    field.pushValue({ id: 'create', name: '', priceCents: 0, quantity: 1, isDeleted: false })
-                  }
+                  onClick={() => field.pushValue(defaultExpenseItem())}
                 >
                   <Plus />
                   Add item
@@ -340,13 +342,7 @@ const ShopDetailSubForm = withForm({
 });
 
 const ItemDetailFieldGroup = withFieldGroup({
-  defaultValues: {
-    id: '',
-    name: '',
-    quantity: 1,
-    priceCents: 0.0,
-    isDeleted: false,
-  },
+  defaultValues: defaultExpenseItem(),
   props: {
     onLocalRemove: () => {},
   },
