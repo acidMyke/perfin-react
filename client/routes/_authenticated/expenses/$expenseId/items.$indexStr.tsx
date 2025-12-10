@@ -32,8 +32,7 @@ function RouteComponent() {
               field.removeValue(itemIndex);
             }}
             itemIndex={itemIndex}
-            additionalServiceChargePercent={form.getFieldValue('additionalServiceChargePercent')}
-            isGstExcluded={form.getFieldValue('isGstExcluded')}
+            getFormField={form.getFieldValue.bind(form)}
             onPricingChange={() => calculateExpenseForm(form)}
           />
         )}

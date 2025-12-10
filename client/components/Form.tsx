@@ -260,6 +260,7 @@ function ComboBox(props: CreatableSelectProps) {
           if (meta.action === 'create-option') setCreateOption(v);
           field.handleChange(suggestionMode ? v.value : v);
         }}
+        onBlur={() => field.handleBlur()}
         isDisabled={readOnly}
       />
       <FieldError field={field} />

@@ -3,8 +3,14 @@ import { PageHeader } from '../../../../components/PageHeader';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../../../../trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
-import { useEffect } from 'react';
-import { createEditExpenseFormOptions, mapExpenseDetailToForm } from './-expense.common';
+import { useCallback, useEffect, useRef, type ReactElement } from 'react';
+import {
+  createEditExpenseFormOptions,
+  mapExpenseDetailToForm,
+  percentageNumberFormat,
+  type ExpenseFormData,
+} from './-expense.common';
+import type { DeepKeys } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -35,8 +41,52 @@ function RouteComponent() {
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
+  const autocompleteSelectionDialogRef = useRef<HTMLDialogElement>(null);
+  const inferShopDetailMutation = useMutation(
+    trpc.expense.inferShopDetail.mutationOptions({
+      onSuccess: inferredResults => inferredResults?.length && autocompleteSelectionDialogRef.current?.showModal(),
+    }),
+  );
+  const attemptShopDetailInference = useCallback(() => {
+    if (form.getFieldValue('ui.shouldInferShopDetail')) {
+      const formValues = form.state.values;
+      const { additionalServiceChargePercent, isGstExcluded, category, account } = formValues;
+      if (
+        additionalServiceChargePercent === null &&
+        isGstExcluded === null &&
+        category === undefined &&
+        account === undefined
+      ) {
+        const { geolocation, shopName, items } = formValues;
+        const { latitude, longitude } = geolocation ?? {};
+        form.setFieldValue('ui.shouldInferShopDetail', false);
+        inferShopDetailMutation.mutate({
+          latitude,
+          longitude,
+          shopName,
+          itemNames: items.map(({ name }) => name),
+        });
+      }
+    }
+  }, [inferShopDetailMutation]);
   const form = useAppForm({
     ...createEditExpenseFormOptions,
+    listeners: {
+      onChangeDebounceMs: 700,
+      onChange: ({ fieldApi }) => {
+        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        if (/(geolocation.*)|(shopName)/.test(fieldName)) {
+          attemptShopDetailInference();
+        }
+      },
+      onBlurDebounceMs: 200,
+      onBlur: ({ fieldApi }) => {
+        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        if (/(items\[\d+\].name)/.test(fieldName)) {
+          attemptShopDetailInference();
+        }
+      },
+    },
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
@@ -57,7 +107,7 @@ function RouteComponent() {
         if ([value.account?.value, value.category?.value].includes('create')) {
           queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter());
         }
-        navigate({ to: '/expenses' });
+        navigate({ to: '/expenses', search: { month: billedAt.getMonth(), year: billedAt.getFullYear() } });
       },
     },
   });
@@ -93,6 +143,91 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
+        {/* Open the modal using document.getElementById('ID').showModal() method */}
+        <dialog className='modal' ref={autocompleteSelectionDialogRef}>
+          <div className='modal-box'>
+            <h3 className='text-lg font-bold'>You seem to have came here before!!</h3>
+            <p className='indent-2 italic'>Select an option below to autocomplete the form</p>
+            {inferShopDetailMutation.data?.length && (
+              <div className='mt-2 flex flex-col gap-y-4'>
+                {inferShopDetailMutation.data.map((shopDetail, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => {
+                      if ('shopMall' in shopDetail) {
+                        form.setFieldValue('shopMall', shopDetail.shopMall);
+                        form.setFieldValue('shopName', shopDetail.shopName);
+                      }
+                      form.setFieldValue('additionalServiceChargePercent', shopDetail.additionalServiceChargePercent);
+                      form.setFieldValue('isGstExcluded', shopDetail.isGstExcluded);
+                      autocompleteSelectionDialogRef.current?.close();
+                    }}
+                    className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-auto grid-flow-row justify-start gap-x-2 p-2 *:text-left'
+                  >
+                    {'shopMall' in shopDetail ? (
+                      <>
+                        <h4 className='col-span-2 text-xl font-bold'>{shopDetail.shopName}</h4>
+                        <p className='col-start-1'>Mall:</p>
+                        <p className='col-start-2'>{shopDetail.shopMall}</p>
+                      </>
+                    ) : (
+                      <h4 className='col-span-2 text-xl font-bold'>{form.getFieldValue('shopName') ?? 'Unknown'}</h4>
+                    )}
+                    <p className='col-start-1'>Service charge:</p>
+                    <p className='col-start-2'>
+                      {shopDetail.additionalServiceChargePercent
+                        ? percentageNumberFormat.format(shopDetail.additionalServiceChargePercent / 100)
+                        : 'N/A'}
+                    </p>
+                    <p className='col-start-1'>GST:</p>
+                    <div className='col-start-2'>{shopDetail.isGstExcluded ? 'Excluded' : 'Included'}</div>
+                  </button>
+                ))}
+                {
+                  inferShopDetailMutation.data.reduce(
+                    (acc, shopDetail, idx) =>
+                      'shopMall' in shopDetail && shopDetail.shopMall && !acc.malls.includes(shopDetail.shopMall)
+                        ? {
+                            malls: [...acc.malls, shopDetail.shopMall],
+                            buttons: [
+                              ...acc.buttons,
+                              <button
+                                key={`mallonly${idx}`}
+                                className='btn btn-soft odd:btn-primary even:btn-secondary w-full'
+                                onClick={() => {
+                                  form.setFieldValue('shopMall', shopDetail.shopMall);
+                                  autocompleteSelectionDialogRef.current?.close();
+                                }}
+                              >
+                                Just the mall: {shopDetail.shopMall}
+                              </button>,
+                            ],
+                          }
+                        : acc,
+                    { malls: [], buttons: [] } as { malls: string[]; buttons: ReactElement[] },
+                  ).buttons
+                }
+                <button
+                  key='no0'
+                  className='btn btn-soft btn-warning w-full'
+                  onClick={() => {
+                    form.setFieldValue('ui.shouldInferShopDetail', true);
+                    autocompleteSelectionDialogRef.current?.close();
+                  }}
+                >
+                  No, try again later
+                </button>
+                <button
+                  key='no1'
+                  className='btn btn-soft btn-error w-full'
+                  onClick={() => autocompleteSelectionDialogRef.current?.close()}
+                >
+                  No, I have never been here, STOP ASKING
+                </button>
+              </div>
+            )}
+          </div>
+        </dialog>
       </form.AppForm>
     </div>
   );
