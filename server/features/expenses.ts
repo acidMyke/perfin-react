@@ -624,7 +624,7 @@ const inferItemPricesProcedure = protectedProcedure
       )
       .groupBy(expenseItemsTable.priceCents)
       .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
-      .limit(3);
+      .limit(1);
   });
 
 export const expenseProcedures = {

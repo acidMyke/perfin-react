@@ -1,9 +1,17 @@
 import { useMutation } from '@tanstack/react-query';
 import { withFieldGroup } from '../../../../components/Form';
 import { queryClient, trpc } from '../../../../trpc';
-import { currencyNumberFormat, defaultExpenseItem, defaultExpenseRefund } from './-expense.common';
+import {
+  currencyNumberFormat,
+  defaultExpenseItem,
+  defaultExpenseRefund,
+  type ExpenseFormData,
+} from './-expense.common';
 import { X } from 'lucide-react';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
+import type { DeepKeys, DeepValue } from '@tanstack/react-form';
+
+type TGetFormField = <TField extends DeepKeys<ExpenseFormData>>(field: TField) => DeepValue<ExpenseFormData, TField>;
 
 export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
@@ -11,21 +19,13 @@ export const ItemDetailFieldGroup = withFieldGroup({
     itemIndex: 0,
     disableRemoveButton: true,
     onRemoveClick: () => {},
-    additionalServiceChargePercent: null as number | null | undefined,
-    isGstExcluded: null as boolean | null | undefined,
+    getFormField: (() => {}) as unknown as TGetFormField,
     onPricingChange: () => {},
   },
-  render({
-    group,
-    itemIndex,
-    disableRemoveButton,
-    onRemoveClick,
-    additionalServiceChargePercent,
-    isGstExcluded,
-    onPricingChange,
-  }) {
+  render({ group, itemIndex, disableRemoveButton, onRemoveClick, getFormField, onPricingChange }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const refundSourceSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 shadow-lg'>
@@ -41,6 +41,13 @@ export const ItemDetailFieldGroup = withFieldGroup({
                   type: 'itemName',
                   search: value,
                 });
+              }
+            },
+            onBlurAsync: async ({ value }) => {
+              const shopName = getFormField('shopName');
+              const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
+              if (itemDetail) {
+                group.setFieldValue('priceCents', itemDetail.priceCents);
               }
             },
           }}
@@ -67,6 +74,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
               const expenseRefund = group.getFieldValue('expenseRefund');
               if (!expenseRefund) return;
               const quantity = group.getFieldValue('quantity');
+              const additionalServiceChargePercent = getFormField('additionalServiceChargePercent');
+              const isGstExcluded = getFormField('isGstExcluded');
               const { grossAmountCents } = calculateExpenseItem(
                 { priceCents: value, quantity, expenseRefund },
                 { additionalServiceChargePercent, isGstExcluded },
@@ -93,6 +102,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
               const expenseRefund = group.getFieldValue('expenseRefund');
               if (!expenseRefund) return;
               const priceCents = group.getFieldValue('priceCents');
+              const additionalServiceChargePercent = getFormField('additionalServiceChargePercent');
+              const isGstExcluded = getFormField('isGstExcluded');
               const { grossAmountCents } = calculateExpenseItem(
                 { priceCents, quantity: value, expenseRefund },
                 { additionalServiceChargePercent, isGstExcluded },
@@ -124,8 +135,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
                             priceCents: group.getFieldValue('priceCents'),
                             quantity: group.getFieldValue('quantity'),
                           },
-                          additionalServiceChargePercent,
-                          isGstExcluded,
+                          additionalServiceChargePercent: getFormField('additionalServiceChargePercent'),
+                          isGstExcluded: getFormField('isGstExcluded'),
                         }),
                       );
                     } else if (!e.target.checked && field.state.value) {
