@@ -40,6 +40,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
                 itenNameSuggestionMutation.mutateAsync({
                   type: 'itemName',
                   search: value,
+                  shopName: getFormField('shopName'),
                 });
               }
             },

@@ -432,6 +432,7 @@ const getSuggestionsProcedure = protectedProcedure
         z.object({
           type: z.literal('itemName'),
           search: z.string().min(2),
+          shopName: z.string().nullish(),
         }),
       )
       .or(
@@ -500,7 +501,13 @@ const getSuggestionsProcedure = protectedProcedure
         .select({ value: sql<string>`${expenseItemsTable.name}` })
         .from(expenseItemsTable)
         .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-        .where(and(eq(expensesTable.belongsToId, userId), like(expenseItemsTable.name, fuzzyPattern)))
+        .where(
+          and(
+            eq(expensesTable.belongsToId, userId),
+            like(expenseItemsTable.name, fuzzyPattern),
+            input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
+          ),
+        )
         .groupBy(expenseItemsTable.name)
         .orderBy(searchRanking(expenseItemsTable.name), desc(count()))
         .limit(5);
