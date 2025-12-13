@@ -1,4 +1,4 @@
-import { createFileRoute, Link, useNavigate } from '@tanstack/react-router';
+import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
 import { queryClient, trpc, type RouterInputs } from '../../../trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
@@ -8,6 +8,7 @@ import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
+  pendingComponent: RoutePendingComponent,
   component: RouteComponent,
   validateSearch: search => {
     return {
@@ -32,77 +33,107 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
   },
 });
 
-function RouteComponent() {
+function MonthSelector() {
+  const router = useRouter();
   const navigate = useNavigate({ from: '/expenses' });
+  const loaderDeps = Route.useLoaderDeps();
+  const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
+
+  return (
+    <div className='flex flex-row gap-4'>
+      <details className='dropdown'>
+        {isBefore(selectedDate, startOfMonth(subMonths(new Date(), 3))) ? (
+          <summary className='btn btn-primary btn-sm'>{format(selectedDate, 'MMM yy')} </summary>
+        ) : (
+          <summary className='btn btn-sm'>Other</summary>
+        )}
+        <form
+          className='dropdown-content bg-base-200 rounded-b-box z-1 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
+          onChange={e => {
+            const formValues = new FormData(e.currentTarget);
+            const month = formValues.get('month')?.toString();
+            const year = formValues.get('year')?.toString();
+            if (month && year) {
+              router.preloadRoute({
+                to: '/expenses',
+                search: { month: parseInt(month), year: parseInt(year) },
+              });
+            }
+          }}
+          onSubmit={e => {
+            e.preventDefault();
+            const formValues = new FormData(e.currentTarget);
+            const month = formValues.get('month')?.toString();
+            const year = formValues.get('year')?.toString();
+            if (month && year) {
+              navigate({
+                to: '/expenses',
+                search: { month: parseInt(month), year: parseInt(year) },
+              });
+              e.currentTarget.parentElement?.removeAttribute('open');
+            }
+          }}
+        >
+          <label className='floating-label w-20'>
+            <span>Month</span>
+            <select name='month' className='select' defaultValue={loaderDeps.month}>
+              {abbreviatedMonthValues.map((s, i) => (
+                <option key={i} value={i}>
+                  {s}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className='floating-label w-16'>
+            <span>Year</span>
+            <input type='text' name='year' className='input' defaultValue={loaderDeps.year} />
+          </label>
+          <button type='submit' className='btn btn-primary'>
+            Go
+          </button>
+        </form>
+      </details>
+      {Array.from({ length: 3 }).map((_, i) => {
+        const date = subMonths(new Date(), 2 - i);
+        const isSelected = isSameMonth(selectedDate, date);
+        return (
+          <Link
+            key={i}
+            to='/expenses'
+            search={{
+              month: date.getMonth(),
+              year: date.getFullYear(),
+            }}
+            className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
+          >
+            {format(date, 'MMM yy')}
+          </Link>
+        );
+      })}
+    </div>
+  );
+}
+
+function RoutePendingComponent() {
+  return (
+    <div className='mx-auto max-w-lg px-2'>
+      <PageHeader title='Expenses' />
+      <MonthSelector />
+      <span className='loading loading-spinner loading-xl'></span>
+    </div>
+  );
+}
+
+function RouteComponent() {
   const loaderDeps = Route.useLoaderDeps();
   const {
     data: { expenses },
   } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
-  const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
 
   return (
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expenses' />
-      <div className='flex flex-row gap-4'>
-        <details className='dropdown'>
-          {isBefore(selectedDate, startOfMonth(subMonths(new Date(), 3))) ? (
-            <summary className='btn btn-primary btn-sm'>{format(selectedDate, 'MMM yy')} </summary>
-          ) : (
-            <summary className='btn btn-sm'>Other</summary>
-          )}
-          <form
-            className='dropdown-content bg-base-200 rounded-b-box z-1 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
-            onSubmit={e => {
-              e.preventDefault();
-              const formValues = new FormData(e.currentTarget);
-              const month = formValues.get('month')?.toString();
-              const year = formValues.get('year')?.toString();
-              if (month && year) {
-                navigate({
-                  to: '/expenses',
-                  search: { month: parseInt(month), year: parseInt(year) },
-                });
-                e.currentTarget.parentElement?.removeAttribute('open');
-              }
-            }}
-          >
-            <label className='floating-label w-20'>
-              <span>Month</span>
-              <select name='month' className='select' defaultValue={loaderDeps.month}>
-                {abbreviatedMonthValues.map((s, i) => (
-                  <option key={i} value={i}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className='floating-label w-16'>
-              <span>Year</span>
-              <input type='text' name='year' className='input' defaultValue={loaderDeps.year} />
-            </label>
-            <button type='submit' className='btn btn-primary'>
-              Go
-            </button>
-          </form>
-        </details>
-        {Array.from({ length: 3 }).map((_, i) => {
-          const date = subMonths(new Date(), 2 - i);
-          const isSelected = isSameMonth(selectedDate, date);
-          return (
-            <Link
-              key={i}
-              to='/expenses'
-              search={{
-                month: date.getMonth(),
-                year: date.getFullYear(),
-              }}
-              className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
-            >
-              {format(date, 'MMM yy')}
-            </Link>
-          );
-        })}
-      </div>
+      <MonthSelector />
       <div className='flex w-full flex-col gap-1'>
         {expenses.map((expense, idx) => {
           const prev = idx != 0 ? expenses[idx - 1] : undefined;
