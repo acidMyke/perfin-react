@@ -4,17 +4,14 @@ import { queryClient, trpc, type RouterInputs } from '../../trpc';
 import { PageHeader } from '../../components/PageHeader';
 import { cn } from '../../components/Form';
 import { ChevronDown, MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
 import { currencyNumberFormat } from '../../utils';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
   loader: () => {
-    return Promise.all([
-      queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions()),
-      queryClient.ensureQueryData(trpc.dashboard.getTrend.queryOptions({ interval: 'days' })),
-    ]);
+    return Promise.all([queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions())]);
   },
 });
 
@@ -51,14 +48,12 @@ function InsightsSection() {
               ) : (
                 <div className='stat-value text-primary'>N/A</div>
               )}
-              {previous.count > 0 ? (
+              {previous.count > 0 && (
                 <div className={cn(`stat-desc`, { 'text-error': percentChange > 0.2 })}>
                   <TrendIcon className='mr-2 inline-block' diff={percentChange} />
                   <span>{currencyNumberFormat.format(diff)} </span>
                   <span>({(percentChange * 100).toFixed(2)}%)</span>
                 </div>
-              ) : (
-                <div className='stat-desc'> N/A </div>
               )}
             </div>
           );
@@ -79,41 +74,52 @@ function TrendIcon({ diff, invert = false, ...rest }: { diff: number; invert?: b
 }
 
 function TrendLineSection() {
-  const [interval, setInterval] = useState<RouterInputs['dashboard']['getTrend']['interval']>('days');
-  const {
-    data: { duration, trendData },
-  } = useSuspenseQuery(trpc.dashboard.getTrend.queryOptions({ interval }));
+  const [{ duration, interval }, setTrendLineOption] = useState<RouterInputs['dashboard']['getTrend']>({
+    duration: 28,
+    interval: 'days',
+  });
 
   return (
     <>
       <h2 className='mt-4 mb-2 text-xl'>
-        Over the past {duration}
+        Over the past
         <div className='dropdown ml-2'>
           <div tabIndex={0} role='button' className='btn'>
-            {interval}
+            {duration} {interval}
             <ChevronDown />
           </div>
           <ul tabIndex={0} className='menu dropdown-content bg-base-100 rounded-box z-1 w-36 p-2 shadow-sm'>
             <li>
-              <button onClick={() => setInterval('days')}>days</button>
+              <button onClick={() => setTrendLineOption({ interval: 'days', duration: 28 })}>28 days</button>
             </li>
             <li>
-              <button onClick={() => setInterval('weeks')}>weeks</button>
+              <button onClick={() => setTrendLineOption({ interval: 'weeks', duration: 14 })}>14 weeks</button>
             </li>
             <li>
-              <button onClick={() => setInterval('months')}>months</button>
+              <button onClick={() => setTrendLineOption({ interval: 'months', duration: 6 })}>6 months</button>
             </li>
           </ul>
         </div>
       </h2>
-
-      <LineChart data={trendData} width={440} height={320}>
-        <CartesianGrid />
-        <XAxis dataKey='tick' />
-        <YAxis />
-        <Legend />
-        <Line type='linear' stroke='#51a2ff' dataKey='amount' name='Amount' />
-      </LineChart>
+      <Suspense fallback={<div className='skeleton h-80 w-110' />}>
+        <DashboardChart interval={interval} duration={duration} />
+      </Suspense>
     </>
+  );
+}
+
+function DashboardChart({ duration, interval }: RouterInputs['dashboard']['getTrend']) {
+  const {
+    data: { trendData },
+  } = useSuspenseQuery(trpc.dashboard.getTrend.queryOptions({ duration, interval }));
+
+  return (
+    <LineChart data={trendData} width={440} height={320}>
+      <CartesianGrid />
+      <XAxis dataKey='tick' />
+      <YAxis />
+      <Legend />
+      <Line type='linear' stroke='#51a2ff' dataKey='amount' name='Amount' />
+    </LineChart>
   );
 }

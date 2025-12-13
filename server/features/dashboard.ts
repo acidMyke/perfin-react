@@ -85,13 +85,13 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
 const getTrendProcedure = protectedProcedure
   .input(
     z.object({
-      interval: z.enum(['days', 'weeks', 'months']).default('days'),
+      interval: z.enum(['days', 'weeks', 'months']),
+      duration: z.number().positive(),
     }),
   )
   .query(async ({ ctx, input }) => {
-    const { interval } = input;
+    const { interval, duration } = input;
     const { db, userId } = ctx;
-    const duration = interval == 'days' ? 28 : 14;
 
     const strf = {
       days: sql`%Y-%m-%d`,
@@ -114,10 +114,7 @@ const getTrendProcedure = protectedProcedure
       .groupBy(sql`label`)
       .orderBy(sql`label asc`);
 
-    return {
-      trendData,
-      duration,
-    };
+    return { trendData };
   });
 
 export const dashboardProcedure = {

@@ -1,6 +1,6 @@
 @import 'tailwindcss' source('.');
-@plugin "daisyui";
-@plugin "daisyui/theme" {
+@plugin 'daisyui';
+@plugin 'daisyui/theme' {
   name: 'dark';
   default: true;
   prefersdark: true;
@@ -121,4 +121,9 @@ label.floating-label:has(div.react-select-lg__control) > span {
 /* Rechart outline removal */
 .recharts-wrapper > svg {
   outline: none;
+}
+
+.skeleton {
+  animation-duration: 1s;
+  animation-delay: -250ms;
 }
