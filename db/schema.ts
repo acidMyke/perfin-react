@@ -123,6 +123,15 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
   }),
 }));
 
+export const fileRequestsTable = sqliteTable('file_requests', {
+  ...baseColumns(),
+  userId: idColumn(),
+  sessionId: idColumn(),
+  method: text({ enum: ['GET', 'PUT'] }).notNull(),
+  contentType: text(),
+  filePath: text().notNull(),
+});
+
 export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
   belongsToId: idColumn(),
