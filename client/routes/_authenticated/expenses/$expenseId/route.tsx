@@ -4,13 +4,9 @@ import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../..
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
 import { useCallback, useEffect, useRef, type ReactElement } from 'react';
-import {
-  createEditExpenseFormOptions,
-  mapExpenseDetailToForm,
-  percentageNumberFormat,
-  type ExpenseFormData,
-} from './-expense.common';
+import { createEditExpenseFormOptions, mapExpenseDetailToForm, type ExpenseFormData } from './-expense.common';
 import type { DeepKeys } from '@tanstack/react-form';
+import { percentageNumberFormat } from '../../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,

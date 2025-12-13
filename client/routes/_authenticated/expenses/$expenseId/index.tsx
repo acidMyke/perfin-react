@@ -4,7 +4,6 @@ import { queryClient, trpc } from '../../../../trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
-  currencyNumberFormat,
   defaultExpenseItem,
   useExpenseForm,
 } from './-expense.common';
@@ -16,6 +15,7 @@ import { useStore } from '@tanstack/react-form';
 import { ExternalLink, Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
+import { currencyNumberFormat } from '../../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,

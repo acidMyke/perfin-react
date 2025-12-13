@@ -1,4 +1,3 @@
-import { nanoid } from 'nanoid';
-
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-export const generateId = () => nanoid();
+export const currencyNumberFormat = new Intl.NumberFormat('en-SG', { style: 'currency', currency: 'SGD' });
+export const percentageNumberFormat = new Intl.NumberFormat('en-SG', { style: 'percent', maximumFractionDigits: 2 });
