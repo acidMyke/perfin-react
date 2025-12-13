@@ -19,6 +19,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
   return function ({ req }: FetchCreateContextFnOptions) {
     return {
       db,
+      r2: env.r2,
       req,
       env, // Cloudflare workers enviroment
       wctx: ctx, // Cloudflare workers context

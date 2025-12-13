@@ -19,12 +19,14 @@
     {
       "binding": "r2",
       "bucket_name": "perfin-staging",
+      "remote": true,
     },
   ],
   "vars": {
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Pefin",
     "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+    "S3_BUCKET_NAME": "perfin-staging",
   },
   "env": {
     "production": {
