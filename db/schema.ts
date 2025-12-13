@@ -130,6 +130,7 @@ export const fileRequestsTable = sqliteTable('file_requests', {
   method: text({ enum: ['GET', 'PUT'] }).notNull(),
   contentType: text(),
   filePath: text().notNull(),
+  putState: text({ enum: ['INITIAL', 'UNUSED', 'VERFIED'] }),
 });
 
 export const accountsTable = sqliteTable('accounts', {
@@ -184,6 +185,7 @@ export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
   }),
   items: many(expenseItemsTable),
   refunds: many(expenseRefundsTable),
+  attachments: many(expenseAttachmentsTable),
 }));
 
 export const expenseItemsTable = sqliteTable('expense_items', {
@@ -234,5 +236,26 @@ export const expenseRefundsRelations = relations(expenseRefundsTable, ({ one }) 
   expenseItem: one(expenseItemsTable, {
     fields: [expenseRefundsTable.expenseItemId],
     references: [expenseItemsTable.id],
+  }),
+}));
+
+export const expenseAttachmentsTable = sqliteTable('expense_attachments', {
+  ...baseColumns(),
+  expenseId: idColumn(),
+  uploadRequestId: idColumn(),
+
+  type: text().notNull(),
+  sequence: integer().notNull(),
+  isDeleted: boolean().notNull().default(false),
+});
+
+export const expenseAttachmentsRelations = relations(expenseAttachmentsTable, ({ one }) => ({
+  expense: one(expensesTable, {
+    fields: [expenseAttachmentsTable.expenseId],
+    references: [expensesTable.id],
+  }),
+  uploadRequest: one(fileRequestsTable, {
+    fields: [expenseAttachmentsTable.uploadRequestId],
+    references: [fileRequestsTable.id],
   }),
 }));

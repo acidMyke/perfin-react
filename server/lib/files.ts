@@ -14,12 +14,12 @@ export async function createSignedUrl(ctx: ProtectedContext, opts: CreateSignerO
   const { db, env, userId, session } = ctx;
   const { CF_ACCOUNT_ID, S3_ACCESS_KEY_ID, S3_SECRET_ACCESS_KEY, S3_BUCKET_NAME } = env;
   const { method, filePath } = opts;
-  const expires = method === 'PUT' ? '300' : '600';
+  const isPut = method === 'PUT';
+  const expires = isPut ? '300' : '600';
   const url = `https://${CF_ACCOUNT_ID}.r2.cloudflarestorage.com/${S3_BUCKET_NAME}/${filePath}?X-Amz-Expires=${expires}`;
   const headers: Record<string, string> = {};
-  if ('contentType' in opts) {
-    headers['Content-Type'] = opts.contentType;
-  }
+  if (isPut) headers['Content-Type'] = opts.contentType;
+
   const signer = new AwsV4Signer({
     service: 's3',
     region: 'auto',
@@ -39,9 +39,53 @@ export async function createSignedUrl(ctx: ProtectedContext, opts: CreateSignerO
       sessionId: session.id,
       method,
       filePath,
-      contentType: 'contentType' in opts ? opts.contentType : undefined,
+      contentType: isPut ? opts.contentType : undefined,
+      putState: isPut ? 'INITIAL' : undefined,
     }),
   ]);
 
   return signed.url.toString();
+}
+
+const mimeTypesByCategory = {
+  audio: ['audio/aac', 'audio/midi', 'audio/x-midi', 'audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm'],
+  video: [
+    'video/x-msvideo',
+    'video/mp4',
+    'video/mpeg',
+    'video/ogg',
+    'video/mp2t',
+    'video/webm',
+    'video/3gpp',
+    'audio/3gpp',
+    'video/3gpp2',
+    'audio/3gpp2',
+  ],
+  image: [
+    'image/apng',
+    'image/avif',
+    'image/bmp',
+    'image/gif',
+    'image/vnd.microsoft.icon',
+    'image/jpeg',
+    'image/png',
+    'image/svg+xml',
+    'image/tiff',
+    'image/webp',
+  ],
+  text: ['text/css', 'text/csv', 'text/html', 'text/javascript', 'text/markdown', 'text/plain', 'text/calendar'],
+  pdf: ['application/pdf'],
+};
+
+export function isAllowedContentType(
+  contentType: string,
+  ...categories: (keyof typeof mimeTypesByCategory)[]
+): boolean {
+  // Check each category passed
+  for (const category of categories) {
+    if (mimeTypesByCategory[category].includes(contentType)) {
+      return true;
+    }
+  }
+  return false;
 }

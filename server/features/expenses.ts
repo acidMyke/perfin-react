@@ -2,6 +2,7 @@ import { FormInputError, protectedProcedure, type ProtectedContext } from '../tr
 import {
   accountsTable,
   categoriesTable,
+  expenseAttachmentsTable,
   expenseItemsTable,
   expenseRefundsTable,
   expensesTable,
@@ -26,11 +27,12 @@ import {
   SQL,
   type AnyColumn,
 } from 'drizzle-orm';
-import { TRPCError, type inferProcedureOutput } from '@trpc/server';
+import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
+import { createSignedUrl } from '../lib/files';
 
 type Option = {
   label: string;
@@ -116,6 +118,22 @@ const loadExpenseDetailProcedure = protectedProcedure
             expenseItemId: true,
           },
         },
+        attachments: {
+          where: eq(expenseAttachmentsTable.isDeleted, false),
+          orderBy: asc(expenseAttachmentsTable.sequence),
+          columns: {
+            id: true,
+            type: true,
+            uploadRequestId: true,
+          },
+          with: {
+            uploadRequest: {
+              columns: {
+                filePath: true,
+              },
+            },
+          },
+        },
       },
     });
 
@@ -123,7 +141,17 @@ const loadExpenseDetailProcedure = protectedProcedure
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return expense;
+    const attachments = await Promise.all(
+      expense.attachments.map(async ({ uploadRequest, ...attachment }) => {
+        const url = await createSignedUrl(ctx, { method: 'GET', filePath: uploadRequest.filePath });
+        return { ...attachment, url };
+      }),
+    );
+
+    return {
+      ...expense,
+      attachments,
+    };
   });
 
 async function safelyCreateSubject(
@@ -229,6 +257,16 @@ const saveExpenseProcedure = protectedProcedure
           }),
         )
         .default([]),
+      attachments: z
+        .array(
+          z.object({
+            id: z.string(),
+            type: z.string(),
+            uploadRequestId: z.string(),
+          }),
+        )
+        .default([]),
+      fileUploadsIds: z.array(z.string()).default([]),
     }),
   )
   .mutation(async ({ input, ctx }) => {
