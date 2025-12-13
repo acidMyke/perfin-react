@@ -1,6 +1,6 @@
 import { endOfToday, getUnixTime, sub, subDays } from 'date-fns';
 import { protectedProcedure } from '../trpc';
-import { and, between, eq, gt, sql } from 'drizzle-orm';
+import { and, between, count, eq, gt, sql } from 'drizzle-orm';
 import { expensesTable } from '../../db/schema';
 import z from 'zod';
 
@@ -20,29 +20,65 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
         WHEN ${expensesTable.billedAt} BETWEEN ${getUnixTime(dMinus28)} AND ${getUnixTime(dMinus14)} THEN 2
         ELSE NULL END AS rangeId`,
       expensesSum: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
+      expensesCount: count(),
     })
     .from(expensesTable)
-    .where(and(eq(expensesTable.belongsToId, userId), between(expensesTable.billedAt, dMinus28, d)))
+    .where(
+      and(
+        eq(expensesTable.belongsToId, userId),
+        between(expensesTable.billedAt, dMinus28, d),
+        eq(expensesTable.isDeleted, false),
+      ),
+    )
     .groupBy(sql`rangeId`)
     .orderBy(sql`rangeId asc`);
 
-  const amounts = [0, 0, 0];
+  const sums = [0, 0, 0];
+  const counts = [0, 0, 0];
 
-  for (const { rangeId, expensesSum } of segmentResult) {
-    amounts[rangeId] = expensesSum;
+  for (const { rangeId, expensesSum, expensesCount } of segmentResult) {
+    sums[rangeId] = expensesSum;
+    counts[rangeId] = expensesCount;
   }
 
-  const lastFourteenDays = amounts[0] + amounts[1];
-  const diffSevenDays = amounts[0] - amounts[1];
-  const diffFourteenDays = lastFourteenDays - amounts[2];
+  const [current7Sum, previous7Sum, previous14Sum] = sums;
+  const [current7Count, previous7Count, previous14Count] = counts;
+
+  const current14Sum = current7Sum + previous7Sum;
+  const diff7 = current7Sum - previous7Sum;
+  const diff14 = current14Sum - previous14Sum;
+
+  const current14Count = current7Count + previous7Count;
 
   return {
-    lastSevenDays: amounts[0],
-    diffSevenDays,
-    percentSevenDays: amounts[1] === 0 ? 1 : diffSevenDays / amounts[1],
-    lastFourteenDays,
-    diffFourteenDays,
-    percentFourteenDays: amounts[2] === 0 ? 1 : diffFourteenDays / amounts[2],
+    sevenDays: {
+      current: {
+        sum: current7Sum,
+        count: current7Count,
+      },
+      previous: {
+        sum: previous7Sum,
+        count: previous7Count,
+      },
+      diff: diff7,
+      percentChange: previous7Sum === 0 ? 1 : diff7 / previous7Sum,
+    },
+
+    fourteenDays: {
+      current: {
+        sum: current14Sum,
+        count: current14Count,
+      },
+      previous: {
+        sum: previous14Sum,
+        count: previous14Count,
+      },
+      diff: diff14,
+      percentChange: previous14Sum === 0 ? 1 : diff14 / previous14Sum,
+    },
+
+    totalCount: current14Count + previous14Count,
+    totalSum: current14Sum + previous14Sum,
   };
 });
 

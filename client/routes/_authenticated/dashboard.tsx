@@ -6,6 +6,7 @@ import { cn } from '../../components/Form';
 import { ChevronDown, MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
 import { useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
+import { currencyNumberFormat } from '../../utils';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
@@ -15,11 +16,6 @@ export const Route = createFileRoute('/_authenticated/dashboard')({
       queryClient.ensureQueryData(trpc.dashboard.getTrend.queryOptions({ interval: 'days' })),
     ]);
   },
-});
-
-const currencyFormatter = Intl.NumberFormat('en-SG', {
-  style: 'currency',
-  currency: 'SGD',
 });
 
 function RouteComponent() {
@@ -32,6 +28,11 @@ function RouteComponent() {
   );
 }
 
+const statTitles = {
+  sevenDays: 'Last 7 days',
+  fourteenDays: 'Last 14 days',
+};
+
 function InsightsSection() {
   const { data } = useSuspenseQuery(trpc.dashboard.getInsights.queryOptions());
 
@@ -40,24 +41,28 @@ function InsightsSection() {
       <h2 className='mb-2 text-xl'>You have spent</h2>
 
       <div className='stats pl-4 shadow'>
-        <div className='stat w-full'>
-          <div className='state-title'>Last 7 days</div>
-          <div className='stat-value text-primary'>{currencyFormatter.format(data.lastSevenDays)}</div>
-          <div className={cn(`stat-desc`, { 'text-error': data.percentSevenDays > 0.2 })}>
-            <TrendIcon className='mr-2 inline-block' diff={data.percentSevenDays} />
-            <span>{currencyFormatter.format(data.diffSevenDays)} </span>
-            <span>({(data.percentSevenDays * 100).toFixed(2)}%)</span>
-          </div>
-        </div>
-        <div className='stat w-full'>
-          <div className='state-title'>Last 14 days</div>
-          <div className='stat-value text-primary'>{currencyFormatter.format(data.lastFourteenDays)}</div>
-          <div className={cn(`stat-desc`, { 'text-error': data.percentFourteenDays > 0.2 })}>
-            <TrendIcon className='mr-2 inline-block' diff={data.percentFourteenDays} />
-            <span>{currencyFormatter.format(data.diffFourteenDays)} </span>
-            <span>({(data.percentFourteenDays * 100).toFixed(2)}%)</span>
-          </div>
-        </div>
+        {(['sevenDays', 'fourteenDays'] as const).map(key => {
+          const { current, previous, diff, percentChange } = data[key];
+          return (
+            <div key={key} className='stat w-full'>
+              <div className='state-title'>{statTitles[key]}</div>
+              {current.count > 0 ? (
+                <div className='stat-value text-primary'>{currencyNumberFormat.format(current.sum)}</div>
+              ) : (
+                <div className='stat-value text-primary'>N/A</div>
+              )}
+              {previous.count > 0 ? (
+                <div className={cn(`stat-desc`, { 'text-error': percentChange > 0.2 })}>
+                  <TrendIcon className='mr-2 inline-block' diff={percentChange} />
+                  <span>{currencyNumberFormat.format(diff)} </span>
+                  <span>({(percentChange * 100).toFixed(2)}%)</span>
+                </div>
+              ) : (
+                <div className='stat-desc'> N/A </div>
+              )}
+            </div>
+          );
+        })}
       </div>
     </>
   );
