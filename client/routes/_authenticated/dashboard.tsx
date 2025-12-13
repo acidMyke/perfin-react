@@ -11,8 +11,12 @@ import { currencyNumberFormat } from '../../utils';
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,
   loader: () => {
-    return Promise.all([queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions())]);
+    return Promise.all([
+      queryClient.ensureQueryData(trpc.dashboard.getInsights.queryOptions()),
+      queryClient.ensureQueryData(trpc.dashboard.getTrend.queryOptions({ duration: 28, interval: 'days' })),
+    ]);
   },
+  pendingComponent: PendingComponent,
 });
 
 function RouteComponent() {
@@ -30,6 +34,8 @@ const statTitles = {
   fourteenDays: 'Last 14 days',
 };
 
+const statKeys = ['sevenDays', 'fourteenDays'] as const;
+
 function InsightsSection() {
   const { data } = useSuspenseQuery(trpc.dashboard.getInsights.queryOptions());
 
@@ -38,22 +44,24 @@ function InsightsSection() {
       <h2 className='mb-2 text-xl'>You have spent</h2>
 
       <div className='stats pl-4 shadow'>
-        {(['sevenDays', 'fourteenDays'] as const).map(key => {
+        {statKeys.map(key => {
           const { current, previous, diff, percentChange } = data[key];
           return (
-            <div key={key} className='stat w-full'>
-              <div className='state-title'>{statTitles[key]}</div>
+            <div key={key} className='stat'>
+              <div className='stat-title'>{statTitles[key]}</div>
               {current.count > 0 ? (
                 <div className='stat-value text-primary'>{currencyNumberFormat.format(current.sum)}</div>
               ) : (
                 <div className='stat-value text-primary'>N/A</div>
               )}
-              {previous.count > 0 && (
+              {previous.count > 0 ? (
                 <div className={cn(`stat-desc`, { 'text-error': percentChange > 0.2 })}>
                   <TrendIcon className='mr-2 inline-block' diff={percentChange} />
                   <span>{currencyNumberFormat.format(diff)} </span>
                   <span>({(percentChange * 100).toFixed(2)}%)</span>
                 </div>
+              ) : (
+                <div className='stat-desc'> Test </div>
               )}
             </div>
           );
@@ -121,5 +129,25 @@ function DashboardChart({ duration, interval }: RouterInputs['dashboard']['getTr
       <Legend />
       <Line type='linear' stroke='#51a2ff' dataKey='amount' name='Amount' />
     </LineChart>
+  );
+}
+
+function PendingComponent() {
+  return (
+    <div className='mx-auto flex max-w-md flex-col'>
+      <PageHeader title='Overview' />
+      <h2 className='mb-2 text-xl'>You have spent</h2>
+      <div className='stats pl-4 shadow'>
+        {statKeys.map(key => (
+          <div key={key} className='stat'>
+            <div className='stat-title'>{statTitles[key]}</div>
+            <div className='stat-value text-primary skeleton mt-4 mb-2 h-8 w-full'></div>
+            <div className='stat-desc skeleton h-4'></div>
+          </div>
+        ))}
+      </div>
+      <h2 className='mt-4 mb-2 text-xl'>Over the past</h2>
+      <div className='skeleton h-80 w-110' />
+    </div>
   );
 }
