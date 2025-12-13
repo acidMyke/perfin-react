@@ -28,6 +28,7 @@ export async function createSignedUrl(ctx: ProtectedContext, opts: CreateSignerO
     method,
     url,
     headers,
+    signQuery: true,
   });
 
   const [signed] = await Promise.all([
