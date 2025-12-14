@@ -9,7 +9,16 @@ import { notFound } from '@tanstack/react-router';
 
 export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
-export const queryClient = new QueryClient();
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 10_800_000, // 3hrs
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchOnMount: false,
+    },
+  },
+});
 
 const errorHandlingLink: TRPCLink<AppRouter> = () => {
   // here we just got initialized in the app - this happens once per app

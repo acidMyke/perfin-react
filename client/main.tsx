@@ -6,7 +6,12 @@ import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from './trpc';
 import { routeTree } from './routeTree.gen';
 
-const router = createRouter({ routeTree });
+const router = createRouter({
+  routeTree,
+  defaultPreload: 'viewport',
+  defaultPreloadStaleTime: 0,
+});
+
 declare module '@tanstack/react-router' {
   interface Register {
     router: typeof router;
