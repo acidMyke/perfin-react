@@ -192,4 +192,11 @@ export function calculateExpenseForm(form: TExpenseForm) {
   });
 
   form.setFieldValue('ui.calculateResult', result);
+
+  for (let i = 0; i < items.length; i++) {
+    const item = items[i];
+    if (!item.expenseRefund) continue;
+    const { grossAmountCents } = calculateExpenseItem(item, { additionalServiceChargePercent, isGstExcluded });
+    form.setFieldValue(`items[${i}].expenseRefund.expectedAmountCents`, grossAmountCents);
+  }
 }

@@ -3,7 +3,6 @@ import { withFieldGroup } from '../../../../components/Form';
 import { queryClient, trpc } from '../../../../trpc';
 import { defaultExpenseItem, defaultExpenseRefund, type ExpenseFormData } from './-expense.common';
 import { X } from 'lucide-react';
-import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import type { DeepKeys, DeepValue } from '@tanstack/react-form';
 import { currencyNumberFormat } from '../../../../utils';
 
@@ -64,24 +63,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           <X />
         </button>
 
-        <group.AppField
-          name={`priceCents`}
-          listeners={{
-            onChange: ({ value }) => {
-              onPricingChange();
-              const expenseRefund = group.getFieldValue('expenseRefund');
-              if (!expenseRefund) return;
-              const quantity = group.getFieldValue('quantity');
-              const additionalServiceChargePercent = getFormField('additionalServiceChargePercent');
-              const isGstExcluded = getFormField('isGstExcluded');
-              const { grossAmountCents } = calculateExpenseItem(
-                { priceCents: value, quantity, expenseRefund },
-                { additionalServiceChargePercent, isGstExcluded },
-              );
-              group.setFieldValue('expenseRefund.expectedAmountCents', grossAmountCents);
-            },
-          }}
-        >
+        <group.AppField name={`priceCents`} listeners={{ onChange: () => onPricingChange() }}>
           {({ NumericInput }) => (
             <NumericInput
               label='Price'
@@ -92,24 +74,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
             />
           )}
         </group.AppField>
-        <group.AppField
-          name={`quantity`}
-          listeners={{
-            onChange: ({ value }) => {
-              onPricingChange();
-              const expenseRefund = group.getFieldValue('expenseRefund');
-              if (!expenseRefund) return;
-              const priceCents = group.getFieldValue('priceCents');
-              const additionalServiceChargePercent = getFormField('additionalServiceChargePercent');
-              const isGstExcluded = getFormField('isGstExcluded');
-              const { grossAmountCents } = calculateExpenseItem(
-                { priceCents, quantity: value, expenseRefund },
-                { additionalServiceChargePercent, isGstExcluded },
-              );
-              group.setFieldValue('expenseRefund.expectedAmountCents', grossAmountCents);
-            },
-          }}
-        >
+        <group.AppField name={`quantity`} listeners={{ onChange: () => onPricingChange() }}>
           {({ NumericInput }) => (
             <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' step={1} min={1} />
           )}
@@ -139,6 +104,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
                       );
                     } else if (!e.target.checked && field.state.value) {
                       group.setFieldValue(`expenseRefund`, null);
+                      onPricingChange();
                     }
                   }}
                 />
