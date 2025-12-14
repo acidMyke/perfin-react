@@ -225,7 +225,7 @@ function BooleanInput(props: BooleanInputProps) {
   const styleIsToggle = style === 'toggle';
 
   return (
-    <label className={cn('label w-full', labelCn)}>
+    <label className={cn('label text-primary-content w-full', labelCn)}>
       {label}
       <input
         type='checkbox'

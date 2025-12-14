@@ -274,18 +274,26 @@ const ShopDetailSubForm = withForm({
             />
           )}
         </form.AppField>
-        <form.AppField name='additionalServiceChargePercent' listeners={{ onChange: () => calculateExpenseForm(form) }}>
+        <form.AppField
+          name='additionalServiceChargePercent'
+          listeners={{
+            onChange: () => {
+              form.setFieldValue('isGstExcluded', true);
+              calculateExpenseForm(form);
+            },
+          }}
+        >
           {field => (
-            <div className='col-span-full my-2 flex flex-row gap-4'>
+            <div className='col-span-full my-2 flex flex-row justify-between gap-4'>
               <field.BooleanInput
-                labelCn='justify-between mr-8'
+                labelCn='justify-between mr-8 w-78'
                 label='Service charge'
                 nullIfFalse
                 transformValue={v => (v === true ? 10 : v)}
               />
               <field.NumericInput
                 label={null}
-                containerCn='inline-block w-32'
+                containerCn='inline-block w-20'
                 inputCn='input-md'
                 disabled={field.state.value === null}
                 numberFormat={percentageNumberFormat}
@@ -293,6 +301,15 @@ const ShopDetailSubForm = withForm({
                 transformFor='formatOnly'
               />
             </div>
+          )}
+        </form.AppField>
+
+        <form.AppField name='isGstExcluded' listeners={{ onChange: () => calculateExpenseForm(form) }}>
+          {field => (
+            <field.BooleanInput
+              labelCn='justify-between col-span-full my-2 w-78'
+              label={`GST (${field.state.value ? 'Exclusive' : 'Inclusive'})`}
+            />
           )}
         </form.AppField>
       </>
