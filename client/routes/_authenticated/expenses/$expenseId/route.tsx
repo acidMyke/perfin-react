@@ -150,39 +150,55 @@ function RouteComponent() {
             <p className='indent-2 italic'>Select an option below to autocomplete the form</p>
             {inferShopDetailMutation.data?.length && (
               <div className='mt-2 flex flex-col gap-y-4'>
-                {inferShopDetailMutation.data.map((shopDetail, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => {
-                      if ('shopMall' in shopDetail) {
-                        form.setFieldValue('shopMall', shopDetail.shopMall);
-                        form.setFieldValue('shopName', shopDetail.shopName);
-                      }
-                      form.setFieldValue('additionalServiceChargePercent', shopDetail.additionalServiceChargePercent);
-                      form.setFieldValue('isGstExcluded', shopDetail.isGstExcluded);
-                      autocompleteSelectionDialogRef.current?.close();
-                    }}
-                    className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-auto grid-flow-row justify-start gap-x-2 p-2 *:text-left'
-                  >
-                    {'shopMall' in shopDetail ? (
-                      <>
-                        <h4 className='col-span-2 text-xl font-bold'>{shopDetail.shopName}</h4>
-                        <p className='col-start-1'>Mall:</p>
-                        <p className='col-start-2'>{shopDetail.shopMall}</p>
-                      </>
-                    ) : (
-                      <h4 className='col-span-2 text-xl font-bold'>{form.getFieldValue('shopName') ?? 'Unknown'}</h4>
-                    )}
-                    <p className='col-start-1'>Service charge:</p>
-                    <p className='col-start-2'>
-                      {shopDetail.additionalServiceChargePercent
-                        ? percentageNumberFormat.format(shopDetail.additionalServiceChargePercent / 100)
-                        : 'N/A'}
-                    </p>
-                    <p className='col-start-1'>GST:</p>
-                    <div className='col-start-2'>{shopDetail.isGstExcluded ? 'Excluded' : 'Included'}</div>
-                  </button>
-                ))}
+                {inferShopDetailMutation.data.map((shopDetail, idx) => {
+                  const { categoryId, accountId, additionalServiceChargePercent, isGstExcluded } = shopDetail;
+                  const { categoryOptions, accountOptions } = optionsData;
+                  const selCategory = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : null;
+                  const selAccount = accountId ? accountOptions.find(({ value }) => value === accountId) : null;
+
+                  return (
+                    <button
+                      key={idx}
+                      onClick={() => {
+                        if ('shopMall' in shopDetail) {
+                          form.setFieldValue('shopMall', shopDetail.shopMall);
+                          form.setFieldValue('shopName', shopDetail.shopName);
+                        }
+                        form.setFieldValue('additionalServiceChargePercent', additionalServiceChargePercent);
+                        form.setFieldValue('isGstExcluded', isGstExcluded);
+
+                        if (selCategory) form.setFieldValue('category', selCategory);
+                        if (selAccount) form.setFieldValue('account', selAccount);
+
+                        autocompleteSelectionDialogRef.current?.close();
+                      }}
+                      className='btn btn-soft odd:btn-primary even:btn-secondary grid h-auto w-full auto-cols-fr grid-flow-row justify-start gap-x-2 p-2 *:text-left'
+                    >
+                      {'shopMall' in shopDetail ? (
+                        <>
+                          <h4 className='col-span-4 text-xl font-bold'>{shopDetail.shopName}</h4>
+                          <p className='col-start-1'>Mall:</p>
+                          <p className='col-span-3 col-start-2'>{shopDetail.shopMall}</p>
+                        </>
+                      ) : (
+                        <h4 className='col-span-2 text-xl font-bold'>{form.getFieldValue('shopName') ?? 'Unknown'}</h4>
+                      )}
+                      <p className='col-start-1'>Service charge:</p>
+                      <p className='col-start-2'>
+                        {additionalServiceChargePercent
+                          ? percentageNumberFormat.format(additionalServiceChargePercent / 100)
+                          : 'N/A'}
+                      </p>
+                      <p className='col-start-3'>GST:</p>
+                      <p className='col-start-4'>{isGstExcluded ? 'Excluded' : 'Included'}</p>
+
+                      <p className='col-start-1'>Category:</p>
+                      <p className='col-start-2'>{selCategory?.label ?? 'Unspecified'}</p>
+                      <p className='col-start-3'>Account:</p>
+                      <p className='col-start-4'>{selAccount?.label ?? 'Unspecified'} </p>
+                    </button>
+                  );
+                })}
                 {
                   inferShopDetailMutation.data.reduce(
                     (acc, shopDetail, idx) =>
