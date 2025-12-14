@@ -15,7 +15,7 @@ import { useStore } from '@tanstack/react-form';
 import { ExternalLink, Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
-import { currencyNumberFormat } from '../../../../utils';
+import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -272,6 +272,27 @@ const ShopDetailSubForm = withForm({
               containerCn='mt-2'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}
             />
+          )}
+        </form.AppField>
+        <form.AppField name='additionalServiceChargePercent' listeners={{ onChange: () => calculateExpenseForm(form) }}>
+          {field => (
+            <div className='col-span-full my-2 flex flex-row gap-4'>
+              <field.BooleanInput
+                labelCn='justify-between mr-8'
+                label='Service charge'
+                nullIfFalse
+                transformValue={v => (v === true ? 10 : v)}
+              />
+              <field.NumericInput
+                label={null}
+                containerCn='inline-block w-32'
+                inputCn='input-md'
+                disabled={field.state.value === null}
+                numberFormat={percentageNumberFormat}
+                transforms={['percentage']}
+                transformFor='formatOnly'
+              />
+            </div>
           )}
         </form.AppField>
       </>

@@ -15,16 +15,21 @@ const NumericTransformers = {
     transform: v => v * 100,
     revert: v => v / 100,
   },
+  percentage: {
+    transform: v => v * 100,
+    revert: v => v / 100,
+  },
 } satisfies Record<string, { transform: (v: number) => number; revert: (v: number) => number }>;
 
 type NumericInputProps = {
-  label?: string;
+  label?: string | null;
   containerCn?: string;
   labelCn?: string;
   inputCn?: string;
   innerInputCn?: string;
   nullIfZero?: boolean;
   transforms?: (keyof typeof NumericTransformers)[];
+  transformFor?: 'default' | 'formatOnly';
   numberFormat?: Intl.NumberFormat;
   additionalSuffix?: string;
 
@@ -32,6 +37,7 @@ type NumericInputProps = {
   max?: number;
   step?: number;
   readOnly?: boolean;
+  disabled?: boolean;
 };
 
 function NumericInput(props: NumericInputProps) {
@@ -43,6 +49,7 @@ function NumericInput(props: NumericInputProps) {
     innerInputCn,
     nullIfZero,
     transforms = [],
+    transformFor = 'default',
     numberFormat,
     additionalSuffix,
     ...inputProps
@@ -103,40 +110,50 @@ function NumericInput(props: NumericInputProps) {
     }
   }, [formatValue, field.state.value]);
 
+  const inputEl = (
+    <label htmlFor='' className={cn('input input-primary input-xl w-full', inputCn)}>
+      {prefix && <span>{prefix}</span>}
+      <input
+        className={innerInputCn}
+        step={1 / Math.pow(10, formatOptions?.maximumFractionDigits ?? 1)}
+        {...inputProps}
+        type='number'
+        id={field.name}
+        name={field.name}
+        placeholder={label ?? undefined}
+        value={formatted}
+        onChange={e => {
+          if (e.target.value === '') setFormatted('');
+          const value = parseFloat(e.target.value);
+          if (!isNaN(value)) setFormatted(e.target.value);
+        }}
+        onBlur={() => {
+          const value = parseFloat(formatted);
+          if (isNaN(value) && !nullIfZero) {
+            field.setErrorMap({ onBlur: 'Invalid number' });
+            return;
+          }
+          if ((nullIfZero && value === 0) || isNaN(value)) field.handleChange(() => null);
+          else if (transformFor === 'formatOnly') field.handleChange(value);
+          else field.handleChange(() => transforms.reduce((a, t) => NumericTransformers[t].transform(a), value));
+
+          field.setErrorMap({ onBlur: undefined });
+        }}
+        onFocus={e => e.currentTarget.select()}
+      />
+      {postfix && <span>{postfix}</span>}
+      {additionalSuffix && <span>{additionalSuffix}</span>}
+    </label>
+  );
+
+  if (label === null) {
+    return <div className={containerCn}>{inputEl}</div>;
+  }
+
   return (
     <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
-      {label && <span className={labelCn}>{label}</span>}
-      <label htmlFor='' className={cn('input input-primary input-xl w-full', inputCn)}>
-        {prefix && <span>{prefix}</span>}
-        <input
-          className={innerInputCn}
-          step={1 / Math.pow(10, formatOptions?.maximumFractionDigits ?? 1)}
-          {...inputProps}
-          type='number'
-          id={field.name}
-          name={field.name}
-          placeholder={label}
-          value={formatted}
-          onChange={e => {
-            if (e.target.value === '') setFormatted('');
-            const value = parseFloat(e.target.value);
-            if (!isNaN(value)) setFormatted(e.target.value);
-          }}
-          onBlur={() => {
-            const value = parseFloat(formatted);
-            if (isNaN(value) && !nullIfZero) {
-              field.setErrorMap({ onBlur: 'Invalid number' });
-              return;
-            }
-            if ((nullIfZero && value === 0) || isNaN(value)) field.handleChange(() => null);
-            else field.handleChange(() => transforms.reduce((a, t) => NumericTransformers[t].transform(a), value));
-            field.setErrorMap({ onBlur: undefined });
-          }}
-          onFocus={e => e.currentTarget.select()}
-        />
-        {postfix && <span>{postfix}</span>}
-        {additionalSuffix && <span>{additionalSuffix}</span>}
-      </label>
+      <span className={labelCn}>{label}</span>
+      {inputEl}
       <FieldError field={field} />
     </label>
   );
@@ -188,6 +205,39 @@ function TextInput(props: TextInputProps) {
         }}
       />
       <FieldError field={field} />
+    </label>
+  );
+}
+
+type BooleanInputProps = {
+  label?: string;
+  style?: 'toggle' | 'checkbox';
+  nullIfFalse?: boolean;
+  labelCn?: string;
+  inputCn?: string;
+  transformValue?: (value: boolean) => boolean | number | string | null;
+};
+
+function BooleanInput(props: BooleanInputProps) {
+  const { label, style = 'toggle', nullIfFalse, labelCn, inputCn, transformValue } = props;
+  const field = useFieldContext<boolean | number | string | null>();
+
+  const styleIsToggle = style === 'toggle';
+
+  return (
+    <label className={cn('label w-full', labelCn)}>
+      {label}
+      <input
+        type='checkbox'
+        checked={!!field.state.value}
+        className={cn(style, styleIsToggle ? 'toggle-primary toggle-xl' : 'checkbox-primary checkbox-xl', inputCn)}
+        onChange={e => {
+          const checked = e.currentTarget.checked;
+          if (nullIfFalse && !checked) field.handleChange(null);
+          else if (transformValue) field.handleChange(transformValue(checked));
+          else field.handleChange(checked);
+        }}
+      />
     </label>
   );
 }
@@ -354,5 +404,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     TextInput,
     ComboBox,
     NumericInput,
+    BooleanInput,
   },
 });
