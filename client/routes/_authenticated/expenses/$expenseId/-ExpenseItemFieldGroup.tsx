@@ -42,6 +42,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
             },
             onBlurAsync: async ({ value }) => {
               const shopName = getFormField('shopName');
+              if (!value.trim() || !shopName?.trim()) return;
               const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
               if (itemDetail) {
                 group.setFieldValue('priceCents', itemDetail.priceCents);
