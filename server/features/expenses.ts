@@ -14,6 +14,7 @@ import {
   count,
   desc,
   eq,
+  gt,
   gte,
   inArray,
   isNotNull,
@@ -26,11 +27,12 @@ import {
   SQL,
   type AnyColumn,
 } from 'drizzle-orm';
-import { TRPCError, type inferProcedureOutput } from '@trpc/server';
+import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
+import { caseWhen, concat } from '../lib/SqlExtension';
 
 type Option = {
   label: string;
@@ -387,11 +389,34 @@ const listExpenseProcedure = protectedProcedure
       !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
     ];
 
+    const expenseItemSubquery = db
+      .select({
+        itemOne: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name)).as('itemOne'),
+        itemTwo: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name)).as('itemOne'),
+        count: count().as('count'),
+        expenseId: expenseItemsTable.expenseId,
+      })
+      .from(expenseItemsTable)
+      .where(eq(expenseItemsTable.isDeleted, false))
+      .groupBy(expenseItemsTable.expenseId)
+      .as('items');
+
     const expenses = await db
       .select({
         id: expensesTable.id,
-        // TODO: Set description
-        description: sql<string>`" "`,
+        description: caseWhen(eq(expenseItemSubquery.count, sql.raw('1')), expenseItemSubquery.itemOne)
+          .whenThen(
+            eq(expenseItemSubquery.count, sql.raw('2')),
+            concat(expenseItemSubquery.itemOne, sql.raw("' and '"), expenseItemSubquery.itemTwo),
+          )
+          .else(
+            concat(
+              expenseItemSubquery.itemOne,
+              sql.raw("' and '"),
+              sql`(${expenseItemSubquery.count} - 1)`,
+              sql.raw("' items'"),
+            ),
+          ),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
         account: {
@@ -407,6 +432,7 @@ const listExpenseProcedure = protectedProcedure
       .from(expensesTable)
       .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
       .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
+      .leftJoin(expenseItemSubquery, eq(expensesTable.id, expenseItemSubquery.expenseId))
       .where(and(...filterList))
       .orderBy(desc(expensesTable.billedAt));
 
