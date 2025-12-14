@@ -149,9 +149,13 @@ function RouteComponent() {
               >
                 <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
                 <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
+                  At: {expense.shopDetail ?? 'Unspecified'}
+                </p>
+
+                <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
                   Account: {expense.account?.name ?? 'Unspecified'}
                 </p>
-                <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
+                <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
                   Category: {expense.category?.name ?? 'Unspecified'}
                 </p>
                 <ChevronRight className='col-start-3 row-start-1 self-center justify-self-end' />

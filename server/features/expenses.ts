@@ -32,7 +32,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
-import { caseWhen, concat } from '../lib/SqlExtension';
+import { caseWhen, coalesce, concat } from '../lib/SqlExtension';
 
 type Option = {
   label: string;
@@ -417,6 +417,7 @@ const listExpenseProcedure = protectedProcedure
               sql.raw("' items'"),
             ),
           ),
+        shopDetail: concat(expensesTable.shopName, coalesce(concat(sql.raw("' @ '"), expensesTable.shopMall))),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
         account: {
