@@ -48,9 +48,10 @@ export const twMerge = extendTailwindMerge<string, string>({
       'tooltip-placement': [{ tooltip: placements }],
       'tooltip-color': [{ tooltip: fullColors }],
 
-      /* -------------------- CHECKBOX -------------------- */
-      'checkbox-color': [{ input: fullColors }],
-      'checkbox-size': [{ input: sizes }],
+      /* -------------------- CHECKBOX / TOGGLE-------------------- */
+      'checkbox': ['checkbox', 'toggle'],
+      'checkbox-color': [{ checkbox: fullColors }, { toggle: fullColors }],
+      'checkbox-size': [{ checkbox: sizes }, { toggle: sizes }],
 
       /* -------------------- INPUT -------------------- */
       'input-color': [{ input: fullColors }],
@@ -75,10 +76,6 @@ export const twMerge = extendTailwindMerge<string, string>({
       /* -------------------- TEXTAREA -------------------- */
       'textarea-color': [{ textarea: fullColors }],
       'textarea-size': [{ textarea: sizes }],
-
-      /* -------------------- TOGGLE -------------------- */
-      'toggle-color': [{ toggle: fullColors }],
-      'toggle-size': [{ toggle: sizes }],
     },
   },
 });
