@@ -392,7 +392,7 @@ const listExpenseProcedure = protectedProcedure
     const expenseItemSubquery = db
       .select({
         itemOne: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name)).as('itemOne'),
-        itemTwo: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name)).as('itemOne'),
+        itemTwo: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name)).as('itemTwo'),
         count: count().as('count'),
         expenseId: expenseItemsTable.expenseId,
       })
