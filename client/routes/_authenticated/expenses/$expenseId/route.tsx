@@ -98,12 +98,16 @@ function RouteComponent() {
           }),
         );
         if (formError) return formError;
-        queryClient.invalidateQueries(trpc.expense.list.queryFilter());
-        queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId }));
-        if ([value.account?.value, value.category?.value].includes('create')) {
-          queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter());
+        const monthYear = { month: billedAt.getMonth(), year: billedAt.getFullYear() };
+        const promises = [queryClient.refetchQueries(trpc.expense.list.queryFilter(monthYear))];
+        if (expenseId !== 'create') {
+          promises.push(queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId })));
         }
-        navigate({ to: '/expenses', search: { month: billedAt.getMonth(), year: billedAt.getFullYear() } });
+        if ([value.account?.value, value.category?.value].includes('create')) {
+          promises.push(queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter()));
+        }
+        await Promise.all(promises);
+        navigate({ to: '/expenses', search: monthYear });
       },
     },
   });

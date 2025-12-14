@@ -125,7 +125,7 @@ function DashboardChart({ duration, interval }: RouterInputs['dashboard']['getTr
     <LineChart data={trendData} width={440} height={320}>
       <CartesianGrid />
       <XAxis dataKey='tick' />
-      <YAxis />
+      <YAxis tickFormatter={v => currencyNumberFormat.format(v as number)} />
       <Legend />
       <Line type='linear' stroke='#51a2ff' dataKey='amount' name='Amount' />
     </LineChart>
