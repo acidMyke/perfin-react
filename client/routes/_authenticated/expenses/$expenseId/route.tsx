@@ -4,7 +4,12 @@ import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../..
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useAppForm } from '../../../../components/Form';
 import { useCallback, useEffect, useRef, type ReactElement } from 'react';
-import { createEditExpenseFormOptions, mapExpenseDetailToForm, type ExpenseFormData } from './-expense.common';
+import {
+  createEditExpenseFormOptions,
+  invalidateAndRedirectBackToList,
+  mapExpenseDetailToForm,
+  type ExpenseFormData,
+} from './-expense.common';
 import type { DeepKeys } from '@tanstack/react-form';
 import { percentageNumberFormat } from '../../../../utils';
 
@@ -98,16 +103,12 @@ function RouteComponent() {
           }),
         );
         if (formError) return formError;
-        const monthYear = { month: billedAt.getMonth(), year: billedAt.getFullYear() };
-        const promises = [queryClient.refetchQueries(trpc.expense.list.queryFilter(monthYear))];
-        if (expenseId !== 'create') {
-          promises.push(queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId })));
-        }
-        if ([value.account?.value, value.category?.value].includes('create')) {
-          promises.push(queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter()));
-        }
-        await Promise.all(promises);
-        navigate({ to: '/expenses', search: monthYear });
+        await invalidateAndRedirectBackToList({
+          expenseId,
+          navigate,
+          optionsCreated: [value.account?.value, value.category?.value].includes('create'),
+          billedAt,
+        });
       },
     },
   });

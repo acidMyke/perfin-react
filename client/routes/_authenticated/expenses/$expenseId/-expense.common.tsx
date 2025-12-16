@@ -1,11 +1,12 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
-import { type RouterOutputs } from '../../../../trpc';
+import { queryClient, trpc, type RouterOutputs } from '../../../../trpc';
 import { useAppForm, useFormContext } from '../../../../components/Form';
 import {
   calculateExpense,
   calculateExpenseItem,
   type ExpenseSurchargeOption,
 } from '../../../../../server/lib/expenseHelper';
+import type { UseNavigateResult } from '@tanstack/react-router';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
@@ -99,6 +100,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       shopMall: undefined,
       additionalServiceChargePercent: null,
       isGstExcluded: null,
+      isDeleted: false,
       items: [defaultExpenseItem()],
       refunds: [],
     };
@@ -199,4 +201,26 @@ export function calculateExpenseForm(form: TExpenseForm) {
     const { grossAmountCents } = calculateExpenseItem(item, { additionalServiceChargePercent, isGstExcluded });
     form.setFieldValue(`items[${i}].expenseRefund.expectedAmountCents`, grossAmountCents);
   }
+}
+
+type InvalidateAndRedirectBackToListOptions = {
+  navigate: UseNavigateResult<any>;
+  billedAt: Date;
+  optionsCreated: boolean;
+  expenseId: string;
+};
+
+export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirectBackToListOptions) {
+  const { navigate, billedAt, optionsCreated, expenseId } = opts;
+
+  const monthYear = { month: billedAt.getMonth(), year: billedAt.getFullYear() };
+  const promises = [queryClient.refetchQueries(trpc.expense.list.queryFilter(monthYear))];
+  if (expenseId !== 'create') {
+    promises.push(queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId })));
+  }
+  if (optionsCreated) {
+    promises.push(queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter()));
+  }
+  await Promise.all(promises);
+  return navigate({ to: '/expenses', search: monthYear });
 }

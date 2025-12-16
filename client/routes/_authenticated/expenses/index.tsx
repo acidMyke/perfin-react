@@ -14,6 +14,7 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     return {
       month: search['month'] as number | undefined,
       year: search['year'] as number | undefined,
+      showDeleted: search['showDeleted'] as boolean | undefined,
     } as Partial<RouterInputs['expense']['list']> | undefined;
   },
   loaderDeps: ({ search }) => {
@@ -21,11 +22,18 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     const deps: RouterInputs['expense']['list'] = {
       month: now.getMonth(),
       year: now.getFullYear(),
+      showDeleted: false,
     };
-    if (search && typeof search['month'] === 'number' && typeof search['year'] === 'number') {
-      deps.month = search['month'] as number;
-      deps.year = search['year'] as number;
+    if (search) {
+      if (typeof search['month'] === 'number' && typeof search['year'] === 'number') {
+        deps.month = search['month'] as number;
+        deps.year = search['year'] as number;
+      }
+      if (typeof search['showDeleted'] && typeof search['showDeleted'] === 'boolean') {
+        deps.showDeleted = search['showDeleted'];
+      }
     }
+
     return deps;
   },
   loader: async ({ deps }) => {
@@ -110,6 +118,21 @@ function MonthSelector() {
           </Link>
         );
       })}
+
+      <Link
+        key='showDelete'
+        to='/expenses'
+        search={{
+          year: loaderDeps.year,
+          month: loaderDeps.month,
+          showDeleted: !loaderDeps.showDeleted,
+        }}
+        className='label ml-auto'
+        preload='intent'
+      >
+        <input type='checkbox' checked={loaderDeps.showDeleted} className='toggle pointer-events-none' readOnly />
+        Deleted
+      </Link>
     </div>
   );
 }

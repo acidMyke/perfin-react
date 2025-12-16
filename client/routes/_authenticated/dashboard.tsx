@@ -61,7 +61,7 @@ function InsightsSection() {
                   <span>({(percentChange * 100).toFixed(2)}%)</span>
                 </div>
               ) : (
-                <div className='stat-desc'> Test </div>
+                <div className='stat-desc'>N/A</div>
               )}
             </div>
           );

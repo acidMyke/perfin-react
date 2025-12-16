@@ -661,6 +661,23 @@ const inferItemPricesProcedure = protectedProcedure
       .limit(1);
   });
 
+const deleteExpenseProcedure = protectedProcedure
+  .input(z.object({ expenseId: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    const { db, userId } = ctx;
+    const { expenseId } = input;
+    const result = await db
+      .update(expensesTable)
+      .set({ isDeleted: true })
+      .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, expenseId)));
+
+    if (result.meta.rows_written == 0) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    return { success: true };
+  });
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
@@ -669,4 +686,5 @@ export const expenseProcedures = {
   getSuggestions: getSuggestionsProcedure,
   inferShopDetail: inferShopDetailsProcedure,
   inferItemPrice: inferItemPricesProcedure,
+  delete: deleteExpenseProcedure,
 };

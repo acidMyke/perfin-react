@@ -108,6 +108,7 @@ const getTrendProcedure = protectedProcedure
       .where(
         and(
           eq(expensesTable.belongsToId, userId),
+          eq(expensesTable.isDeleted, false),
           gt(expensesTable.billedAt, sub(endOfToday(), { [interval]: duration })),
         ),
       )
