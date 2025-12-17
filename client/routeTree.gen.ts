@@ -21,6 +21,7 @@ import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
 import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './routes/_authenticated/expenses/$expenseId/route'
 import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
+import { Route as AuthenticatedExpensesExpenseIdViewRouteImport } from './routes/_authenticated/expenses/$expenseId/view'
 import { Route as AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport } from './routes/_authenticated/expenses/$expenseId/items.$indexStr'
 
 const VerifyRoute = VerifyRouteImport.update({
@@ -87,6 +88,12 @@ const AuthenticatedExpensesExpenseIdIndexRoute =
     path: '/',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
+const AuthenticatedExpensesExpenseIdViewRoute =
+  AuthenticatedExpensesExpenseIdViewRouteImport.update({
+    id: '/view',
+    path: '/view',
+    getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
+  } as any)
 const AuthenticatedExpensesExpenseIdItemsIndexStrRoute =
   AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport.update({
     id: '/items/$indexStr',
@@ -105,6 +112,7 @@ export interface FileRoutesByFullPath {
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -118,6 +126,7 @@ export interface FileRoutesByTo {
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -134,6 +143,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/_authenticated/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/_authenticated/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -150,6 +160,7 @@ export interface FileRouteTypes {
     | '/settings/manage-subjects'
     | '/expenses'
     | '/settings'
+    | '/expenses/$expenseId/view'
     | '/expenses/$expenseId/'
     | '/expenses/$expenseId/items/$indexStr'
   fileRoutesByTo: FileRoutesByTo
@@ -163,6 +174,7 @@ export interface FileRouteTypes {
     | '/settings/manage-subjects'
     | '/expenses'
     | '/settings'
+    | '/expenses/$expenseId/view'
     | '/expenses/$expenseId'
     | '/expenses/$expenseId/items/$indexStr'
   id:
@@ -178,6 +190,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/expenses/'
     | '/_authenticated/settings/'
+    | '/_authenticated/expenses/$expenseId/view'
     | '/_authenticated/expenses/$expenseId/'
     | '/_authenticated/expenses/$expenseId/items/$indexStr'
   fileRoutesById: FileRoutesById
@@ -277,6 +290,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdIndexRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
+    '/_authenticated/expenses/$expenseId/view': {
+      id: '/_authenticated/expenses/$expenseId/view'
+      path: '/view'
+      fullPath: '/expenses/$expenseId/view'
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdViewRouteImport
+      parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
+    }
     '/_authenticated/expenses/$expenseId/items/$indexStr': {
       id: '/_authenticated/expenses/$expenseId/items/$indexStr'
       path: '/items/$indexStr'
@@ -288,12 +308,15 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthenticatedExpensesExpenseIdRouteRouteChildren {
+  AuthenticatedExpensesExpenseIdViewRoute: typeof AuthenticatedExpensesExpenseIdViewRoute
   AuthenticatedExpensesExpenseIdIndexRoute: typeof AuthenticatedExpensesExpenseIdIndexRoute
   AuthenticatedExpensesExpenseIdItemsIndexStrRoute: typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
 
 const AuthenticatedExpensesExpenseIdRouteRouteChildren: AuthenticatedExpensesExpenseIdRouteRouteChildren =
   {
+    AuthenticatedExpensesExpenseIdViewRoute:
+      AuthenticatedExpensesExpenseIdViewRoute,
     AuthenticatedExpensesExpenseIdIndexRoute:
       AuthenticatedExpensesExpenseIdIndexRoute,
     AuthenticatedExpensesExpenseIdItemsIndexStrRoute:

@@ -166,7 +166,7 @@ function RouteComponent() {
             <Fragment key={expense.id}>
               {showDate && <div className='divider divider-start'>{format(expense.billedAt, 'dd MMM yyyy')}</div>}
               <Link
-                to='/expenses/$expenseId'
+                to='/expenses/$expenseId/view'
                 params={{ expenseId: expense.id }}
                 className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
               >
