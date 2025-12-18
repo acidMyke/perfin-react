@@ -19,8 +19,8 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, items, account, category, isDeleted } = expense;
-  const { grossAmount, expectedRefundSum, amount } = ui.calculateResult;
+  const { ui, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
+  const { baseAmount, grossAmount, expectedRefundSum, amount, gst, serviceCharge } = ui.calculateResult;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
@@ -63,7 +63,27 @@ function RouteComponent() {
         );
       })}
 
-      <div className='border-t-base-content/20 col-span-2 grid grid-cols-subgrid border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
+      <div className='border-t-base-content/20 col-span-2 grid grid-cols-subgrid border-t pt-4 *:even:text-right'>
+        {baseAmount < grossAmount && (
+          <>
+            <span>Subtotal:</span>
+            <span>{currencyNumberFormat.format(baseAmount)}</span>
+          </>
+        )}
+        {serviceCharge > 0 && (
+          <>
+            <span>Service charge ({additionalServiceChargePercent}%):</span>
+            <span>{currencyNumberFormat.format(serviceCharge)}</span>
+          </>
+        )}
+        {gst > 0 && (
+          <>
+            <span>Excl GST (9%):</span>
+            <span>{currencyNumberFormat.format(gst)}</span>
+          </>
+        )}
+      </div>
+      <div className='col-span-2 grid grid-cols-subgrid text-xl *:odd:font-bold *:even:text-right'>
         <span>Gross amount:</span>
         <span>{currencyNumberFormat.format(grossAmount)}</span>
         {expectedRefundSum > 0 && (
