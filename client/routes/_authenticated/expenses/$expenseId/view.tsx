@@ -1,10 +1,9 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { invalidateAndRedirectBackToList, useExpenseForm } from './-expense.common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat } from '../../../../utils';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { useMutation } from '@tanstack/react-query';
-import { ArchiveRestore, Trash2 } from 'lucide-react';
 import { useRef } from 'react';
 import { trpc } from '../../../../trpc';
 
@@ -20,21 +19,28 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, items, isDeleted } = expense;
+  const { ui, items, account, category, isDeleted } = expense;
   const { grossAmount, expectedRefundSum, amount } = ui.calculateResult;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
-      <div className='border-base-300 col-span-2 space-y-1 border-b pb-2'>
-        <h1 className='text-lg font-bold'>{expense.shopName ?? 'Unknown Shop'}</h1>
+      <div className='border-base-300 col-span-2 grid grid-cols-2 space-y-1 border-b pb-2'>
+        <h1 className='col-span-2 text-lg font-bold'>{expense.shopName ?? 'Unknown Shop'}</h1>
         {expense.shopMall && <p className='text-sm opacity-70'>{expense.shopMall}</p>}
         <p className='text-sm opacity-60'>{dateFormat.format(expense.billedAt)}</p>
+        <p className='text-sm opacity-60'>Category: {category?.label ?? 'Unspecified'}</p>
+        <p className='text-sm opacity-60'>Account: {account?.label ?? 'Unspecified'}</p>
       </div>
+      <span>Items</span>
+      <span>Amount</span>
 
       {items.map(item => {
         const { grossAmount, amount, minRefundCents } = calculateExpenseItem(item, expense);
         return (
-          <div key={item.id} className='border-base-300 col-span-2 grid grid-cols-subgrid pt-2 pb-2 last:border-0'>
+          <div
+            key={item.id}
+            className='border-base-300 col-span-2 grid grid-cols-subgrid pt-2 pb-2 last:border-0 *:even:justify-self-end'
+          >
             <span className='font-medium'>
               {item.name} ({formatCents(item.priceCents)}) × {item.quantity}
             </span>
@@ -70,13 +76,13 @@ function RouteComponent() {
         <span>{currencyNumberFormat.format(amount)}</span>
       </div>
 
-      <ToggleDeleteButtonAndModal className='btn btn-lg col-span-2 mt-4' isDeleted={isDeleted} />
+      <ActionSection isDeleted={isDeleted} />
     </div>
   );
 }
 
-function ToggleDeleteButtonAndModal(props: { className: string; isDeleted: boolean }) {
-  const { className, isDeleted } = props;
+function ActionSection(props: { isDeleted: boolean }) {
+  const { isDeleted } = props;
   const confirmModalRef = useRef<HTMLDialogElement>(null);
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -99,17 +105,13 @@ function ToggleDeleteButtonAndModal(props: { className: string; isDeleted: boole
 
   return (
     <>
-      {isDeleted ? (
-        <button className={className} onClick={() => confirmModalRef.current?.showModal()}>
-          <ArchiveRestore />
-          Restore
-        </button>
-      ) : (
-        <button className={className} onClick={() => confirmModalRef.current?.showModal()}>
-          <Trash2 />
-          Delete
-        </button>
-      )}
+      <Link to='/expenses/$expenseId' params={{ expenseId }} className='btn btn-lg btn-primary col-span-2 mt-4'>
+        Edit
+      </Link>
+
+      <button className='btn btn-lg col-span-2 mt-2' onClick={() => confirmModalRef.current?.showModal()}>
+        {isDeleted ? 'Restore' : 'Delete'}
+      </button>
       <dialog className='modal' ref={confirmModalRef}>
         <div className='modal-box'>
           <h3 className='text-lg font-bold'>Confirm {deleteOrRestore}?</h3>
