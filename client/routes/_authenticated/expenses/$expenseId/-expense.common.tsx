@@ -48,6 +48,7 @@ export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseR
 
 export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: ExpenseOptions, param?: { isCopy: boolean }) {
   if (detail && options) {
+    console.log('remap', param);
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
     const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
@@ -62,14 +63,19 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       }
     }
 
+    if (param?.isCopy) {
+      rest.items = rest.items.map(item => ({ ...item, id: 'create' }));
+      rest.refunds = rest.refunds.map(refund => ({ ...refund, id: 'create' }));
+    }
+
     return {
       ui: {
         isCreate: false,
         isItemsSubpage,
         shouldInferShopDetail: false,
-        calculateResult: calculateExpense(rest),
+        calculateResult: calculateExpense(detail),
       },
-      billedAt: param?.isCopy ? new Date(billedAt) : new Date(),
+      billedAt: param?.isCopy ? new Date() : new Date(billedAt),
       account,
       category,
       geolocation:
