@@ -130,7 +130,12 @@ function MonthSelector() {
         className='label ml-auto'
         preload='intent'
       >
-        <input type='checkbox' checked={loaderDeps.showDeleted} className='toggle pointer-events-none' readOnly />
+        <input
+          type='checkbox'
+          checked={loaderDeps.showDeleted}
+          className='toggle checked:toggle-primary pointer-events-none'
+          readOnly
+        />
         Deleted
       </Link>
     </div>
