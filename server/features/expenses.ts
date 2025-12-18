@@ -160,7 +160,6 @@ const saveExpenseProcedure = protectedProcedure
     z.object({
       expenseId: z.string(),
       version: z.int().optional().default(0),
-      isDeleted: z.boolean().optional().default(false),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
         .object({ value: z.string(), label: z.string() })
@@ -319,7 +318,6 @@ const saveExpenseProcedure = protectedProcedure
         shopMall: input.shopMall,
         additionalServiceChargePercent: input.additionalServiceChargePercent,
         isGstExcluded: input.isGstExcluded,
-        isDeleted: input.isDeleted,
       })
       .onConflictDoUpdate({
         target: expensesTable.id,
@@ -661,19 +659,25 @@ const inferItemPricesProcedure = protectedProcedure
       .limit(1);
   });
 
-const deleteExpenseProcedure = protectedProcedure
-  .input(z.object({ expenseId: z.string() }))
+const setIsDeletedExpenseProcedure = protectedProcedure
+  .input(z.object({ expenseId: z.string(), isDeleted: z.boolean(), version: z.number() }))
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
-    const { expenseId } = input;
-    const result = await db
-      .update(expensesTable)
-      .set({ isDeleted: true })
-      .where(and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, expenseId)));
+    const { expenseId, isDeleted, version } = input;
+    const condition = and(eq(expensesTable.id, expenseId), eq(expensesTable.belongsToId, userId));
 
-    if (result.meta.rows_written == 0) {
+    // Validation
+    const existing = await db.query.expensesTable.findFirst({ where: condition, columns: { version: true } });
+
+    if (!existing) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
+
+    if (existing.version > version) {
+      throw new TRPCError({ code: 'CONFLICT' });
+    }
+
+    await db.update(expensesTable).set({ isDeleted }).where(condition);
 
     return { success: true };
   });
@@ -686,5 +690,5 @@ export const expenseProcedures = {
   getSuggestions: getSuggestionsProcedure,
   inferShopDetail: inferShopDetailsProcedure,
   inferItemPrice: inferItemPricesProcedure,
-  delete: deleteExpenseProcedure,
+  setDelete: setIsDeletedExpenseProcedure,
 };

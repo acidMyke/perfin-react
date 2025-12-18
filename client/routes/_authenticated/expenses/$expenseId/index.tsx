@@ -5,7 +5,6 @@ import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
   defaultExpenseItem,
-  invalidateAndRedirectBackToList,
   useExpenseForm,
 } from './-expense.common';
 import { format } from 'date-fns/format';
@@ -13,33 +12,16 @@ import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { ExternalLink, Plus, Trash2 } from 'lucide-react';
+import { ExternalLink, Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
-import { useRef } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
 });
 
 function RouteComponent() {
-  const navigate = Route.useNavigate();
-  const { expenseId } = Route.useParams();
-  const isCreate = expenseId === 'create';
-  const deleteExpenseMutation = useMutation(
-    trpc.expense.delete.mutationOptions({
-      onSuccess() {
-        return invalidateAndRedirectBackToList({
-          expenseId,
-          navigate,
-          optionsCreated: false,
-          billedAt: form.getFieldValue('billedAt'),
-        });
-      },
-    }),
-  );
-  const confirmDeleteModalRef = useRef<HTMLDialogElement>(null);
   const form = useExpenseForm();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
@@ -105,34 +87,6 @@ function RouteComponent() {
         doneLabel='Submitted'
         inProgressLabel='Submitting...'
       />
-      {!isCreate && (
-        <button className='btn btn-lg col-span-full' onClick={() => confirmDeleteModalRef.current?.showModal()}>
-          <Trash2 />
-          Mark as deleted
-        </button>
-      )}
-      <dialog className='modal' ref={confirmDeleteModalRef}>
-        <div className='modal-box'>
-          <h3 className='text-lg font-bold'>Confirm delete?</h3>
-          <p className='py-4'>Are you sure you want to delete this record?</p>
-          <div className='modal-action'>
-            <button
-              className='btn btn-error'
-              onClick={() => {
-                deleteExpenseMutation.mutateAsync({ expenseId });
-                confirmDeleteModalRef.current?.close();
-              }}
-            >
-              {deleteExpenseMutation.isPending && <span className='loading' />}
-              Yes
-            </button>
-            <button className='btn' onClick={() => confirmDeleteModalRef.current?.close()}>
-              No
-            </button>
-          </div>
-          <div></div>
-        </div>
-      </dialog>
     </div>
   );
 }

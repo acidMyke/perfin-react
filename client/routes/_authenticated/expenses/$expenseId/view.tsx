@@ -1,8 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useExpenseForm } from './-expense.common';
+import { invalidateAndRedirectBackToList, useExpenseForm } from './-expense.common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat } from '../../../../utils';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
+import { useMutation } from '@tanstack/react-query';
+import { ArchiveRestore, Trash2 } from 'lucide-react';
+import { useRef } from 'react';
+import { trpc } from '../../../../trpc';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -65,6 +69,76 @@ function RouteComponent() {
         <span>Total paid:</span>
         <span>{currencyNumberFormat.format(amount)}</span>
       </div>
+
+      <ToggleDeleteButtonAndModal className='btn btn-lg col-span-full' />
     </div>
+  );
+}
+
+function ToggleDeleteButtonAndModal(props: { className: string }) {
+  const { className } = props;
+  const confirmModalRef = useRef<HTMLDialogElement>(null);
+  const navigate = Route.useNavigate();
+  const { expenseId } = Route.useParams();
+  const isCreate = expenseId === 'create';
+  const form = useExpenseForm();
+
+  const setIsDeleteExpenseMutation = useMutation(
+    trpc.expense.setDelete.mutationOptions({
+      onSuccess() {
+        return invalidateAndRedirectBackToList({
+          expenseId,
+          navigate,
+          optionsCreated: false,
+          billedAt: form.getFieldValue('billedAt'),
+        });
+      },
+    }),
+  );
+
+  if (!isCreate) {
+    return undefined;
+  }
+
+  const isDeleted = form.state.values.isDeleted;
+  const deleteOrRestore = isDeleted ? 'restore' : 'delete';
+
+  return (
+    <>
+      {isDeleted ? (
+        <button className={className} onClick={() => confirmModalRef.current?.showModal()}>
+          <ArchiveRestore />
+          Restore
+        </button>
+      ) : (
+        <button className={className} onClick={() => confirmModalRef.current?.showModal()}>
+          <Trash2 />
+          Delete
+        </button>
+      )}
+      <dialog className='modal' ref={confirmModalRef}>
+        <div className='modal-box'>
+          <h3 className='text-lg font-bold'>Confirm {deleteOrRestore}?</h3>
+          <p className='py-4'>Are you sure you want to {deleteOrRestore} this record?</p>
+          <div className='modal-action'>
+            <button
+              className='btn btn-error'
+              onClick={() => {
+                const version = form.getFieldValue('version');
+                setIsDeleteExpenseMutation.mutateAsync({ expenseId, version, isDeleted: !isDeleted });
+                confirmModalRef.current?.close();
+              }}
+            >
+              {setIsDeleteExpenseMutation.isPending && <span className='loading' />}
+              Yes
+            </button>
+            <button className='btn' onClick={() => confirmModalRef.current?.close()}>
+              No
+            </button>
+          </div>
+          <div></div>
+        </div>
+      </dialog>
+    </>
   );
 }
