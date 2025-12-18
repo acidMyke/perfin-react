@@ -46,7 +46,7 @@ export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseR
   };
 }
 
-export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: ExpenseOptions) {
+export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: ExpenseOptions, param?: { isCopy: boolean }) {
   if (detail && options) {
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
@@ -69,7 +69,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
         shouldInferShopDetail: false,
         calculateResult: calculateExpense(rest),
       },
-      billedAt: new Date(billedAt),
+      billedAt: param?.isCopy ? new Date(billedAt) : new Date(),
       account,
       category,
       geolocation:

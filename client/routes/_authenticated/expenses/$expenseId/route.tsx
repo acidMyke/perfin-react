@@ -48,13 +48,13 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
-  const { isCopy } = Route.useLoaderDeps();
+  const { isCopy, copyId } = Route.useLoaderDeps();
   const isCreate = expenseId === 'create';
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const existingExpenseQuery = useQuery(
     trpc.expense.loadDetail.queryOptions(
-      { expenseId },
-      { enabled: !isCreate, refetchOnMount: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
+      { expenseId: copyId ?? expenseId },
+      { enabled: !isCreate || isCopy, refetchOnMount: false, refetchOnReconnect: false, refetchOnWindowFocus: false },
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
@@ -131,11 +131,10 @@ function RouteComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), {
-        keepDefaultValues: isCopy,
-      });
+      const formData = mapExpenseDetailToForm(existingExpenseQuery.data, optionsData, { isCopy });
+      form.reset(formData, { keepDefaultValues: !isCopy });
     }
-  }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
+  }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError, isCopy]);
 
   useEffect(() => {
     if (isCreate && navigator.geolocation) {
@@ -149,7 +148,7 @@ function RouteComponent() {
         },
       );
     }
-  }, []);
+  }, [isCreate]);
 
   return (
     <div className='mx-auto max-w-md'>
