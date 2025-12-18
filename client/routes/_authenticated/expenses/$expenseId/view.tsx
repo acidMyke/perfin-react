@@ -20,7 +20,7 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, items } = expense;
+  const { ui, items, isDeleted } = expense;
   const { grossAmount, expectedRefundSum, amount } = ui.calculateResult;
 
   return (
@@ -70,17 +70,16 @@ function RouteComponent() {
         <span>{currencyNumberFormat.format(amount)}</span>
       </div>
 
-      <ToggleDeleteButtonAndModal className='btn btn-lg col-span-full' />
+      <ToggleDeleteButtonAndModal className='btn btn-lg col-span-2 mt-4' isDeleted={isDeleted} />
     </div>
   );
 }
 
-function ToggleDeleteButtonAndModal(props: { className: string }) {
-  const { className } = props;
+function ToggleDeleteButtonAndModal(props: { className: string; isDeleted: boolean }) {
+  const { className, isDeleted } = props;
   const confirmModalRef = useRef<HTMLDialogElement>(null);
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
-  const isCreate = expenseId === 'create';
   const form = useExpenseForm();
 
   const setIsDeleteExpenseMutation = useMutation(
@@ -96,11 +95,6 @@ function ToggleDeleteButtonAndModal(props: { className: string }) {
     }),
   );
 
-  if (!isCreate) {
-    return undefined;
-  }
-
-  const isDeleted = form.state.values.isDeleted;
   const deleteOrRestore = isDeleted ? 'restore' : 'delete';
 
   return (

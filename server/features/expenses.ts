@@ -80,6 +80,7 @@ const loadExpenseDetailProcedure = protectedProcedure
         version: true,
         isGstExcluded: true,
         additionalServiceChargePercent: true,
+        isDeleted: true,
       },
       with: {
         items: {
