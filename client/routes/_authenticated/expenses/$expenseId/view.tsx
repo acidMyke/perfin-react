@@ -129,9 +129,27 @@ function ActionSection(props: { isDeleted: boolean }) {
         Edit
       </Link>
 
-      <button className='btn btn-lg col-span-2 mt-2' onClick={() => confirmModalRef.current?.showModal()}>
-        {isDeleted ? 'Restore' : 'Delete'}
-      </button>
+      <div className='col-span-2 mt-2 flex gap-4'>
+        <button
+          className='btn btn-lg btn-warning col-span-2 mt-2 flex-1'
+          onClick={() => confirmModalRef.current?.showModal()}
+        >
+          {isDeleted ? 'Restore' : 'Delete'}
+        </button>
+
+        <button
+          className='btn btn-lg col-span-2 mt-2 flex-1'
+          onClick={() =>
+            navigate({
+              to: '/expenses/$expenseId',
+              params: { expenseId: 'create' },
+              search: { copyId: expenseId },
+            })
+          }
+        >
+          Duplicate
+        </button>
+      </div>
       <dialog className='modal' ref={confirmModalRef}>
         <div className='modal-box'>
           <h3 className='text-lg font-bold'>Confirm {deleteOrRestore}?</h3>

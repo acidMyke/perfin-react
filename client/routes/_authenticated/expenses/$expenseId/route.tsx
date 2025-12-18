@@ -16,23 +16,39 @@ import { percentageNumberFormat } from '../../../../utils';
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
   notFoundComponent: ExpenseNotFoundComponent,
-  loader: ({ params }) => {
+  validateSearch: search => {
+    if (!('copyId' in search)) return undefined;
+    return {
+      copyId: search['copyId'] as string | undefined,
+    };
+  },
+  loaderDeps: ({ search }) => {
+    if (search) {
+      if (typeof search['copyId'] === 'string')
+        return {
+          copyId: search['copyId'],
+          isCopy: true,
+        };
+    }
+    return { isCopy: false };
+  },
+  loader: ({ params, deps }) => {
     const isCreate = params.expenseId === 'create';
-    return Promise.all([
-      isCreate
-        ? undefined
-        : queryClient
-            .ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: params.expenseId }))
-            .catch(error => throwIfNotFound(error)),
-      queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
-      // load existing detail if not create
-    ]);
+    const promises: Promise<any>[] = [queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions())];
+    if (!isCreate || deps.isCopy) {
+      promises.push(
+        queryClient
+          .ensureQueryData(trpc.expense.loadDetail.queryOptions({ expenseId: deps.copyId ?? params.expenseId }))
+          .catch(error => throwIfNotFound(error)),
+      );
+    }
   },
 });
 
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
+  const { isCopy } = Route.useLoaderDeps();
   const isCreate = expenseId === 'create';
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const existingExpenseQuery = useQuery(
@@ -115,10 +131,9 @@ function RouteComponent() {
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
-      form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), { keepDefaultValues: true });
-      const { amountCents, items } = existingExpenseQuery.data;
-      const totalCents = items.reduce((acc, { priceCents, quantity }) => acc + priceCents * quantity, 0);
-      form.setFieldMeta('amountCents', meta => ({ ...meta, isDirty: totalCents !== amountCents }));
+      form.reset(mapExpenseDetailToForm(existingExpenseQuery.data, optionsData), {
+        keepDefaultValues: isCopy,
+      });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError]);
 
