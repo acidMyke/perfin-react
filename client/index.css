@@ -5,27 +5,28 @@
   default: true;
   prefersdark: true;
   color-scheme: dark;
-  --color-content: hsl(226, 64%, 88%);
+  --color-content: hsl(226, 40%, 92%);
 
   --color-base-100: hsl(240, 21%, 15%);
   --color-base-200: hsl(240, 21%, 22%);
   --color-base-300: hsl(240, 21%, 29%);
   --color-base-content: var(--color-content);
-  --color-primary: var(--color-blue-400);
+  --color-primary: oklch(62% 0.14 255); /* softer blue */
   --color-primary-content: var(--color-content);
-  --color-secondary: var(--color-fuchsia-400);
+
+  --color-secondary: oklch(60% 0.15 320); /* muted fuchsia */
   --color-secondary-content: var(--color-content);
-  --color-accent: oklch(--color-sky-300);
+
+  --color-accent: oklch(65% 0.13 220); /* calm sky */
   --color-accent-content: var(--color-content);
-  --color-neutral: var(--color-slate-600);
-  --color-neutral-content: var(--color-content);
-  --color-info: oklch(74% 0.16 232.661);
+
+  --color-info: oklch(64% 0.11 230);
   --color-info-content: var(--color-content);
-  --color-success: oklch(76% 0.177 163.223);
+  --color-success: oklch(64% 0.12 160);
   --color-success-content: var(--color-content);
-  --color-warning: oklch(82% 0.189 84.429);
+  --color-warning: oklch(68% 0.13 85);
   --color-warning-content: var(--color-content);
-  --color-error: oklch(71% 0.194 13.428);
+  --color-error: oklch(60% 0.14 15);
   --color-error-content: var(--color-content);
 
   /* border radius */

@@ -59,7 +59,7 @@ function RouteComponent() {
             <span className={amount === 0 ? 'line-through' : ''}>{currencyNumberFormat.format(grossAmount)}</span>
             {item.expenseRefund && (
               <>
-                <span className='text-warning ml-2 text-sm'>
+                <span className='text-secondary ml-2 text-sm'>
                   {(item.expenseRefund.actualAmountCents == null
                     ? 'Pending refund '
                     : minRefundCents < grossAmount
@@ -67,7 +67,7 @@ function RouteComponent() {
                       : 'Fully refunded ') + `(${item.expenseRefund.source})`}
                 </span>
                 {item.expenseRefund.actualAmountCents && (
-                  <span className='text-warning text-sm'>-{formatCents(item.expenseRefund.actualAmountCents)}</span>
+                  <span className='text-secondary text-sm'>-{formatCents(item.expenseRefund.actualAmountCents)}</span>
                 )}
               </>
             )}
@@ -143,14 +143,14 @@ function ActionSection(props: { isDeleted: boolean }) {
 
       <div className='col-span-2 mt-2 flex gap-4'>
         <button
-          className='btn btn-lg btn-warning col-span-2 mt-2 flex-1'
+          className='btn btn-lg btn-error col-span-2 mt-2 flex-1'
           onClick={() => confirmModalRef.current?.showModal()}
         >
           {isDeleted ? 'Restore' : 'Delete'}
         </button>
 
         <button
-          className='btn btn-lg col-span-2 mt-2 flex-1'
+          className='btn btn-secondary btn-lg col-span-2 mt-2 flex-1'
           onClick={() =>
             navigate({
               to: '/expenses/$expenseId',
