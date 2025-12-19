@@ -19,13 +19,25 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
+  const { ui, geolocation, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
   const { baseAmount, grossAmount, expectedRefundSum, amount, gst, serviceCharge } = ui.calculateResult;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
       <div className='border-base-300 col-span-2 grid grid-cols-2 space-y-1 border-b pb-2'>
-        <h1 className='col-span-2 text-lg font-bold'>{expense.shopName ?? 'Unknown Shop'}</h1>
+        <h1 className='col-span-2 text-lg font-bold'>
+          {geolocation ? (
+            <a
+              href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
+              target='_blank'
+              className='link'
+            >
+              {expense.shopName ?? 'Unknown Shop'}
+            </a>
+          ) : (
+            (expense.shopName ?? 'Unknown Shop')
+          )}
+        </h1>
         {expense.shopMall && <p className='text-sm opacity-70'>{expense.shopMall}</p>}
         <p className='text-sm opacity-60'>{dateFormat.format(expense.billedAt)}</p>
         <p className='text-sm opacity-60'>Category: {category?.label ?? 'Unspecified'}</p>
