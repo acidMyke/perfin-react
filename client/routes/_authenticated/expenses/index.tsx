@@ -46,6 +46,7 @@ function MonthSelector() {
   const navigate = useNavigate({ from: '/expenses' });
   const loaderDeps = Route.useLoaderDeps();
   const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
+  const showDeleted = loaderDeps.showDeleted || undefined;
 
   return (
     <div className='flex flex-row gap-4'>
@@ -64,7 +65,7 @@ function MonthSelector() {
             if (month && year) {
               router.preloadRoute({
                 to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year) },
+                search: { month: parseInt(month), year: parseInt(year), showDeleted },
               });
             }
           }}
@@ -76,7 +77,7 @@ function MonthSelector() {
             if (month && year) {
               navigate({
                 to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year) },
+                search: { month: parseInt(month), year: parseInt(year), showDeleted },
               });
               e.currentTarget.parentElement?.removeAttribute('open');
             }
@@ -111,6 +112,7 @@ function MonthSelector() {
             search={{
               month: date.getMonth(),
               year: date.getFullYear(),
+              showDeleted,
             }}
             className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
           >
@@ -125,7 +127,7 @@ function MonthSelector() {
         search={{
           year: loaderDeps.year,
           month: loaderDeps.month,
-          showDeleted: !loaderDeps.showDeleted,
+          showDeleted: !showDeleted || undefined,
         }}
         className='label ml-auto'
         preload='intent'
