@@ -126,6 +126,11 @@ export const protectedProcedure = publicProcedure.use(async opts => {
     }
     throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
+
+  if (opts.type === 'mutation' && !opts.ctx.isCsrfValid) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'CSRF verification failed' });
+  }
+
   return opts.next({
     ctx: opts.ctx,
   });

@@ -67,45 +67,6 @@ async function revokeToken(db: AppDatabase, userId: string, sessionId: string, r
   console.log('revoke_token', { result: result.meta });
 }
 
-async function create(ctx: Context, userId: string) {
-  const { db, env, resHeaders } = ctx;
-  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
-  await createAndSaveToken(db, env, resHeaders, userId, loginAttemptId);
-}
-
-async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
-  const { session, userId, db } = ctx;
-  if (!otherSessionId) {
-    unsetTokenCookie(ctx.env, ctx.resHeaders);
-  }
-  await revokeToken(db, userId, otherSessionId ?? session.id);
-}
-
-function getTokenFromReq(req: Request, env: Env) {
-  const cookieHeader = req.headers.get('Cookie');
-  if (!cookieHeader) {
-    return { token: undefined, authFailureReason: 'Missing cookie header' };
-  }
-
-  const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
-
-  if (cookies.length === 0) {
-    return { token: undefined, authFailureReason: 'Empty cookie header' };
-  }
-
-  for (const cookie of cookies) {
-    const [name, ...rest] = cookie.split('=');
-    if (name === env.TOKEN_COOKIE_NAME) {
-      return {
-        token: decodeURIComponent(rest.join('=')),
-        authFailureReason: undefined,
-      };
-    }
-  }
-
-  return { token: undefined, authFailureReason: 'Missing token' };
-}
-
 async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId: string | null = null) {
   const { db, req } = ctx;
   const cf = req.cf;
@@ -137,17 +98,58 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   return loginAttemptId;
 }
 
+async function create(ctx: Context, userId: string) {
+  const { db, env, resHeaders } = ctx;
+  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
+  await createAndSaveToken(db, env, resHeaders, userId, loginAttemptId);
+}
+
+async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
+  const { session, userId, db } = ctx;
+  if (!otherSessionId) {
+    unsetTokenCookie(ctx.env, ctx.resHeaders);
+  }
+  await revokeToken(db, userId, otherSessionId ?? session.id);
+}
+
+function getTokensFromCookies(req: Request, env: Env) {
+  const parsedCookies = {
+    authToken: undefined as string | undefined,
+    csrfToken: undefined as string | undefined,
+  };
+  const cookieHeader = req.headers.get('Cookie');
+  const cookies = cookieHeader?.split(';')?.map(cookie => cookie.trim());
+
+  if (!cookies || cookies.length === 0) {
+    return parsedCookies;
+  }
+
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.split('=');
+    const decoded = decodeURIComponent(rest.join('='));
+    if (name === env.TOKEN_COOKIE_NAME) {
+      parsedCookies.authToken = decoded;
+    } else if (name === 'csrf') {
+      parsedCookies.csrfToken = decoded;
+    }
+  }
+
+  return parsedCookies;
+}
+
+async function checkCsrf(db: AppDatabase, req: Request, cookieCsrf: string) {}
+
 async function check(db: AppDatabase, req: Request, env: Env, resHeaders: CookieHeaders) {
-  const { token, authFailureReason } = getTokenFromReq(req, env);
-  if (!token) {
+  const { authToken, csrfToken } = getTokensFromCookies(req, env);
+  if (!authToken) {
     return {
       isAuthenticated: false as const,
-      authFailureReason,
+      authFailureReason: 'Missing token',
     };
   }
 
   const session = await db.query.sessionsTable.findFirst({
-    where: (session, { eq, gt, and }) => and(eq(session.token, token), gt(session.expiresAt, new Date())),
+    where: (session, { eq, gt, and }) => and(eq(session.token, authToken), gt(session.expiresAt, new Date())),
     columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
     with: { user: { columns: { id: true, name: true } } },
   });
@@ -168,7 +170,22 @@ async function check(db: AppDatabase, req: Request, env: Env, resHeaders: Cookie
     await revokeToken(db, userId, session.id, true);
   }
 
+  let isCsrfValid = false;
+  if (csrfToken) {
+    isCsrfValid = req.headers.get('X-CSRF-Token') == csrfToken;
+  } else {
+    const { expiresAt, maxAge, token } = generateTokenParam();
+    resHeaders.setCookie('csrf', token, {
+      secure: !import.meta.env.DEV,
+      path: '/',
+      expires: expiresAt,
+      maxAge,
+      sameSite: 'Lax',
+    });
+  }
+
   return {
+    isCsrfValid,
     isAuthenticated: true as const,
     session,
     user: session.user,
@@ -180,7 +197,7 @@ export const sessions = {
   create,
   revoke,
   saveLoginAttempt,
-  getTokenFromReq,
+  getTokenFromReq: getTokensFromCookies,
   check,
 };
 
