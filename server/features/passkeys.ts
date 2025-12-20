@@ -12,7 +12,7 @@ import { isoUint8Array } from '@simplewebauthn/server/helpers';
 
 const REGISTRATION_CHALLENGE_COOKIE_NAME = 'pkreg-challenge';
 
-const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(async ({ ctx }) => {
+const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, env, user, resHeaders } = ctx;
 
   const excludeCredentials = await db
