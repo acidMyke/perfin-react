@@ -240,10 +240,7 @@ const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
 });
 
 const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
-  const { isAuthenticated, user, session, promises } = await sessions.resolve(ctx, /*allowUnauthicated:*/ true);
-  if (promises) {
-    await Promise.allSettled(promises);
-  }
+  const { isAuthenticated, user, session } = ctx;
 
   return {
     isAuthenticated,
