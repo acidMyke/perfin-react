@@ -236,7 +236,7 @@ const signUpFinalizeProcedure = publicProcedure
   });
 
 const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
-  sessions.revoke(ctx);
+  await sessions.revoke(ctx);
 });
 
 const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {

@@ -57,10 +57,12 @@ async function revokeToken(db: AppDatabase, userId: string, sessionId: string, r
   if (revokeLater) {
     expiresAt = addMinutes(expiresAt, 2);
   }
-  return db
+  const result = await db
     .update(schema.sessionsTable)
     .set({ expiresAt })
     .where(and(eq(schema.sessionsTable.id, sessionId), eq(schema.sessionsTable.userId, userId)));
+
+  console.log('revoke_token', { result: result.meta });
 }
 
 async function create(ctx: Context, userId: string) {
@@ -74,7 +76,7 @@ async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
   if (!otherSessionId) {
     unsetTokenCookie(ctx.env, ctx.resHeaders);
   }
-  await revokeToken(db, otherSessionId ?? session.id, userId);
+  await revokeToken(db, userId, otherSessionId ?? session.id);
 }
 
 function getTokenFromReq(req: Request, env: Env) {
@@ -161,7 +163,7 @@ async function check(db: AppDatabase, req: Request, env: Env, resHeaders: Cookie
   // if the token is older then 2 days, refresh it
   if (differenceInDays(new Date(), session.createdAt) > 2) {
     await createAndSaveToken(db, env, resHeaders, userId, session.loginAttemptId);
-    await revokeToken(db, userId, token, true);
+    await revokeToken(db, userId, session.id, true);
   }
 
   return {
