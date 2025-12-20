@@ -29,7 +29,9 @@ function setTokenCookie(env: Env, resHeaders: CookieHeaders, param: ReturnType<t
 }
 
 function unsetTokenCookie(env: Env, resHeaders: CookieHeaders) {
-  resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
+  resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME, {
+    path: '/',
+  });
 }
 
 async function createAndSaveToken(
