@@ -1,13 +1,13 @@
 import { initTRPC, TRPCError, type inferProcedureBuilderResolverOptions } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
-import { type CookieHeaders } from './lib/CookieHeaders';
-import sessions from './lib/sessions';
+import { type CookieHeaders } from './CookieHeaders';
+import sessions from './sessions';
 import { $ZodError } from 'zod/v4/core';
 import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 import { format } from 'date-fns/format';
-import { createDatabase } from './lib/db';
+import { createDatabase } from './db';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = createDatabase(env);

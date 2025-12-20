@@ -1,6 +1,29 @@
-import { SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import { getTableColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
 import * as schema from '../../db/schema';
+
+export const sankeCaseFromCamelCase = (camelCase: string) =>
+  camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
+
+export function excluded<T extends AnyColumn>(column: T) {
+  return sql`excluded.${sql.raw(sankeCaseFromCamelCase(column.name))}`;
+}
+
+export function excludedAll<T extends Table>(
+  table: T,
+  omits: (keyof T['_']['columns'])[] = [],
+): Record<keyof T['_']['columns'], SQL<unknown>> {
+  const columns = getTableColumns(table);
+  // @ts-expect-error
+  const excludedColumns: Record<keyof T['_']['columns'], SQL<unknown>> = {};
+
+  for (const key in columns) {
+    if (omits.includes(key)) continue;
+    excludedColumns[key] = excluded(columns[key]);
+  }
+
+  return excludedColumns;
+}
 
 type ChunkValue<TReturn> = TReturn | SQL<TReturn> | SQL.Aliased<TReturn> | SQLWrapper;
 

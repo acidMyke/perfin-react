@@ -1,5 +1,5 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
-import { FormInputError, protectedProcedure, publicProcedure } from '../trpc';
+import { FormInputError, protectedProcedure, publicProcedure } from '../lib/trpc';
 import { eq, or } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
@@ -239,7 +239,7 @@ const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   await sessions.revoke(ctx);
 });
 
-const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
+export const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
   const { isAuthenticated, user, session } = ctx;
 
   return {
@@ -251,13 +251,10 @@ const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
   };
 });
 
-export const usersProcedures = {
-  whoami: whoamiProcedure,
-  session: {
-    signIn: signInProcedure,
-    signOut: signOutProcedure,
-    signUpEmail: signUpEmailProcedure,
-    signUpVerify: signUpVerifyProcedure,
-    signUpFinalize: signUpFinalizeProcedure,
-  },
-} as const;
+export const sessionProcedures = {
+  signIn: signInProcedure,
+  signOut: signOutProcedure,
+  signUpEmail: signUpEmailProcedure,
+  signUpVerify: signUpVerifyProcedure,
+  signUpFinalize: signUpFinalizeProcedure,
+};

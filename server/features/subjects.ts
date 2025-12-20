@@ -1,5 +1,5 @@
 import z from 'zod';
-import { FormInputError, protectedProcedure } from '../trpc';
+import { FormInputError, protectedProcedure } from '../lib/trpc';
 import { accountsTable, categoriesTable } from '../../db/schema';
 import { and, asc, eq } from 'drizzle-orm';
 import { SUBJECT_TYPES_TUPLE } from '../../db/enum';

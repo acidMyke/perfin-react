@@ -1,4 +1,4 @@
-import type { Context, ProtectedContext } from '../trpc';
+import type { Context, ProtectedContext } from './trpc';
 import { addDays } from 'date-fns/addDays';
 import { randomBytes } from 'node:crypto';
 import * as schema from '../../db/schema';

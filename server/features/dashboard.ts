@@ -1,5 +1,5 @@
 import { endOfToday, getUnixTime, sub, subDays } from 'date-fns';
-import { protectedProcedure } from '../trpc';
+import { protectedProcedure } from '../lib/trpc';
 import { and, between, count, eq, gt, sql } from 'drizzle-orm';
 import { expensesTable } from '../../db/schema';
 import z from 'zod';

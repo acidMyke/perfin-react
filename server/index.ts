@@ -2,7 +2,7 @@
 // From here call trpc when request hit /trpc
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router';
-import { createContextFactory } from './trpc';
+import { createContextFactory } from './lib/trpc';
 import { CookieHeaders } from './lib/CookieHeaders';
 
 export default {

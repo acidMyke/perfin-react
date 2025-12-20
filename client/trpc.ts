@@ -3,7 +3,7 @@ import { createTRPCClient, httpBatchLink, isTRPCClientError, loggerLink, type TR
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
 import type { AppRouter } from '../server/router';
 import { observable, type Unsubscribable } from '@trpc/server/observable';
-import type { AppErrorShapeData } from '../server/trpc';
+import type { AppErrorShapeData } from '../server/lib/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { notFound } from '@tanstack/react-router';
 
