@@ -32,7 +32,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { excludedAll } from '../lib/utils';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat } from '../lib/SqlExtension';
+import { caseWhen, coalesce, concat } from '../lib/db';
 
 type Option = {
   label: string;

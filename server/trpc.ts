@@ -1,22 +1,19 @@
 import { initTRPC, TRPCError, type inferProcedureBuilderResolverOptions } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
-import { drizzle } from 'drizzle-orm/d1';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
-import * as schema from '../db/schema';
 import { type CookieHeaders } from './lib/CookieHeaders';
 import sessions from './lib/sessions';
 import { $ZodError } from 'zod/v4/core';
 import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 import { format } from 'date-fns/format';
+import { createDatabase } from './lib/db';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
-  const db = drizzle(env.db, {
-    logger: import.meta.env.DEV,
-    casing: 'snake_case',
-    schema,
-  });
-  return function ({ req }: FetchCreateContextFnOptions) {
+  const db = createDatabase(env);
+  return async function ({ req }: FetchCreateContextFnOptions) {
+    const checkResult = await sessions.check(db, req, env, resHeaders);
+
     return {
       db,
       req,
@@ -24,6 +21,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
       wctx: ctx, // Cloudflare workers context
       url: new URL(req.url),
       resHeaders,
+      ...checkResult,
     };
   };
 }
@@ -121,21 +119,21 @@ export const publicProcedure = t.procedure.use(async opts => {
 });
 
 export const protectedProcedure = publicProcedure.use(async opts => {
-  const { user, session, promises } = await sessions.resolve(opts.ctx);
-  // resolve will throw if unauthenticated
-  const res = opts.next({
-    ctx: {
-      user: user!,
-      userId: user!.id,
-      session: session!,
-    },
-  });
-
-  if (promises?.length) {
-    await Promise.all(promises);
+  if (!opts.ctx.isAuthenticated) {
+    // Throw when unauthenticated
+    if (import.meta.env.DEV) {
+      throw new TRPCError({ code: 'UNAUTHORIZED', message: opts.ctx.authFailureReason });
+    }
+    throw new TRPCError({ code: 'UNAUTHORIZED' });
   }
 
-  return res;
+  if (opts.type === 'mutation' && !opts.ctx.isCsrfValid) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'CSRF verification failed' });
+  }
+
+  return opts.next({
+    ctx: opts.ctx,
+  });
 });
 
 export type ProtectedContext = inferProcedureBuilderResolverOptions<typeof protectedProcedure>['ctx'];

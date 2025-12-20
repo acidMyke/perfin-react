@@ -5,8 +5,9 @@ import * as schema from '../../db/schema';
 import { and, eq } from 'drizzle-orm';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { addMinutes } from 'date-fns/addMinutes';
-import { TRPCError } from '@trpc/server';
 import { UAParser } from 'ua-parser-js';
+import type { AppDatabase } from './db';
+import type { CookieHeaders } from './CookieHeaders';
 
 export function generateTokenParam() {
   return {
@@ -16,19 +17,8 @@ export function generateTokenParam() {
   };
 }
 
-async function create(ctx: Context, userId: string) {
-  const { db, env, resHeaders } = ctx;
-  const { token, expiresAt, maxAge } = generateTokenParam();
-
-  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
-  await db.insert(schema.sessionsTable).values({
-    token,
-    expiresAt,
-    userId,
-    lastUsedAt: new Date(),
-    loginAttemptId,
-  });
-
+function setTokenCookie(env: Env, resHeaders: CookieHeaders, param: ReturnType<typeof generateTokenParam>) {
+  const { token, expiresAt, maxAge } = param;
   resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
     httpOnly: true,
     secure: !import.meta.env.DEV,
@@ -38,116 +28,43 @@ async function create(ctx: Context, userId: string) {
   });
 }
 
-function unsetCookie(ctx: Pick<Context, 'resHeaders' | 'env'>) {
-  const { resHeaders, env } = ctx;
-  resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
+function unsetTokenCookie(env: Env, resHeaders: CookieHeaders) {
+  resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME, {
+    path: '/',
+  });
 }
 
-async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
-  const { session, user, db } = ctx;
-  if (!otherSessionId) {
-    unsetCookie(ctx);
+async function createAndSaveToken(
+  db: AppDatabase,
+  env: Env,
+  resHeaders: CookieHeaders,
+  userId: string,
+  loginAttemptId: string,
+) {
+  const tokenParam = generateTokenParam();
+  const { token, expiresAt } = tokenParam;
+
+  await db.insert(schema.sessionsTable).values({
+    token,
+    expiresAt,
+    userId,
+    lastUsedAt: new Date(),
+    loginAttemptId,
+  });
+  setTokenCookie(env, resHeaders, tokenParam);
+}
+
+async function revokeToken(db: AppDatabase, userId: string, sessionId: string, revokeLater = false) {
+  let expiresAt = new Date();
+  if (revokeLater) {
+    expiresAt = addMinutes(expiresAt, 2);
   }
-  await db
+  const result = await db
     .update(schema.sessionsTable)
-    .set({ expiresAt: new Date() })
-    .where(and(eq(schema.sessionsTable.id, otherSessionId ?? session.id), eq(schema.sessionsTable.userId, user.id)));
-}
+    .set({ expiresAt })
+    .where(and(eq(schema.sessionsTable.id, sessionId), eq(schema.sessionsTable.userId, userId)));
 
-function getTokenFromHeader(ctx: Context) {
-  const { req, env } = ctx;
-
-  const cookieHeader = req.headers.get('Cookie');
-  if (!cookieHeader) {
-    return { token: undefined, failureReason: 'Missing cookie header' };
-  }
-
-  const cookies = cookieHeader.split(';').map(cookie => cookie.trim());
-
-  if (cookies.length === 0) {
-    return { token: undefined, failureReason: 'Empty cookie header' };
-  }
-
-  for (const cookie of cookies) {
-    const [name, ...rest] = cookie.split('=');
-    if (name === env.TOKEN_COOKIE_NAME) {
-      return {
-        token: decodeURIComponent(rest.join('=')),
-        failureReason: undefined,
-      };
-    }
-  }
-
-  return { token: undefined, failureReason: 'Missing token' };
-}
-
-async function refreshToken(ctx: Context, existingToken: string, userId: string, loginAttemptId: string) {
-  const { db, env, resHeaders, wctx } = ctx;
-  const { token, expiresAt, maxAge } = generateTokenParam();
-  await db.insert(schema.sessionsTable).values({
-    token,
-    expiresAt,
-    userId,
-    lastUsedAt: new Date(),
-    loginAttemptId,
-  });
-  resHeaders.setCookie(env.TOKEN_COOKIE_NAME, token, {
-    httpOnly: true,
-    secure: !import.meta.env.DEV,
-    path: '/',
-    expires: expiresAt,
-    maxAge,
-  });
-  wctx.waitUntil(
-    db
-      .update(schema.sessionsTable)
-      .set({ expiresAt: addMinutes(new Date(), 2) })
-      .where(eq(schema.sessionsTable.token, existingToken)),
-  );
-}
-
-async function resolve(ctx: Context, allowUnauthicated = false) {
-  const { db } = ctx;
-  let { token, failureReason } = getTokenFromHeader(ctx);
-
-  if (token) {
-    const session = await db.query.sessionsTable.findFirst({
-      where: (session, { eq, gt, and }) => and(eq(session.token, token), gt(session.expiresAt, new Date())),
-      columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
-      with: { user: { columns: { id: true, name: true } } },
-    });
-
-    if (session) {
-      let promises: Promise<any>[] = [];
-
-      // Refresh token if its created more than 2 days ago.
-      if (differenceInDays(new Date(), session.createdAt) > 2) {
-        const refreshTokenPr = refreshToken(ctx, token, session.user.id, session.loginAttemptId);
-        promises.push(refreshTokenPr);
-      }
-
-      return {
-        isAuthenticated: true,
-        user: session.user,
-        session,
-        promises,
-      };
-    }
-    failureReason = 'Unable to find token';
-    unsetCookie(ctx);
-  }
-
-  if (allowUnauthicated) {
-    return {
-      isAuthenticated: false,
-      failureReason: import.meta.env.DEV ? failureReason : undefined,
-    };
-  }
-
-  if (import.meta.env.DEV) {
-    throw new TRPCError({ code: 'UNAUTHORIZED', message: failureReason });
-  }
-  throw new TRPCError({ code: 'UNAUTHORIZED' });
+  console.log('revoke_token', { result: result.meta });
 }
 
 async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId: string | null = null) {
@@ -181,11 +98,108 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   return loginAttemptId;
 }
 
+async function create(ctx: Context, userId: string) {
+  const { db, env, resHeaders } = ctx;
+  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
+  await createAndSaveToken(db, env, resHeaders, userId, loginAttemptId);
+}
+
+async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
+  const { session, userId, db } = ctx;
+  if (!otherSessionId) {
+    unsetTokenCookie(ctx.env, ctx.resHeaders);
+  }
+  await revokeToken(db, userId, otherSessionId ?? session.id);
+}
+
+function getTokensFromCookies(req: Request, env: Env) {
+  const parsedCookies = {
+    authToken: undefined as string | undefined,
+    csrfToken: undefined as string | undefined,
+  };
+  const cookieHeader = req.headers.get('Cookie');
+  const cookies = cookieHeader?.split(';')?.map(cookie => cookie.trim());
+
+  if (!cookies || cookies.length === 0) {
+    return parsedCookies;
+  }
+
+  for (const cookie of cookies) {
+    const [name, ...rest] = cookie.split('=');
+    const decoded = decodeURIComponent(rest.join('='));
+    if (name === env.TOKEN_COOKIE_NAME) {
+      parsedCookies.authToken = decoded;
+    } else if (name === 'csrf') {
+      parsedCookies.csrfToken = decoded;
+    }
+  }
+
+  return parsedCookies;
+}
+
+async function check(db: AppDatabase, req: Request, env: Env, resHeaders: CookieHeaders) {
+  const { authToken, csrfToken } = getTokensFromCookies(req, env);
+
+  if (!csrfToken) {
+    const { expiresAt, maxAge, token } = generateTokenParam();
+    resHeaders.setCookie('csrf', token, {
+      secure: !import.meta.env.DEV,
+      path: '/',
+      expires: expiresAt,
+      maxAge,
+      sameSite: 'Lax',
+    });
+  }
+
+  if (!authToken) {
+    return {
+      isAuthenticated: false as const,
+      authFailureReason: 'Missing token',
+    };
+  }
+
+  const session = await db.query.sessionsTable.findFirst({
+    where: (session, { eq, gt, and }) => and(eq(session.token, authToken), gt(session.expiresAt, new Date())),
+    columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
+    with: { user: { columns: { id: true, name: true } } },
+  });
+
+  if (!session) {
+    resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
+    return {
+      isAuthenticated: false as const,
+      authFailureReason: 'Unable to find token',
+    };
+  }
+
+  const userId = session.user.id;
+
+  // if the token is older then 2 days, refresh it
+  if (differenceInDays(new Date(), session.createdAt) > 2) {
+    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttemptId);
+    await revokeToken(db, userId, session.id, true);
+  }
+
+  let isCsrfValid = false;
+  if (csrfToken) {
+    isCsrfValid = req.headers.get('X-CSRF-Token') == csrfToken;
+  }
+
+  return {
+    isCsrfValid,
+    isAuthenticated: true as const,
+    session,
+    user: session.user,
+    userId,
+  };
+}
+
 export const sessions = {
   create,
-  resolve,
   revoke,
   saveLoginAttempt,
+  getTokenFromReq: getTokensFromCookies,
+  check,
 };
 
 export default sessions;

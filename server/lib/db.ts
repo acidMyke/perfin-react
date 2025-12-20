@@ -1,4 +1,6 @@
 import { SQL, sql, type SQLWrapper } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/d1';
+import * as schema from '../../db/schema';
 
 type ChunkValue<TReturn> = TReturn | SQL<TReturn> | SQL.Aliased<TReturn> | SQLWrapper;
 
@@ -52,3 +54,13 @@ export function coalesce<TValue, TFallback = ''>(
 ): SQL<TValue | TFallback> {
   return fallback ? sql`COALESCE(${value}, ${fallback})` : sql`COALESCE(${value},'')`;
 }
+
+export function createDatabase(env: Env) {
+  return drizzle(env.db, {
+    logger: import.meta.env.DEV,
+    casing: 'snake_case',
+    schema,
+  });
+}
+
+export type AppDatabase = ReturnType<typeof createDatabase>;
