@@ -1,7 +1,7 @@
 import { initTRPC, TRPCError, type inferProcedureBuilderResolverOptions } from '@trpc/server';
 import type { FetchCreateContextFnOptions } from '@trpc/server/adapters/fetch';
 import { DrizzleQueryError } from 'drizzle-orm/errors';
-import { type CookieHeaders } from './CookieHeaders';
+import { parseCookie, type CookieHeaders } from './CookieHeaders';
 import sessions from './sessions';
 import { $ZodError } from 'zod/v4/core';
 import z from 'zod';
@@ -12,7 +12,8 @@ import { createDatabase } from './db';
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = createDatabase(env);
   return async function ({ req }: FetchCreateContextFnOptions) {
-    const checkResult = await sessions.check(db, req, env, resHeaders);
+    const reqCookie = parseCookie(req);
+    const checkResult = await sessions.check(db, req, env, resHeaders, reqCookie);
 
     return {
       db,
@@ -22,6 +23,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
       url: new URL(req.url),
       resHeaders,
       ...checkResult,
+      reqCookie,
     };
   };
 }

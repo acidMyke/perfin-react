@@ -43,3 +43,21 @@ export class CookieHeaders extends Headers {
     });
   }
 }
+
+export function parseCookie(req: Request) {
+  const cookieHeader = req.headers.get('Cookie');
+
+  return (
+    cookieHeader?.split(';')?.reduce(
+      (acc, cookie) => {
+        const [name, ...rest] = cookie.split('=');
+        const value = rest.join('=');
+        if (name && value) {
+          acc[name.trim()] = decodeURIComponent(value.trim());
+        }
+        return acc;
+      },
+      {} as Record<string, string>,
+    ) ?? {}
+  );
+}
