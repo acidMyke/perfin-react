@@ -49,6 +49,10 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
               } else if (code === 'INTERNAL_SERVER_ERROR') {
                 // TODO: add some logging
                 shouldRetry = true;
+              } else if (code === 'FORBIDDEN') {
+                if (err.message.startsWith('CSRF')) {
+                  shouldRetry = true;
+                }
               }
             }
 
@@ -83,7 +87,22 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
 };
 
 const trpcClient = createTRPCClient<AppRouter>({
-  links: [loggerLink({ enabled: () => import.meta.env.DEV }), errorHandlingLink, httpBatchLink({ url: '/trpc' })],
+  links: [
+    loggerLink({ enabled: () => import.meta.env.DEV }),
+    errorHandlingLink,
+    httpBatchLink({
+      url: '/trpc',
+      headers() {
+        let csrf = undefined as string | undefined;
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; csrf=`);
+        if (parts.length === 2) csrf = parts?.pop()?.split(';')?.shift();
+
+        if (!csrf) return {};
+        return { 'X-CSRF-Token': csrf };
+      },
+    }),
+  ],
 });
 
 export const trpc = createTRPCOptionsProxy<AppRouter>({

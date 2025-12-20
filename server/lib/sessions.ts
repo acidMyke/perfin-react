@@ -137,10 +137,20 @@ function getTokensFromCookies(req: Request, env: Env) {
   return parsedCookies;
 }
 
-async function checkCsrf(db: AppDatabase, req: Request, cookieCsrf: string) {}
-
 async function check(db: AppDatabase, req: Request, env: Env, resHeaders: CookieHeaders) {
   const { authToken, csrfToken } = getTokensFromCookies(req, env);
+
+  if (!csrfToken) {
+    const { expiresAt, maxAge, token } = generateTokenParam();
+    resHeaders.setCookie('csrf', token, {
+      secure: !import.meta.env.DEV,
+      path: '/',
+      expires: expiresAt,
+      maxAge,
+      sameSite: 'Lax',
+    });
+  }
+
   if (!authToken) {
     return {
       isAuthenticated: false as const,
@@ -173,15 +183,6 @@ async function check(db: AppDatabase, req: Request, env: Env, resHeaders: Cookie
   let isCsrfValid = false;
   if (csrfToken) {
     isCsrfValid = req.headers.get('X-CSRF-Token') == csrfToken;
-  } else {
-    const { expiresAt, maxAge, token } = generateTokenParam();
-    resHeaders.setCookie('csrf', token, {
-      secure: !import.meta.env.DEV,
-      path: '/',
-      expires: expiresAt,
-      maxAge,
-      sameSite: 'Lax',
-    });
   }
 
   return {
