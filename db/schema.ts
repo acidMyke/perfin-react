@@ -95,11 +95,10 @@ export const passkeysTable = sqliteTable('passkeys', {
   id: text().primaryKey(),
   userId: idColumn(),
   publicKey: blob({ mode: 'buffer' }).notNull(),
-  webauthnUserID: text().notNull().unique(),
   counter: integer().notNull(),
   deviceType: text().notNull().$type<CredentialDeviceType>(),
   backedUp: boolean().notNull(),
-  transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>(),
+  transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
 });
 
 export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
