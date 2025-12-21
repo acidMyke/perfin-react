@@ -99,6 +99,7 @@ export const passkeysTable = sqliteTable('passkeys', {
   deviceType: text().notNull().$type<CredentialDeviceType>(),
   backedUp: boolean().notNull(),
   transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
+  nickname: text(),
 });
 
 export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
