@@ -1,16 +1,22 @@
-import { protectedProcedure } from '../lib/trpc';
+import { protectedProcedure, publicProcedure } from '../lib/trpc';
 import {
+  generateAuthenticationOptions,
   generateRegistrationOptions,
+  verifyAuthenticationResponse,
   verifyRegistrationResponse,
+  type AuthenticationResponseJSON,
   type RegistrationResponseJSON,
+  type VerifiedAuthenticationResponse,
   type VerifiedRegistrationResponse,
+  type WebAuthnCredential,
 } from '@simplewebauthn/server';
-import { passkeysTable } from '../../db/schema';
+import { passkeysTable, usersTable } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { isoUint8Array } from '@simplewebauthn/server/helpers';
+import z from 'zod';
 
-const REGISTRATION_CHALLENGE_COOKIE_NAME = 'pkreg-challenge';
+const REGISTRATION_CHALLENGE_COOKIE_NAME = 'passkey-challenge';
 
 const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, user, resHeaders } = ctx;
@@ -112,11 +118,115 @@ const listRegisteredPasskey = protectedProcedure.query(async ({ ctx }) => {
   return { passkeys };
 });
 
+const generatePasskeyAuthenticationOptionsProcedure = publicProcedure
+  .input(z.object({ username: z.string() }).optional())
+  .mutation(async ({ ctx, input }) => {
+    const { db, env, resHeaders } = ctx;
+
+    type TypeofGenerateAuthenticationOptions = typeof generateAuthenticationOptions;
+    type AllowCredentials = Parameters<TypeofGenerateAuthenticationOptions>[0]['allowCredentials'];
+
+    let allowCredentials: AllowCredentials;
+
+    if (ctx.isAuthenticated) {
+      allowCredentials = await db
+        .select({
+          id: passkeysTable.id,
+          transports: passkeysTable.transports,
+        })
+        .from(passkeysTable)
+        .where(eq(passkeysTable.userId, ctx.userId));
+    } else if (input?.username?.trim()) {
+      allowCredentials = await db
+        .select({
+          id: passkeysTable.id,
+          transports: passkeysTable.transports,
+        })
+        .from(passkeysTable)
+        .innerJoin(usersTable, eq(passkeysTable.userId, usersTable.id))
+        .where(eq(usersTable.name, input.username.trim()));
+    }
+
+    if (allowCredentials && allowCredentials.length === 0) {
+      throw new TRPCError({ code: 'NOT_FOUND', message: 'No passkeys found' });
+    }
+
+    const userVerification = allowCredentials ? undefined : 'preferred';
+    const options = await generateAuthenticationOptions({
+      rpID: env.PASSKEYS_RP_ID,
+      allowCredentials,
+      userVerification,
+    });
+
+    resHeaders.setCookie(REGISTRATION_CHALLENGE_COOKIE_NAME, options.challenge, {
+      httpOnly: true,
+      secure: true,
+      sameSite: 'Strict',
+      maxAge: 120,
+      path: '/',
+    });
+
+    return options;
+  });
+
+const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
+  .input(z.looseObject({}).transform(obj => obj as unknown as AuthenticationResponseJSON))
+  .mutation(async ({ ctx, input }) => {
+    const { db, env, reqCookie } = ctx;
+    const challenge = reqCookie[REGISTRATION_CHALLENGE_COOKIE_NAME];
+
+    if (!challenge) {
+      throw new TRPCError({ code: 'BAD_REQUEST', message: 'No challenge found' });
+    }
+
+    const [credential] = await db
+      .select({
+        id: passkeysTable.id,
+        publicKey: passkeysTable.publicKey,
+        counter: passkeysTable.counter,
+        transport: passkeysTable.transports,
+      })
+      .from(passkeysTable)
+      .where(eq(passkeysTable.id, input.id));
+
+    if (!credential) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    let verification: VerifiedAuthenticationResponse | undefined;
+    try {
+      verification = await verifyAuthenticationResponse({
+        response: input,
+        expectedChallenge: challenge,
+        expectedOrigin: env.ORIGIN,
+        expectedRPID: env.PASSKEYS_RP_ID,
+        credential: { ...credential, publicKey: new Uint8Array(credential.publicKey) },
+      });
+      if (!verification.verified) {
+        throw new Error('verification.verified is false');
+      }
+    } catch (cause) {
+      const message =
+        cause && typeof cause === 'object' && 'message' in cause
+          ? 'Verification failed: ' + cause.message
+          : 'Verification failed';
+      throw new TRPCError({ code: 'BAD_REQUEST', message, cause });
+    }
+
+    const { newCounter } = verification.authenticationInfo;
+    await db.update(passkeysTable).set({ counter: newCounter, lastUsedAt: new Date() });
+    return { success: true };
+  });
+
 export const passkeyProcedures = {
   list: listRegisteredPasskey,
   registration: {
     generateOptions: generatePasskeyRegistrationOptionsProcedure,
     verifyResponse: verifyPasskeyRegistrationResponseProcedure,
+  },
+  authentication: {
+    generateOptions: generatePasskeyAuthenticationOptionsProcedure,
+    verifyResponse: verifyPasskeyAuthenticationResponseProcedure,
   },
 };
 
