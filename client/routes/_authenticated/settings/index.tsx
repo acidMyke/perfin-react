@@ -38,6 +38,10 @@ function RouteComponent() {
         <h3 className='inline-block text-2xl'>Manage categories</h3>
         <ChevronRight className='ml-auto inline-block' />
       </Link>
+      <Link to='/settings/passkey' className='btn btn-block btn-xl btn-ghost bg-base-200/25'>
+        <h3 className='inline-block text-2xl'>Manage passkey</h3>
+        <ChevronRight className='ml-auto inline-block' />
+      </Link>
       <button
         className='btn btn-error btn-lg btn-block'
         onClick={() => {
