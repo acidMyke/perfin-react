@@ -12,7 +12,7 @@ import { isoUint8Array } from '@simplewebauthn/server/helpers';
 
 const REGISTRATION_CHALLENGE_COOKIE_NAME = 'pkreg-challenge';
 
-const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.query(async ({ ctx }) => {
+const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, user, resHeaders } = ctx;
 
   const excludeCredentials = await db
@@ -72,10 +72,14 @@ const verifyPasskeyRegistrationResponseProcedure = protectedProcedure
         expectedRPID: env.PASSKEYS_RP_ID,
       });
       if (!verification.verified) {
-        throw new Error();
+        throw new Error('verification.verified is false');
       }
-    } catch (error) {
-      throw new TRPCError({ code: 'BAD_REQUEST', message: 'Verification failed' });
+    } catch (cause) {
+      const message =
+        cause && typeof cause === 'object' && 'message' in cause
+          ? 'Verification failed: ' + cause.message
+          : 'Verification failed';
+      throw new TRPCError({ code: 'BAD_REQUEST', message, cause });
     }
 
     const { credential, credentialDeviceType, credentialBackedUp } = verification.registrationInfo;
