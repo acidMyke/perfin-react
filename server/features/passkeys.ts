@@ -98,9 +98,26 @@ const verifyPasskeyRegistrationResponseProcedure = protectedProcedure
     return { success: true };
   });
 
+const listRegisteredPasskey = protectedProcedure.query(async ({ ctx }) => {
+  const { db, userId } = ctx;
+  const passkeys = await db
+    .select({
+      id: passkeysTable.id,
+      nickname: passkeysTable.nickname,
+      createdAt: passkeysTable.createdAt,
+    })
+    .from(passkeysTable)
+    .where(eq(passkeysTable.userId, userId));
+
+  return { passkeys };
+});
+
 export const passkeyProcedures = {
-  generateOptions: generatePasskeyRegistrationOptionsProcedure,
-  verifyResponse: verifyPasskeyRegistrationResponseProcedure,
+  list: listRegisteredPasskey,
+  registration: {
+    generateOptions: generatePasskeyRegistrationOptionsProcedure,
+    verifyResponse: verifyPasskeyRegistrationResponseProcedure,
+  },
 };
 
 export default passkeyProcedures;

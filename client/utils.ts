@@ -10,3 +10,8 @@ export const dateFormat = new Intl.DateTimeFormat('en-SG', {
   hour: '2-digit',
   minute: '2-digit',
 });
+
+export const monthDayFormat = new Intl.DateTimeFormat('en-SG', {
+  day: '2-digit',
+  month: 'short',
+});
