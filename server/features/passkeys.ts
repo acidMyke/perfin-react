@@ -8,16 +8,19 @@ import {
   type RegistrationResponseJSON,
   type VerifiedAuthenticationResponse,
   type VerifiedRegistrationResponse,
-  type WebAuthnCredential,
 } from '@simplewebauthn/server';
 import { passkeysTable, usersTable } from '../../db/schema';
 import { eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { isoUint8Array } from '@simplewebauthn/server/helpers';
 import z from 'zod';
+import sessions from '../lib/sessions';
 
 const REGISTRATION_CHALLENGE_COOKIE_NAME = 'passkey-challenge';
-
+const jsonObjectPassthrough = <T>(input: unknown) => {
+  if (input && typeof input === 'object') return input as T;
+  throw new Error('Input is not a object');
+};
 const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, user, resHeaders } = ctx;
 
@@ -55,12 +58,7 @@ const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(
 });
 
 const verifyPasskeyRegistrationResponseProcedure = protectedProcedure
-  .input(input => {
-    if (typeof input === 'object') {
-      return input as RegistrationResponseJSON;
-    }
-    throw new Error('Input is not a object');
-  })
+  .input(jsonObjectPassthrough<RegistrationResponseJSON>)
   .mutation(async ({ ctx, input }) => {
     const { db, env, userId, reqCookie } = ctx;
     const challenge = reqCookie[REGISTRATION_CHALLENGE_COOKIE_NAME];
@@ -170,7 +168,7 @@ const generatePasskeyAuthenticationOptionsProcedure = publicProcedure
   });
 
 const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
-  .input(z.looseObject({}).transform(obj => obj as unknown as AuthenticationResponseJSON))
+  .input(jsonObjectPassthrough<AuthenticationResponseJSON>)
   .mutation(async ({ ctx, input }) => {
     const { db, env, reqCookie } = ctx;
     const challenge = reqCookie[REGISTRATION_CHALLENGE_COOKIE_NAME];
@@ -182,6 +180,7 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
     const [credential] = await db
       .select({
         id: passkeysTable.id,
+        userId: passkeysTable.userId,
         publicKey: passkeysTable.publicKey,
         counter: passkeysTable.counter,
         transport: passkeysTable.transports,
@@ -215,7 +214,19 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
 
     const { newCounter } = verification.authenticationInfo;
     await db.update(passkeysTable).set({ counter: newCounter, lastUsedAt: new Date() });
-    return { success: true };
+
+    const [user] = await db
+      .select({ name: usersTable.name })
+      .from(usersTable)
+      .where(eq(usersTable.id, credential.userId));
+
+    // Create session
+    await sessions.create(ctx, credential.userId);
+
+    return {
+      userName: user?.name,
+      userId: credential.userId,
+    };
   });
 
 export const passkeyProcedures = {

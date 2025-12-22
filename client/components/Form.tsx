@@ -174,10 +174,11 @@ type TextInputProps = {
   transform?: keyof typeof TextTransformers;
   transforms?: (keyof typeof TextTransformers)[];
   nullIfEmpty?: boolean;
+  autoComplete?: string;
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty } = props;
+  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete } = props;
   const field = useFieldContext<string | null>();
 
   let transforms = props.transform
@@ -194,6 +195,7 @@ function TextInput(props: TextInputProps) {
         id={field.name}
         name={field.name}
         className={cn('input input-primary input-xl w-full', inputCn)}
+        autoComplete={autoComplete}
         value={field.state.value ?? ''}
         onChange={e => {
           const value = transforms.reduce((a, t) => TextTransformers[t](a), e.target.value as string);
@@ -324,10 +326,11 @@ type SubmitButtonProps = {
   inProgressLabel?: string;
   buttonCn?: string;
   loadingCn?: string;
+  disabled?: boolean;
 };
 
 function SubmitButton(props: SubmitButtonProps) {
-  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn } = props;
+  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn, disabled } = props;
   const form = useFormContext();
 
   return (
@@ -338,7 +341,7 @@ function SubmitButton(props: SubmitButtonProps) {
         <button
           type='button'
           className={cn('btn btn-primary btn-lg btn-block mt-8', buttonCn)}
-          disabled={isPristine || !canSubmit || isSubmitting}
+          disabled={isPristine || !canSubmit || isSubmitting || disabled}
           onClick={() => form.handleSubmit()}
         >
           {isSubmitting && <span className={cn('loading loading-dots loading-md', loadingCn)}></span>}
