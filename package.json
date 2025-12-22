@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts",
     "migration:generate": "drizzle-kit generate",
