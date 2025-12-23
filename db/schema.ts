@@ -30,17 +30,6 @@ const baseColumns = () => ({
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
-export const historiesTable = sqliteTable('histories', {
-  id: pkIdColumn(),
-  tableName: text().notNull(),
-  rowId: idColumn(),
-  // Values extracted from source
-  valuesWere: text({ mode: 'json' }).notNull(),
-  versionWas: integer().notNull(),
-  wasUpdatedAt: dateColumn(),
-  wasUpdatedBy: nullableIdColumn(),
-});
-
 export const emailCodesTable = sqliteTable('email_codes', {
   ...baseColumns(),
   email: text().notNull(),
