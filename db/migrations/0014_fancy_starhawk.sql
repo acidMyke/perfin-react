@@ -1,1 +1,0 @@
-ALTER TABLE `passkeys` ADD `nickname` text;

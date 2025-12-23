@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { sql, relations } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
@@ -30,17 +30,6 @@ const baseColumns = () => ({
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
-export const historiesTable = sqliteTable('histories', {
-  id: pkIdColumn(),
-  tableName: text().notNull(),
-  rowId: idColumn(),
-  // Values extracted from source
-  valuesWere: text({ mode: 'json' }).notNull(),
-  versionWas: integer().notNull(),
-  wasUpdatedAt: dateColumn(),
-  wasUpdatedBy: nullableIdColumn(),
-});
-
 export const emailCodesTable = sqliteTable('email_codes', {
   ...baseColumns(),
   email: text().notNull(),
@@ -64,14 +53,6 @@ export const loginAttemptsTable = sqliteTable('login_attempts', {
   userAgent: text(),
 });
 
-export const loginAttemptsRelations = relations(loginAttemptsTable, ({ one, many }) => ({
-  attemptedFor: one(usersTable, {
-    fields: [loginAttemptsTable.attemptedForId],
-    references: [usersTable.id],
-  }),
-  session: many(sessionsTable),
-}));
-
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
   name: text().unique().notNull(),
@@ -81,11 +62,6 @@ export const usersTable = sqliteTable('users', {
   failedAttempts: integer().notNull().default(0),
   releasedAfter: integer({ mode: 'timestamp' }),
 });
-
-export const usersRelations = relations(usersTable, ({ many }) => ({
-  sessions: many(sessionsTable),
-  passkeys: many(passkeysTable),
-}));
 
 export const passkeysTable = sqliteTable('passkeys', {
   createdAt: createdAtColumn(),
@@ -102,13 +78,6 @@ export const passkeysTable = sqliteTable('passkeys', {
   nickname: text(),
 });
 
-export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
-  user: one(usersTable, {
-    fields: [passkeysTable.userId],
-    references: [usersTable.id],
-  }),
-}));
-
 export const sessionsTable = sqliteTable('sessions', {
   ...baseColumns(),
   token: text({ length: 16 }).notNull(),
@@ -118,20 +87,9 @@ export const sessionsTable = sqliteTable('sessions', {
   loginAttemptId: idColumn(),
 });
 
-export const sessionRelations = relations(sessionsTable, ({ one }) => ({
-  user: one(usersTable, {
-    fields: [sessionsTable.userId],
-    references: [usersTable.id],
-  }),
-  loginAttempts: one(loginAttemptsTable, {
-    fields: [sessionsTable.loginAttemptId],
-    references: [loginAttemptsTable.id],
-  }),
-}));
-
 export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -140,7 +98,7 @@ export const accountsTable = sqliteTable('accounts', {
 
 export const categoriesTable = sqliteTable('categories', {
   ...baseColumns(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -152,7 +110,7 @@ export const expensesTable = sqliteTable('expenses', {
   amountCents: centsColumn(),
   amountCentsPreRefund: centsColumn(),
   billedAt: dateColumn(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   accountId: nullableIdColumn(),
   categoryId: nullableIdColumn(),
   updatedBy: idColumn(),
@@ -166,23 +124,6 @@ export const expensesTable = sqliteTable('expenses', {
   isDeleted: boolean().notNull().default(false),
 });
 
-export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
-  belongsTo: one(usersTable, {
-    fields: [expensesTable.belongsToId],
-    references: [usersTable.id],
-  }),
-  account: one(accountsTable, {
-    fields: [expensesTable.accountId],
-    references: [accountsTable.id],
-  }),
-  category: one(categoriesTable, {
-    fields: [expensesTable.categoryId],
-    references: [categoriesTable.id],
-  }),
-  items: many(expenseItemsTable),
-  refunds: many(expenseRefundsTable),
-}));
-
 export const expenseItemsTable = sqliteTable('expense_items', {
   ...baseColumns(),
   sequence: integer().notNull(),
@@ -194,21 +135,6 @@ export const expenseItemsTable = sqliteTable('expense_items', {
   expenseRefundId: nullableIdColumn(),
   isDeleted: boolean().notNull().default(false),
 });
-
-export const expenseItemsRelations = relations(expenseItemsTable, ({ one }) => ({
-  expense: one(expensesTable, {
-    fields: [expenseItemsTable.expenseId],
-    references: [expensesTable.id],
-  }),
-  category: one(categoriesTable, {
-    fields: [expenseItemsTable.categoryId],
-    references: [categoriesTable.id],
-  }),
-  expenseRefund: one(expenseRefundsTable, {
-    fields: [expenseItemsTable.expenseRefundId],
-    references: [expenseRefundsTable.id],
-  }),
-}));
 
 export const expenseRefundsTable = sqliteTable('expense_refunds', {
   ...baseColumns(),
@@ -222,14 +148,3 @@ export const expenseRefundsTable = sqliteTable('expense_refunds', {
   sequence: integer().notNull(),
   isDeleted: boolean().notNull().default(false),
 });
-
-export const expenseRefundsRelations = relations(expenseRefundsTable, ({ one }) => ({
-  expense: one(expensesTable, {
-    fields: [expenseRefundsTable.expenseId],
-    references: [expensesTable.id],
-  }),
-  expenseItem: one(expenseItemsTable, {
-    fields: [expenseRefundsTable.expenseItemId],
-    references: [expenseItemsTable.id],
-  }),
-}));

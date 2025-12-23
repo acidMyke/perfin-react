@@ -2,34 +2,10 @@ import z from 'zod';
 import { FormInputError, protectedProcedure } from '../lib/trpc';
 import { accountsTable, categoriesTable } from '../../db/schema';
 import { and, asc, eq } from 'drizzle-orm';
-import { SUBJECT_TYPES_TUPLE } from '../../db/enum';
 import { TRPCError } from '@trpc/server';
 
-// let subjectPr =
-//   typeof cursor !== 'undefined' && cursor !== null
-//     ? undefined
-//     : db
-//         .select({
-//           id: schema.subjectsTable.id,
-//           type: schema.subjectsTable.type,
-//           name: schema.subjectsTable.name,
-//           sequence: schema.subjectsTable.sequence,
-//           count: db.$count(
-//             schema.expensesTable,
-//             and(
-//               eq(schema.expensesTable.belongsToId, userId),
-//               or(
-//                 eq(schema.expensesTable.accountId, schema.subjectsTable.id),
-//                 eq(schema.expensesTable.categoryId, schema.subjectsTable.id),
-//               ),
-//             ),
-//           ),
-//         })
-//         .from(schema.subjectsTable)
-//         .where(eq(schema.subjectsTable.belongsToId, userId));
-
 const listSubjectsProcedure = protectedProcedure
-  .input(z.object({ subjectType: z.enum(SUBJECT_TYPES_TUPLE) }))
+  .input(z.object({ subjectType: z.enum(['account', 'category']) }))
   .query(async ({ ctx, input }) => {
     const { db, user } = ctx;
     const { subjectType } = input;
@@ -45,14 +21,14 @@ const listSubjectsProcedure = protectedProcedure
         isDeleted: subjectsTable.isDeleted,
       })
       .from(subjectsTable)
-      .where(and(eq(subjectsTable.belongsToId, user.id)))
+      .where(and(eq(subjectsTable.userId, user.id)))
       .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
   });
 
 const saveSubjectListProcedure = protectedProcedure
   .input(
     z.object({
-      subjectType: z.enum(SUBJECT_TYPES_TUPLE),
+      subjectType: z.enum(['account', 'category']),
       subjects: z.array(z.object({ id: z.string(), name: z.string() })),
     }),
   )
@@ -71,7 +47,7 @@ const saveSubjectListProcedure = protectedProcedure
         description: subjectsTable.description,
       })
       .from(subjectsTable)
-      .where(and(eq(subjectsTable.belongsToId, user.id)))
+      .where(and(eq(subjectsTable.userId, user.id)))
       .orderBy(asc(subjectsTable.sequence), asc(subjectsTable.createdAt));
 
     if (existingSubjects.length != subjects.length) {
@@ -120,7 +96,7 @@ const saveSubjectListProcedure = protectedProcedure
           db
             .update(subjectsTable)
             .set(setDate)
-            .where(and(eq(subjectsTable.id, id), eq(subjectsTable.belongsToId, user.id))),
+            .where(and(eq(subjectsTable.id, id), eq(subjectsTable.userId, user.id))),
         ),
       );
     }

@@ -1,6 +1,6 @@
-import { getTableColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'drizzle-orm';
+import { getColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import * as schema from '../../db/schema';
+import relations from '../../db/relation';
 
 export const sankeCaseFromCamelCase = (camelCase: string) =>
   camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
@@ -13,7 +13,7 @@ export function excludedAll<T extends Table>(
   table: T,
   omits: (keyof T['_']['columns'])[] = [],
 ): Record<keyof T['_']['columns'], SQL<unknown>> {
-  const columns = getTableColumns(table);
+  const columns = getColumns(table);
   // @ts-expect-error
   const excludedColumns: Record<keyof T['_']['columns'], SQL<unknown>> = {};
 
@@ -82,7 +82,7 @@ export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,
     casing: 'snake_case',
-    schema,
+    relations,
   });
 }
 

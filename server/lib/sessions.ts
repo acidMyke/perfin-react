@@ -141,7 +141,7 @@ async function check(
   }
 
   const session = await db.query.sessionsTable.findFirst({
-    where: (session, { eq, gt, and }) => and(eq(session.token, authToken), gt(session.expiresAt, new Date())),
+    where: { token: authToken, expiresAt: { gt: new Date() } },
     columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
     with: { user: { columns: { id: true, name: true } } },
   });

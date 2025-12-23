@@ -267,7 +267,7 @@ export async function createEmailCode(
 export async function verifyEmailCode(ctx: Context, code: string) {
   const { db } = ctx;
   const emailCode = await db.query.emailCodesTable.findFirst({
-    where: and(eq(emailCodesTable.code, code), gt(emailCodesTable.validUntil, new Date())),
+    where: { code, validUntil: { gt: new Date() } },
   });
 
   if (emailCode) {

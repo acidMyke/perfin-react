@@ -17,7 +17,6 @@ import {
   gte,
   inArray,
   isNotNull,
-  isNull,
   like,
   lt,
   max,
@@ -42,12 +41,12 @@ const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db,
     db
       .select({ value: accountsTable.id, label: accountsTable.name })
       .from(accountsTable)
-      .where(and(eq(accountsTable.belongsToId, user.id), eq(accountsTable.isDeleted, false)))
+      .where(and(eq(accountsTable.userId, user.id), eq(accountsTable.isDeleted, false)))
       .orderBy(asc(accountsTable.sequence), asc(accountsTable.createdAt)),
     db
       .select({ value: categoriesTable.id, label: categoriesTable.name })
       .from(categoriesTable)
-      .where(and(eq(categoriesTable.belongsToId, user.id), eq(categoriesTable.isDeleted, false)))
+      .where(and(eq(categoriesTable.userId, user.id), eq(categoriesTable.isDeleted, false)))
       .orderBy(asc(categoriesTable.sequence), asc(categoriesTable.createdAt)),
   ]);
 
@@ -63,7 +62,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
     const expense = await db.query.expensesTable.findFirst({
-      where: and(eq(expensesTable.belongsToId, userId), eq(expensesTable.id, input.expenseId)),
+      where: { AND: [{ userId }, { id: input.expenseId }] },
       columns: {
         amountCents: true,
         amountCentsPreRefund: true,
@@ -82,8 +81,8 @@ const loadExpenseDetailProcedure = protectedProcedure
       },
       with: {
         items: {
-          where: eq(expenseItemsTable.isDeleted, false),
-          orderBy: asc(expenseItemsTable.sequence),
+          where: { isDeleted: false },
+          orderBy: { sequence: 'asc' },
           columns: {
             id: true,
             name: true,
@@ -104,8 +103,8 @@ const loadExpenseDetailProcedure = protectedProcedure
           },
         },
         refunds: {
-          where: and(eq(expenseRefundsTable.isDeleted, false), isNull(expenseRefundsTable.expenseItemId)),
-          orderBy: asc(expenseRefundsTable.sequence),
+          where: { AND: [{ isDeleted: false, expenseItemId: { isNull: true } }] },
+          orderBy: { sequence: 'asc' },
           columns: {
             id: true,
             source: true,
@@ -138,7 +137,7 @@ async function safelyCreateSubject(
   const existings = await db
     .select({ id: table.id })
     .from(table)
-    .where(and(eq(table.belongsToId, userId), like(table.name, label), eq(table.isDeleted, false)))
+    .where(and(eq(table.userId, userId), like(table.name, label), eq(table.isDeleted, false)))
     .limit(1);
 
   if (existings.length > 0) {
@@ -150,7 +149,7 @@ async function safelyCreateSubject(
     });
   }
 
-  const newRecord = await db.insert(table).values({ name: label, belongsToId: userId }).returning({ id: table.id });
+  const newRecord = await db.insert(table).values({ name: label, userId: userId }).returning({ id: table.id });
   return newRecord[0].id;
 }
 
@@ -232,20 +231,15 @@ const saveExpenseProcedure = protectedProcedure
     }),
   )
   .mutation(async ({ input, ctx }) => {
-    const { user, db } = ctx;
-    const userId = user.id;
+    const { db, userId } = ctx;
 
     if (input.expenseId !== 'create') {
       const existing = await db.query.expensesTable.findFirst({
-        where: and(eq(expensesTable.id, input.expenseId)),
-        columns: {
-          belongsToId: true,
-          isDeleted: true,
-          version: true,
-        },
+        where: { id: input.expenseId, userId },
+        columns: { userId: true, isDeleted: true, version: true },
       });
 
-      if (existing?.belongsToId !== userId) {
+      if (!existing) {
         throw new TRPCError({ code: 'FORBIDDEN' });
       }
 
@@ -306,7 +300,7 @@ const saveExpenseProcedure = protectedProcedure
         amountCents,
         amountCentsPreRefund: grossAmountCents,
         billedAt: input.billedAt,
-        belongsToId: userId,
+        userId: userId,
         accountId: accountId,
         categoryId: categoryId,
         updatedBy: userId,
@@ -320,7 +314,7 @@ const saveExpenseProcedure = protectedProcedure
       })
       .onConflictDoUpdate({
         target: expensesTable.id,
-        set: excludedAll(expensesTable, ['belongsToId']),
+        set: excludedAll(expensesTable, ['userId']),
       });
 
     await db
@@ -380,7 +374,7 @@ const listExpenseProcedure = protectedProcedure
     const filterEnd = endOfMonth(filterStart);
 
     const filterList: (SQL | undefined)[] = [
-      eq(expensesTable.belongsToId, userId),
+      eq(expensesTable.userId, userId),
       gte(expensesTable.billedAt, filterStart),
       lt(expensesTable.billedAt, filterEnd),
       !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
@@ -490,7 +484,7 @@ const getSuggestionsProcedure = protectedProcedure
         .from(expensesTable)
         .where(
           and(
-            eq(expensesTable.belongsToId, userId),
+            eq(expensesTable.userId, userId),
             isNotNull(expensesTable.shopName),
             like(expensesTable.shopName, fuzzyPattern),
           ),
@@ -508,7 +502,7 @@ const getSuggestionsProcedure = protectedProcedure
         .from(expensesTable)
         .where(
           and(
-            eq(expensesTable.belongsToId, userId),
+            eq(expensesTable.userId, userId),
             isNotNull(expensesTable.shopMall),
             like(expensesTable.shopMall, fuzzyPattern),
           ),
@@ -527,7 +521,7 @@ const getSuggestionsProcedure = protectedProcedure
         .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
         .where(
           and(
-            eq(expensesTable.belongsToId, userId),
+            eq(expensesTable.userId, userId),
             like(expenseItemsTable.name, fuzzyPattern),
             input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
           ),
@@ -544,7 +538,7 @@ const getSuggestionsProcedure = protectedProcedure
         .select({ value: sql<string>`${expenseRefundsTable.source}` })
         .from(expenseRefundsTable)
         .innerJoin(expensesTable, eq(expensesTable.id, expenseRefundsTable.expenseId))
-        .where(and(eq(expensesTable.belongsToId, userId), like(expenseRefundsTable.source, fuzzyPattern)))
+        .where(and(eq(expensesTable.userId, userId), like(expenseRefundsTable.source, fuzzyPattern)))
         .groupBy(expenseRefundsTable.source)
         .orderBy(searchRanking(expenseRefundsTable.source), desc(count()))
         .limit(5);
@@ -591,7 +585,7 @@ const inferShopDetailsProcedure = protectedProcedure
         accountId: expensesTable.accountId,
       } as const;
       const nearbyShopsCondition = and(
-        eq(expensesTable.belongsToId, userId),
+        eq(expensesTable.userId, userId),
         between(expensesTable.latitude, input.latitude - COORD_THRESHOLD, input.latitude + COORD_THRESHOLD),
         between(expensesTable.longitude, input.longitude - COORD_THRESHOLD, input.longitude + COORD_THRESHOLD),
         isNotNull(expensesTable.shopName),
@@ -628,9 +622,7 @@ const inferShopDetailsProcedure = protectedProcedure
           accountId: expensesTable.accountId,
         })
         .from(expensesTable)
-        .where(
-          and(eq(expensesTable.belongsToId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())),
-        )
+        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())))
         .orderBy(desc(expensesTable.billedAt))
         .limit(5);
     }
@@ -648,7 +640,7 @@ const inferItemPricesProcedure = protectedProcedure
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
       .where(
         and(
-          eq(expensesTable.belongsToId, userId),
+          eq(expensesTable.userId, userId),
           eq(expenseItemsTable.name, itemName),
           input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
         ),
@@ -663,10 +655,12 @@ const setIsDeletedExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
     const { expenseId, isDeleted, version } = input;
-    const condition = and(eq(expensesTable.id, expenseId), eq(expensesTable.belongsToId, userId));
 
     // Validation
-    const existing = await db.query.expensesTable.findFirst({ where: condition, columns: { version: true } });
+    const existing = await db.query.expensesTable.findFirst({
+      where: { id: expenseId, userId },
+      columns: { version: true },
+    });
 
     if (!existing) {
       throw new TRPCError({ code: 'NOT_FOUND' });
@@ -676,7 +670,10 @@ const setIsDeletedExpenseProcedure = protectedProcedure
       throw new TRPCError({ code: 'CONFLICT' });
     }
 
-    await db.update(expensesTable).set({ isDeleted }).where(condition);
+    await db
+      .update(expensesTable)
+      .set({ isDeleted })
+      .where(and(eq(expensesTable.id, expenseId), eq(expensesTable.userId, userId)));
 
     return { success: true };
   });

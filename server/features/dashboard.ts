@@ -25,7 +25,7 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
     .from(expensesTable)
     .where(
       and(
-        eq(expensesTable.belongsToId, userId),
+        eq(expensesTable.userId, userId),
         between(expensesTable.billedAt, dMinus28, d),
         eq(expensesTable.isDeleted, false),
       ),
@@ -107,7 +107,7 @@ const getTrendProcedure = protectedProcedure
       .from(expensesTable)
       .where(
         and(
-          eq(expensesTable.belongsToId, userId),
+          eq(expensesTable.userId, userId),
           eq(expensesTable.isDeleted, false),
           gt(expensesTable.billedAt, sub(endOfToday(), { [interval]: duration })),
         ),
