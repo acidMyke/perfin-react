@@ -327,10 +327,11 @@ type SubmitButtonProps = {
   buttonCn?: string;
   loadingCn?: string;
   disabled?: boolean;
+  allowPristine?: boolean;
 };
 
 function SubmitButton(props: SubmitButtonProps) {
-  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn, disabled } = props;
+  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn, disabled, allowPristine } = props;
   const form = useFormContext();
 
   return (
@@ -341,7 +342,7 @@ function SubmitButton(props: SubmitButtonProps) {
         <button
           type='button'
           className={cn('btn btn-primary btn-lg btn-block mt-8', buttonCn)}
-          disabled={isPristine || !canSubmit || isSubmitting || disabled}
+          disabled={(!allowPristine && isPristine) || !canSubmit || isSubmitting || disabled}
           onClick={() => form.handleSubmit()}
         >
           {isSubmitting && <span className={cn('loading loading-dots loading-md', loadingCn)}></span>}

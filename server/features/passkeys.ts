@@ -10,7 +10,7 @@ import {
   type VerifiedRegistrationResponse,
 } from '@simplewebauthn/server';
 import { passkeysTable, usersTable } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { isoUint8Array } from '@simplewebauthn/server/helpers';
 import z from 'zod';
@@ -115,6 +115,47 @@ const listRegisteredPasskey = protectedProcedure.query(async ({ ctx }) => {
 
   return { passkeys };
 });
+
+const updateRegisteredPasskey = protectedProcedure
+  .input(z.object({ passkeyId: z.string(), nickname: z.string().nullable() }))
+  .mutation(async ({ ctx, input }) => {
+    const { passkeyId, nickname } = input;
+    const { db, userId } = ctx;
+    const result = await db
+      .update(passkeysTable)
+      .set({ nickname })
+      .where(and(eq(passkeysTable.userId, userId), eq(passkeysTable.id, passkeyId)))
+      .limit(1);
+
+    if (result.meta.rows_written === 0) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    return { success: true };
+  });
+
+const deleteRegisteredPasskey = protectedProcedure
+  .input(z.object({ passkeyId: z.string() }))
+  .mutation(async ({ ctx, input }) => {
+    const { passkeyId } = input;
+    const { db, userId } = ctx;
+    const result = await db
+      .delete(passkeysTable)
+      .where(and(eq(passkeysTable.userId, userId), eq(passkeysTable.id, passkeyId)))
+      .limit(1)
+      .returning({ nickname: passkeysTable.nickname, createdAt: passkeysTable.createdAt });
+
+    if (result.length === 0) {
+      throw new TRPCError({ code: 'NOT_FOUND' });
+    }
+
+    const [{ nickname, createdAt }] = result;
+
+    return {
+      nickname,
+      createdAt,
+    };
+  });
 
 const generatePasskeyAuthenticationOptionsProcedure = publicProcedure
   .input(z.object({ username: z.string() }).optional())
@@ -231,6 +272,8 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
 
 export const passkeyProcedures = {
   list: listRegisteredPasskey,
+  update: updateRegisteredPasskey,
+  delete: deleteRegisteredPasskey,
   registration: {
     generateOptions: generatePasskeyRegistrationOptionsProcedure,
     verifyResponse: verifyPasskeyRegistrationResponseProcedure,
