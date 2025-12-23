@@ -1,10 +1,9 @@
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
-import { SUBJECT_TYPES_TUPLE, type SubjectType } from '../../../../db/enum';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { useAppForm } from '../../../components/Form';
 import { PageHeader } from '../../../components/PageHeader';
-import { ChevronDown, ChevronUp, Undo } from 'lucide-react';
+import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/settings/manage-subjects')({
   component: RouteComponent,
@@ -13,12 +12,11 @@ export const Route = createFileRoute('/_authenticated/settings/manage-subjects')
       throw redirect({ to: '/settings' });
     }
 
-    // @ts-expect-error
-    if (!SUBJECT_TYPES_TUPLE.includes(search.type)) {
+    if (!['account', 'category'].includes(search.type)) {
       throw notFound();
     }
 
-    return { type: search.type as SubjectType };
+    return { type: search.type as 'account' | 'category' };
   },
   loaderDeps: ({ search }) => ({ subjectType: search.type }),
   loader: async ({ deps }) => {
