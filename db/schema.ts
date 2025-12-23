@@ -131,7 +131,7 @@ export const sessionRelations = relations(sessionsTable, ({ one }) => ({
 
 export const accountsTable = sqliteTable('accounts', {
   ...baseColumns(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -140,7 +140,7 @@ export const accountsTable = sqliteTable('accounts', {
 
 export const categoriesTable = sqliteTable('categories', {
   ...baseColumns(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   name: text().notNull(),
   description: text(),
   sequence: integer(),
@@ -152,7 +152,7 @@ export const expensesTable = sqliteTable('expenses', {
   amountCents: centsColumn(),
   amountCentsPreRefund: centsColumn(),
   billedAt: dateColumn(),
-  belongsToId: idColumn(),
+  userId: idColumn(),
   accountId: nullableIdColumn(),
   categoryId: nullableIdColumn(),
   updatedBy: idColumn(),
@@ -168,7 +168,7 @@ export const expensesTable = sqliteTable('expenses', {
 
 export const expensesRelations = relations(expensesTable, ({ one, many }) => ({
   belongsTo: one(usersTable, {
-    fields: [expensesTable.belongsToId],
+    fields: [expensesTable.userId],
     references: [usersTable.id],
   }),
   account: one(accountsTable, {
