@@ -3,9 +3,11 @@ import { createFileRoute, useRouter, redirect, Link } from '@tanstack/react-rout
 import { whoamiQueryOptions } from '../queryOptions';
 import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
 import { sleep } from '../../server/lib/utils';
-import { signInValidator } from '../../server/validators';
 import { useAppForm } from '../components/Form';
 import { ChevronRight } from 'lucide-react';
+import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
+import { useCallback, useEffect, useRef } from 'react';
+import z from 'zod';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
@@ -30,32 +32,74 @@ export const Route = createFileRoute('/signin')({
 function RouteComponent() {
   const search = Route.useSearch();
   const router = useRouter();
+  const invalidateAndRedirect = useCallback(
+    () =>
+      Promise.allSettled([queryClient.refetchQueries(trpc.whoami.pathFilter()), sleep(2000)]).then(async () => {
+        if (search.redirect) {
+          await router.navigate({ href: search.redirect });
+        } else {
+          await router.navigate({ to: '/dashboard', from: '/signin' });
+        }
+      }),
+    [router.navigate],
+  );
+
+  const passkeyAuthOptionsMutation = useMutation(
+    trpc.passkey.authentication.generateOptions.mutationOptions({
+      onSuccess: (optionsJSON, variables) =>
+        startPasskeyAuthMutation.mutate({ optionsJSON, withoutUsername: !variables!.username }),
+    }),
+  );
+  const startPasskeyAuthMutation = useMutation({
+    onSuccess: data => verifyPasskeyAuthMutation.mutateAsync(data),
+    mutationFn: ({
+      optionsJSON,
+      withoutUsername,
+    }: {
+      optionsJSON: PublicKeyCredentialRequestOptionsJSON;
+      withoutUsername: boolean;
+    }) => startAuthentication({ optionsJSON, useBrowserAutofill: withoutUsername, verifyBrowserAutofillInput: false }),
+  });
+  const verifyPasskeyAuthMutation = useMutation(
+    trpc.passkey.authentication.verifyResponse.mutationOptions({
+      onSuccess: () => invalidateAndRedirect(),
+    }),
+  );
   const signInMutation = useMutation(
     trpc.session.signIn.mutationOptions({
-      onSuccess() {
-        Promise.allSettled([queryClient.refetchQueries(trpc.whoami.pathFilter()), sleep(2000)]).then(async () => {
-          if (search.redirect) {
-            await router.navigate({ href: search.redirect });
-          } else {
-            await router.navigate({ to: '/dashboard', from: '/signin' });
-          }
-        });
-      },
-      onError() {
-        form.resetField('password');
-      },
+      onSuccess: () => invalidateAndRedirect(),
+      onError: () => void form.resetField('password'),
     }),
   );
   const form = useAppForm({
     defaultValues: { username: '', password: '' },
     validators: {
-      onChange: signInValidator,
+      onChange: z.object({
+        username: z.string(),
+        password: z.string(),
+      }),
       onSubmitAsync: ({ value, signal }) => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.session.signIn.mutationKey() });
-        return handleFormMutateAsync(signInMutation.mutateAsync(value));
+        if (!value.password) {
+          return handleFormMutateAsync(passkeyAuthOptionsMutation.mutateAsync({ username: value.username }));
+        } else {
+          return handleFormMutateAsync(signInMutation.mutateAsync(value));
+        }
       },
     },
   });
+  const hasStarted = useRef(false);
+
+  useEffect(() => {
+    if (!hasStarted.current) {
+      hasStarted.current = true;
+      passkeyAuthOptionsMutation.mutate();
+    }
+  }, []);
+
+  const isSubmitting = verifyPasskeyAuthMutation.isPending || signInMutation.isPending;
+  const isSubmitSuccessful = verifyPasskeyAuthMutation.isSuccess || signInMutation.isSuccess;
+  const userName = verifyPasskeyAuthMutation.data?.userName || signInMutation.data?.userName;
 
   return (
     <form
@@ -67,15 +111,38 @@ function RouteComponent() {
     >
       <h1 className='mt-20 text-center text-3xl font-black'>Sign In</h1>
       <form.AppForm>
-        <form.AppField name='username'>{({ TextInput }) => <TextInput type='text' label='Username' />}</form.AppField>
+        <form.AppField name='username'>
+          {({ TextInput }) => <TextInput type='text' label='Username' autoComplete='username webauthn' />}
+        </form.AppField>
         <form.AppField name='password'>
           {({ TextInput }) => <TextInput type='password' label='Password' />}
         </form.AppField>
-        <form.SubmitButton
-          label='Sign In'
-          inProgressLabel='Signing In...'
-          doneLabel={`Welcome, ${signInMutation.data?.userName}`}
-        />
+        <form.Subscribe
+          selector={state => [
+            state.isPristine,
+            state.canSubmit,
+            state.values.password !== '',
+            state.values.username !== '',
+          ]}
+        >
+          {([isPristine, canSubmit, passwordNotEmpty]) => (
+            <button
+              type='button'
+              className='btn btn-primary btn-lg btn-block mt-8'
+              disabled={isPristine || !canSubmit}
+              onClick={() => form.handleSubmit()}
+            >
+              {isSubmitting && <span className='loading loading-dots loading-md'></span>}
+              {isSubmitting
+                ? 'Signing in...'
+                : isSubmitSuccessful
+                  ? `Welcome, ${userName}`
+                  : passwordNotEmpty
+                    ? 'Sign in'
+                    : 'Sign in with passkey'}
+            </button>
+          )}
+        </form.Subscribe>
       </form.AppForm>
       <p className='mt-4 text-center'>Don't have an account?</p>
       <Link to='/signup' className='link block w-full text-center'>

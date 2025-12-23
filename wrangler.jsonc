@@ -19,6 +19,9 @@
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Pefin",
     "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+    "ORIGIN": "http://localhost:5173",
+    "PASSKEYS_RP_NAME": "Perfin",
+    "PASSKEYS_RP_ID": "localhost",
   },
   "env": {
     "production": {
@@ -35,6 +38,9 @@
         "TOKEN_COOKIE_NAME": "__Host-token",
         "EMAIL_SENDER_NAME": "Pefin",
         "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+        "ORIGIN": "https://perfin.acidmyke.link",
+        "PASSKEYS_RP_NAME": "Perfin",
+        "PASSKEYS_RP_ID": "perfin.acidmyke.link",
       },
     },
   },

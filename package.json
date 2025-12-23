@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts",
     "migration:generate": "drizzle-kit generate",
@@ -14,6 +14,8 @@
     "runsql": "wrangler d1 execute perfin-staging --local --command"
   },
   "dependencies": {
+    "@simplewebauthn/browser": "^13.2.2",
+    "@simplewebauthn/server": "^13.2.2",
     "@tanstack/react-form": "^1.27.3",
     "@tanstack/react-query": "^5.90.12",
     "@tanstack/react-router": "^1.141.1",

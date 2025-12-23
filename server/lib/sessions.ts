@@ -112,33 +112,15 @@ async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
   await revokeToken(db, userId, otherSessionId ?? session.id);
 }
 
-function getTokensFromCookies(req: Request, env: Env) {
-  const parsedCookies = {
-    authToken: undefined as string | undefined,
-    csrfToken: undefined as string | undefined,
-  };
-  const cookieHeader = req.headers.get('Cookie');
-  const cookies = cookieHeader?.split(';')?.map(cookie => cookie.trim());
-
-  if (!cookies || cookies.length === 0) {
-    return parsedCookies;
-  }
-
-  for (const cookie of cookies) {
-    const [name, ...rest] = cookie.split('=');
-    const decoded = decodeURIComponent(rest.join('='));
-    if (name === env.TOKEN_COOKIE_NAME) {
-      parsedCookies.authToken = decoded;
-    } else if (name === 'csrf') {
-      parsedCookies.csrfToken = decoded;
-    }
-  }
-
-  return parsedCookies;
-}
-
-async function check(db: AppDatabase, req: Request, env: Env, resHeaders: CookieHeaders) {
-  const { authToken, csrfToken } = getTokensFromCookies(req, env);
+async function check(
+  db: AppDatabase,
+  req: Request,
+  env: Env,
+  resHeaders: CookieHeaders,
+  reqCookie: Record<string, string | undefined>,
+) {
+  const authToken = reqCookie[env.TOKEN_COOKIE_NAME];
+  const csrfToken = reqCookie['csrf'];
 
   if (!csrfToken) {
     const { expiresAt, maxAge, token } = generateTokenParam();
@@ -198,7 +180,6 @@ export const sessions = {
   create,
   revoke,
   saveLoginAttempt,
-  getTokenFromReq: getTokensFromCookies,
   check,
 };
 

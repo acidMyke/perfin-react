@@ -1,3 +1,4 @@
+import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { sql, relations } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
@@ -87,13 +88,18 @@ export const usersRelations = relations(usersTable, ({ many }) => ({
 }));
 
 export const passkeysTable = sqliteTable('passkeys', {
+  createdAt: createdAtColumn(),
+  lastUsedAt: dateColumn()
+    .notNull()
+    .$default(() => new Date()),
   id: text().primaryKey(),
   userId: idColumn(),
-  publicKey: blob({ mode: 'buffer' }),
-  signCount: integer().notNull(),
-  challenge: text(),
-  challengedAt: integer({ mode: 'timestamp' }),
-  createdAt: createdAtColumn(),
+  publicKey: blob({ mode: 'buffer' }).notNull(),
+  counter: integer().notNull(),
+  deviceType: text().notNull().$type<CredentialDeviceType>(),
+  backedUp: boolean().notNull(),
+  transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
+  nickname: text(),
 });
 
 export const passkeysRelations = relations(passkeysTable, ({ one }) => ({
