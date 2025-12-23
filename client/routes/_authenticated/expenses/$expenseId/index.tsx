@@ -57,7 +57,7 @@ function RouteComponent() {
         )}
       </form.Field>
       <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
+        {({ HeadlessComboBox }) => <HeadlessComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
       </form.AppField>
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-2' />}

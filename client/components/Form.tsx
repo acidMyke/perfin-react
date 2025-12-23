@@ -5,7 +5,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import CreatableSelect from 'react-select/creatable';
 import { twMerge } from '../twMerge';
 import { FieldError } from './FieldError';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 export const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
@@ -320,6 +321,109 @@ function ComboBox(props: CreatableSelectProps) {
   );
 }
 
+type HeadlessComboBoxProps = {
+  label: string;
+  options: (Option | string)[];
+  maxMenuHeight?: number;
+  containerCn?: string;
+  labelCn?: string;
+  suggestionMode?: boolean;
+  readOnly?: boolean;
+};
+
+function HeadlessComboBox({
+  label,
+  options,
+  maxMenuHeight = 300,
+  containerCn,
+  labelCn,
+  suggestionMode = false,
+  readOnly = false,
+}: HeadlessComboBoxProps) {
+  const field = useFieldContext<Option | string | undefined>();
+
+  // Normalize options to {label,value} objects
+  const normalizedOptions: Option[] = useMemo(
+    () => options.map(opt => (typeof opt === 'string' ? { label: opt, value: opt } : opt)),
+    [options],
+  );
+
+  // Compute the input value from form state
+  const inputValue = suggestionMode
+    ? typeof field.state.value === 'string'
+      ? field.state.value
+      : ''
+    : (field.state.value as Option)?.label || '';
+
+  const comboboxValue = suggestionMode
+    ? null // free-text, menu selection does not control value
+    : (field.state.value as Option | null) || null;
+
+  return (
+    <label className={cn('floating-label z-10 flex flex-col gap-1', containerCn)}>
+      <span className={cn('text-lg font-medium', labelCn)}>{label}</span>
+
+      <Combobox
+        value={comboboxValue}
+        onChange={option => {
+          if (!option) return;
+          if (suggestionMode) {
+            field.handleChange(option.label.toUpperCase()); // or .label
+          } else {
+            field.handleChange(option); // store Option object
+          }
+        }}
+        disabled={readOnly}
+      >
+        <div className='relative'>
+          <ComboboxInput
+            className={cn(
+              'w-full rounded border border-gray-300 px-3 py-2',
+              'focus:ring-primary border-primary focus:ring-2 focus:outline-none',
+              'bg-base-100 text-lg',
+            )}
+            placeholder={label}
+            value={inputValue}
+            onChange={e => {
+              const val = e.target.value;
+              if (suggestionMode) {
+                field.handleChange(val.toUpperCase());
+              } else {
+                field.handleChange({ label: val, value: val });
+              }
+            }}
+            onBlur={() => field.handleBlur()}
+          />
+
+          <div className='pointer-events-none absolute inset-y-0 right-3 flex items-center'>
+            <ChevronDown className='h-5 w-5 text-gray-400' />
+          </div>
+          {normalizedOptions.length > 0 && (
+            <ComboboxOptions
+              className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
+              style={{ maxHeight: maxMenuHeight }}
+            >
+              {normalizedOptions.map(opt => (
+                <ComboboxOption
+                  key={opt.value}
+                  value={opt}
+                  className={({ focus, selected }) =>
+                    cn('cursor-pointer rounded px-3 py-2', { 'bg-base-200': focus }, { 'bg-base-300': selected })
+                  }
+                >
+                  {opt.label}
+                </ComboboxOption>
+              ))}
+            </ComboboxOptions>
+          )}
+        </div>
+      </Combobox>
+
+      <FieldError field={field} />
+    </label>
+  );
+}
+
 type SubmitButtonProps = {
   label: string;
   doneLabel?: string;
@@ -409,5 +513,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     ComboBox,
     NumericInput,
     BooleanInput,
+    HeadlessComboBox,
   },
 });
