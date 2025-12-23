@@ -9,6 +9,7 @@
     "preview": "vite preview",
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts",
     "migration:generate": "drizzle-kit generate",
+    "migration:create": "wrangler d1 migrations create perfin-staging $(pnpm dlx human-id a l 0 _)",
     "migration:apply": "wrangler d1 migrations apply perfin-staging --local",
     "migration:apply-staging": "wrangler d1 migrations apply perfin-staging --remote",
     "runsql": "wrangler d1 execute perfin-staging --local --command"
