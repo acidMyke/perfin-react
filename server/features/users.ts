@@ -1,6 +1,6 @@
 import { scrypt, randomBytes, timingSafeEqual, type ScryptOptions } from 'node:crypto';
 import { FormInputError, protectedProcedure, publicProcedure } from '../lib/trpc';
-import { eq, or } from 'drizzle-orm';
+import { eq } from 'drizzle-orm';
 import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib/utils';
@@ -56,7 +56,7 @@ const signInProcedure = publicProcedure
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
-      where: eq(usersTable.name, username),
+      where: { name: { like: username } },
       columns: {
         id: true,
         name: true,
@@ -140,8 +140,9 @@ const signUpEmailProcedure = publicProcedure
   )
   .mutation(async ({ ctx, input }) => {
     const { db } = ctx;
+    const { email, name } = input;
     const existingUser = await db.query.usersTable.findFirst({
-      where: or(eq(usersTable.email, input.email), eq(usersTable.name, input.name)),
+      where: { OR: [{ email }, { name }] },
     });
 
     if (existingUser) {

@@ -17,7 +17,6 @@ import {
   gte,
   inArray,
   isNotNull,
-  isNull,
   like,
   lt,
   max,
@@ -63,7 +62,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
     const expense = await db.query.expensesTable.findFirst({
-      where: and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)),
+      where: { AND: [{ userId }, { id: input.expenseId }] },
       columns: {
         amountCents: true,
         amountCentsPreRefund: true,
@@ -82,8 +81,8 @@ const loadExpenseDetailProcedure = protectedProcedure
       },
       with: {
         items: {
-          where: eq(expenseItemsTable.isDeleted, false),
-          orderBy: asc(expenseItemsTable.sequence),
+          where: { isDeleted: false },
+          orderBy: { sequence: 'asc' },
           columns: {
             id: true,
             name: true,
@@ -104,8 +103,8 @@ const loadExpenseDetailProcedure = protectedProcedure
           },
         },
         refunds: {
-          where: and(eq(expenseRefundsTable.isDeleted, false), isNull(expenseRefundsTable.expenseItemId)),
-          orderBy: asc(expenseRefundsTable.sequence),
+          where: { AND: [{ isDeleted: false, expenseItemId: { isNull: true } }] },
+          orderBy: { sequence: 'asc' },
           columns: {
             id: true,
             source: true,
@@ -232,20 +231,15 @@ const saveExpenseProcedure = protectedProcedure
     }),
   )
   .mutation(async ({ input, ctx }) => {
-    const { user, db } = ctx;
-    const userId = user.id;
+    const { db, userId } = ctx;
 
     if (input.expenseId !== 'create') {
       const existing = await db.query.expensesTable.findFirst({
-        where: and(eq(expensesTable.id, input.expenseId)),
-        columns: {
-          userId: true,
-          isDeleted: true,
-          version: true,
-        },
+        where: { id: input.expenseId, userId },
+        columns: { userId: true, isDeleted: true, version: true },
       });
 
-      if (existing?.userId !== userId) {
+      if (!existing) {
         throw new TRPCError({ code: 'FORBIDDEN' });
       }
 
@@ -661,10 +655,12 @@ const setIsDeletedExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
     const { expenseId, isDeleted, version } = input;
-    const condition = and(eq(expensesTable.id, expenseId), eq(expensesTable.userId, userId));
 
     // Validation
-    const existing = await db.query.expensesTable.findFirst({ where: condition, columns: { version: true } });
+    const existing = await db.query.expensesTable.findFirst({
+      where: { id: expenseId, userId },
+      columns: { version: true },
+    });
 
     if (!existing) {
       throw new TRPCError({ code: 'NOT_FOUND' });
@@ -674,7 +670,10 @@ const setIsDeletedExpenseProcedure = protectedProcedure
       throw new TRPCError({ code: 'CONFLICT' });
     }
 
-    await db.update(expensesTable).set({ isDeleted }).where(condition);
+    await db
+      .update(expensesTable)
+      .set({ isDeleted })
+      .where(and(eq(expensesTable.id, expenseId), eq(expensesTable.userId, userId)));
 
     return { success: true };
   });
