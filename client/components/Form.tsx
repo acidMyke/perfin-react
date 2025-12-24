@@ -285,7 +285,7 @@ function ComboBox({
 
   return (
     <label className={cn('floating-label z-10 flex flex-col gap-1', containerCn)}>
-      <span className={cn('text-lg font-medium', labelCn)}>{label}</span>
+      <span className={cn('text-lg', labelCn)}>{label}</span>
 
       <Combobox
         value={comboboxValue}
