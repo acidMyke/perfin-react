@@ -50,9 +50,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
           }}
         >
           {field => (
-            <field.ComboBox
+            <field.HeadlessComboBox
               suggestionMode
-              placeholder=''
               label={`Item ${itemIndex + 1} name`}
               containerCn='col-span-7 w-full'
               options={itenNameSuggestionMutation.data?.suggestions ?? []}
