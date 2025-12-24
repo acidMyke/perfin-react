@@ -241,7 +241,6 @@ const ShopDetailSubForm = withForm({
           {field => (
             <field.ComboBox
               suggestionMode
-              placeholder=''
               label='Shop name'
               containerCn='mt-2'
               options={shopNameSuggestionMutation.data?.suggestions ?? []}
@@ -267,7 +266,6 @@ const ShopDetailSubForm = withForm({
           {field => (
             <field.ComboBox
               suggestionMode
-              placeholder=''
               label='Mall'
               containerCn='mt-2'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}

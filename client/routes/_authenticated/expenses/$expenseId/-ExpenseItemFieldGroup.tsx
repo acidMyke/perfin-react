@@ -28,16 +28,14 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`name`}
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
+            onChangeAsync: async ({ value, signal, fieldApi }) => {
               if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 1) {
-                itenNameSuggestionMutation.mutateAsync({
-                  type: 'itemName',
-                  search: value,
-                  shopName: getFormField('shopName'),
-                });
-              }
+              await itenNameSuggestionMutation.mutateAsync({
+                type: 'itemName',
+                search: value,
+                context: getFormField('shopName') ?? undefined,
+              });
             },
             onBlurAsync: async ({ value }) => {
               const shopName = getFormField('shopName');
@@ -52,10 +50,10 @@ export const ItemDetailFieldGroup = withFieldGroup({
           {field => (
             <field.ComboBox
               suggestionMode
-              placeholder=''
               label={`Item ${itemIndex + 1} name`}
               containerCn='col-span-7 w-full'
               options={itenNameSuggestionMutation.data?.suggestions ?? []}
+              triggerChangeOnFocus
             />
           )}
         </group.AppField>
@@ -132,7 +130,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
                     {field => (
                       <field.ComboBox
                         suggestionMode
-                        placeholder='None'
                         label='Refund source'
                         containerCn='row-start-3 col-start-1 col-span-4 w-full'
                         options={refundSourceSuggestionMutation.data?.suggestions ?? []}

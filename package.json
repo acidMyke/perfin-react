@@ -15,6 +15,7 @@
     "runsql": "wrangler d1 execute perfin-staging --local --command"
   },
   "dependencies": {
+    "@headlessui/react": "^2.2.9",
     "@simplewebauthn/browser": "^13.2.2",
     "@simplewebauthn/server": "^13.2.2",
     "@tanstack/react-form": "^1.27.3",
@@ -31,7 +32,6 @@
     "nanoid": "^5.1.6",
     "react": "^19.2.3",
     "react-dom": "^19.2.3",
-    "react-select": "^5.10.2",
     "recharts": "^3.5.1",
     "tailwind-merge": "^3.4.0",
     "ua-parser-js": "^2.0.7",

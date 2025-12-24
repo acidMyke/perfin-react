@@ -6,6 +6,7 @@ import {
   expenseRefundsTable,
   expensesTable,
   generateId,
+  searchTable,
 } from '../../db/schema';
 import {
   and,
@@ -30,6 +31,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
+import { getTrigrams } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -250,6 +252,10 @@ const saveExpenseProcedure = protectedProcedure
       input.expenseId = generateId();
     }
 
+    const searchables: { type: string; text: string; context?: string | null }[] = [];
+    if (input.shopName) searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
+    if (input.shopMall) searchables.push({ type: 'shopMall', text: input.shopMall });
+
     const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
     const activeIds: string[] = [];
 
@@ -258,6 +264,7 @@ const saveExpenseProcedure = protectedProcedure
         item.id = generateId();
       }
       activeIds.push(item.id);
+      searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
       if (item.expenseRefund) {
         if (item.expenseRefund.id === 'create') {
           item.expenseRefund.id = generateId();
@@ -278,9 +285,8 @@ const saveExpenseProcedure = protectedProcedure
       if (refund.id === 'create') {
         refund.id = generateId();
       }
-      if (refund.id) {
-        activeIds.push(refund.id);
-      }
+      activeIds.push(refund.id!);
+      searchables.push({ type: 'refundSource', text: refund.source, context: input.shopName });
       if (refund.actualAmountCents && !refund.confirmedAt) {
         refund.confirmedAt = new Date();
       }
@@ -356,6 +362,18 @@ const saveExpenseProcedure = protectedProcedure
       .update(expenseRefundsTable)
       .set({ isDeleted: true })
       .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
+
+    if (searchables.length) {
+      for (const { text, type, context } of searchables) {
+        await db
+          .insert(searchTable)
+          .values(getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })))
+          .onConflictDoUpdate({
+            target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
+            set: { usageCount: sql`${searchTable.usageCount} + 1` },
+          });
+      }
+    }
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -435,120 +453,46 @@ const listExpenseProcedure = protectedProcedure
 
 const getSuggestionsProcedure = protectedProcedure
   .input(
-    z
-      .object({
-        type: z.literal('shopName'),
-        search: z.string().min(2),
-      })
-      .or(
-        z.object({
-          type: z.literal('shopMall'),
-          search: z.string().min(2),
-        }),
-      )
-      .or(
-        z.object({
-          type: z.literal('itemName'),
-          search: z.string().min(2),
-          shopName: z.string().nullish(),
-        }),
-      )
-      .or(
-        z.object({
-          type: z.literal('refundSource'),
-          search: z.string().min(2),
-        }),
-      ),
+    z.object({
+      type: z.enum(['shopName', 'shopMall', 'itemName', 'refundSource']),
+      search: z.string(),
+      context: z.string().optional(),
+    }),
   )
-  .mutation(async ({ input, ctx, signal }) => {
+  .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
-    const search = input.search.toUpperCase();
-    const fuzzyPattern =
-      '%' +
-      search
-        .replace(/(.)\1+/g, '$1')
-        .split('')
-        .join('%') +
-      '%';
-    const searchRanking = (column: AnyColumn) => sql<number>`CASE
-      WHEN ${column} = ${search} THEN 0
-      WHEN ${column} LIKE ${search + '%'} THEN 1
-      WHEN ${column} LIKE ${'%' + search + '%'} THEN 2
-      ELSE 3 END`;
 
-    signal?.throwIfAborted();
+    const condition = and(
+      eq(searchTable.userId, userId),
+      eq(searchTable.type, input.type),
+      input.search ? inArray(searchTable.chunk, getTrigrams(input.search)) : undefined,
+    );
 
-    if (input.type === 'shopName') {
-      const suggestions = await db
-        .select({ value: sql<string>`${expensesTable.shopName}` })
-        .from(expensesTable)
-        .where(
-          and(
-            eq(expensesTable.userId, userId),
-            isNotNull(expensesTable.shopName),
-            like(expensesTable.shopName, fuzzyPattern),
-          ),
-        )
-        .groupBy(expensesTable.shopName)
-        .orderBy(searchRanking(expensesTable.shopName), desc(count()))
-        .limit(5);
-      return {
-        ...input,
-        suggestions: suggestions.map(({ value }) => value),
-      };
-    } else if (input.type === 'shopMall') {
-      const suggestions = await db
-        .select({ value: sql<string>`${expensesTable.shopMall}` })
-        .from(expensesTable)
-        .where(
-          and(
-            eq(expensesTable.userId, userId),
-            isNotNull(expensesTable.shopMall),
-            like(expensesTable.shopMall, fuzzyPattern),
-          ),
-        )
-        .groupBy(expensesTable.shopMall)
-        .orderBy(searchRanking(expensesTable.shopMall), desc(count()))
-        .limit(5);
-      return {
-        ...input,
-        suggestions: suggestions.map(({ value }) => value),
-      };
-    } else if (input.type === 'itemName') {
-      const suggestions = await db
-        .select({ value: sql<string>`${expenseItemsTable.name}` })
-        .from(expenseItemsTable)
-        .innerJoin(expensesTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-        .where(
-          and(
-            eq(expensesTable.userId, userId),
-            like(expenseItemsTable.name, fuzzyPattern),
-            input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
-          ),
-        )
-        .groupBy(expenseItemsTable.name)
-        .orderBy(searchRanking(expenseItemsTable.name), desc(count()))
-        .limit(5);
-      return {
-        ...input,
-        suggestions: suggestions.map(({ value }) => value),
-      };
-    } else if (input.type === 'refundSource') {
-      const suggestions = await db
-        .select({ value: sql<string>`${expenseRefundsTable.source}` })
-        .from(expenseRefundsTable)
-        .innerJoin(expensesTable, eq(expensesTable.id, expenseRefundsTable.expenseId))
-        .where(and(eq(expensesTable.userId, userId), like(expenseRefundsTable.source, fuzzyPattern)))
-        .groupBy(expenseRefundsTable.source)
-        .orderBy(searchRanking(expenseRefundsTable.source), desc(count()))
-        .limit(5);
-      return {
-        ...input,
-        suggestions: suggestions.map(({ value }) => value),
-      };
+    const descMatchCount = desc(max(searchTable.usageCount));
+    const descPopularity = desc(count(searchTable.chunk));
+
+    let suggestions: { value: string }[];
+    if (input.context) {
+      const hasMatchingContext = sql<number>`MAX(CASE WHEN ${eq(searchTable.context, input.context)} THEN 0 ELSE 1 END)`;
+      suggestions = await db
+        .select({ value: searchTable.text })
+        .from(searchTable)
+        .where(condition)
+        .groupBy(searchTable.text)
+        .orderBy(hasMatchingContext, descMatchCount, descPopularity);
     } else {
-      throw new TRPCError({ code: 'NOT_IMPLEMENTED' });
+      suggestions = await db
+        .select({ value: searchTable.text })
+        .from(searchTable)
+        .where(condition)
+        .groupBy(searchTable.text)
+        .orderBy(descMatchCount, descPopularity);
     }
+
+    return {
+      ...input,
+      suggestions: suggestions.map(({ value }) => value),
+    };
   });
 
 const COORD_THRESHOLD = 0.0009; // ~100m

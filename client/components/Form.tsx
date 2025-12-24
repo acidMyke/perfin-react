@@ -2,10 +2,10 @@ import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import CreatableSelect from 'react-select/creatable';
 import { twMerge } from '../twMerge';
 import { FieldError } from './FieldError';
-import { TriangleAlert } from 'lucide-react';
+import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 export const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
@@ -249,72 +249,106 @@ export type Option = {
   value: string;
 };
 
-type CreatableSelectProps = {
+type ComboBoxProps = {
   label: string;
   options: (Option | string)[];
-  placeholder?: string;
   maxMenuHeight?: number;
   containerCn?: string;
   labelCn?: string;
   suggestionMode?: boolean;
   readOnly?: boolean;
+  triggerChangeOnFocus?: boolean;
 };
 
-function ComboBox(props: CreatableSelectProps) {
-  const {
-    label,
-    placeholder = 'Unspecified',
-    maxMenuHeight = 124,
-    containerCn,
-    labelCn,
-    suggestionMode,
-    readOnly,
-  } = props;
+function ComboBox({
+  label,
+  options,
+  maxMenuHeight = 300,
+  containerCn,
+  labelCn,
+  suggestionMode = false,
+  readOnly = false,
+  triggerChangeOnFocus = false,
+}: ComboBoxProps) {
   const field = useFieldContext<Option | string | undefined>();
-  const [createOption, setCreateOption] = useState<Option | undefined>();
 
-  const value = (
-    typeof field.state.value === 'string' ? { label: field.state.value, value: field.state.value } : field.state.value
-  ) as Option | undefined;
+  // Compute the input value from form state
+  const inputValue = suggestionMode
+    ? typeof field.state.value === 'string'
+      ? field.state.value
+      : ''
+    : (field.state.value as Option)?.label || '';
 
-  const options = suggestionMode
-    ? (props.options as string[]).map(value => ({ label: value, value }))
-    : (props.options as Option[]);
+  const comboboxValue = suggestionMode
+    ? null // free-text, menu selection does not control value
+    : (field.state.value as Option | null) || null;
 
   return (
-    <label htmlFor={field.name} className={cn('floating-label', containerCn)}>
+    <label className={cn('floating-label z-10 flex flex-col gap-1', containerCn)}>
       <span className={cn('text-lg', labelCn)}>{label}</span>
-      <CreatableSelect
-        options={createOption ? [...options, createOption] : options}
-        placeholder={placeholder}
-        classNamePrefix='react-select-lg'
-        unstyled
-        maxMenuHeight={maxMenuHeight}
-        isClearable
-        isSearchable
-        value={value}
-        getNewOptionData={label => {
+
+      <Combobox
+        value={comboboxValue}
+        onChange={option => {
+          if (!option) return;
           if (suggestionMode) {
-            label = label.toUpperCase();
-            field.handleChange(label);
-            return { label, value: label };
+            field.handleChange(option.label); // or .label
+            field.handleBlur();
           } else {
-            return { label, value: 'create' };
+            field.handleChange(option); // store Option object
           }
         }}
-        createOptionPosition='first'
-        formatCreateLabel={label => 'Create: ' + label}
-        onChange={(v, meta) => {
-          if (v === null) {
-            field.handleChange(undefined);
-            return;
-          }
-          if (meta.action === 'create-option') setCreateOption(v);
-          field.handleChange(suggestionMode ? v.value : v);
-        }}
-        onBlur={() => field.handleBlur()}
-        isDisabled={readOnly}
-      />
+        disabled={readOnly}
+        immediate
+      >
+        <div className='relative'>
+          <ComboboxInput
+            className={cn(
+              'w-full rounded border border-gray-300 px-3 py-2',
+              'focus:ring-primary border-primary focus:ring-2 focus:outline-none',
+              'bg-base-100 text-lg',
+            )}
+            placeholder={label}
+            value={inputValue}
+            onChange={e => {
+              const val = e.target.value;
+              if (suggestionMode) {
+                field.handleChange(val);
+              } else {
+                field.handleChange({ label: val, value: val });
+              }
+            }}
+            onBlur={() => field.handleBlur()}
+            onFocus={e => {
+              if (suggestionMode && triggerChangeOnFocus) {
+                const val = e.target.value;
+                if (e.target.value === '') field.handleChange(val);
+              }
+            }}
+          />
+
+          <div className='pointer-events-none absolute inset-y-0 right-3 flex items-center'>
+            <ChevronDown className='h-5 w-5 text-gray-400' />
+          </div>
+          <ComboboxOptions
+            className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
+            style={{ maxHeight: maxMenuHeight }}
+          >
+            {options.map(opt => (
+              <ComboboxOption
+                key={typeof opt === 'string' ? opt : opt.value}
+                value={opt}
+                className={({ focus, selected }) =>
+                  cn('cursor-pointer rounded px-3 py-2', { 'bg-base-200': focus }, { 'bg-base-300': selected })
+                }
+              >
+                {typeof opt === 'string' ? opt : opt.label}
+              </ComboboxOption>
+            ))}
+          </ComboboxOptions>
+        </div>
+      </Combobox>
+
       <FieldError field={field} />
     </label>
   );
