@@ -257,6 +257,7 @@ type ComboBoxProps = {
   labelCn?: string;
   suggestionMode?: boolean;
   readOnly?: boolean;
+  triggerChangeOnFocus?: boolean;
 };
 
 function ComboBox({
@@ -267,6 +268,7 @@ function ComboBox({
   labelCn,
   suggestionMode = false,
   readOnly = false,
+  triggerChangeOnFocus = false,
 }: ComboBoxProps) {
   const field = useFieldContext<Option | string | undefined>();
 
@@ -321,6 +323,12 @@ function ComboBox({
               }
             }}
             onBlur={() => field.handleBlur()}
+            onFocus={e => {
+              if (suggestionMode && triggerChangeOnFocus) {
+                const val = e.target.value;
+                field.handleChange(val.toUpperCase());
+              }
+            }}
           />
 
           <div className='pointer-events-none absolute inset-y-0 right-3 flex items-center'>

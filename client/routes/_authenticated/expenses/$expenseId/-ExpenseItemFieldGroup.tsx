@@ -31,13 +31,11 @@ export const ItemDetailFieldGroup = withFieldGroup({
             onChangeAsync: ({ value, signal, fieldApi }) => {
               if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 1) {
-                itenNameSuggestionMutation.mutateAsync({
-                  type: 'itemName',
-                  search: value,
-                  shopName: getFormField('shopName'),
-                });
-              }
+              itenNameSuggestionMutation.mutateAsync({
+                type: 'itemName',
+                search: value,
+                context: getFormField('shopName') ?? undefined,
+              });
             },
             onBlurAsync: async ({ value }) => {
               const shopName = getFormField('shopName');
@@ -55,6 +53,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
               label={`Item ${itemIndex + 1} name`}
               containerCn='col-span-7 w-full'
               options={itenNameSuggestionMutation.data?.suggestions ?? []}
+              triggerChangeOnFocus
             />
           )}
         </group.AppField>
