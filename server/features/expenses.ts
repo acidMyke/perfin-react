@@ -6,6 +6,7 @@ import {
   expenseRefundsTable,
   expensesTable,
   generateId,
+  searchTable,
 } from '../../db/schema';
 import {
   and,
@@ -30,6 +31,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
+import { getTrigrams } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -250,6 +252,10 @@ const saveExpenseProcedure = protectedProcedure
       input.expenseId = generateId();
     }
 
+    const searchables: { type: string; text: string; context?: string | null }[] = [];
+    if (input.shopName) searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
+    if (input.shopMall) searchables.push({ type: 'shopMall', text: input.shopMall });
+
     const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
     const activeIds: string[] = [];
 
@@ -258,6 +264,7 @@ const saveExpenseProcedure = protectedProcedure
         item.id = generateId();
       }
       activeIds.push(item.id);
+      searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
       if (item.expenseRefund) {
         if (item.expenseRefund.id === 'create') {
           item.expenseRefund.id = generateId();
@@ -278,9 +285,8 @@ const saveExpenseProcedure = protectedProcedure
       if (refund.id === 'create') {
         refund.id = generateId();
       }
-      if (refund.id) {
-        activeIds.push(refund.id);
-      }
+      activeIds.push(refund.id!);
+      searchables.push({ type: 'refundSource', text: refund.source, context: input.shopName });
       if (refund.actualAmountCents && !refund.confirmedAt) {
         refund.confirmedAt = new Date();
       }
@@ -356,6 +362,18 @@ const saveExpenseProcedure = protectedProcedure
       .update(expenseRefundsTable)
       .set({ isDeleted: true })
       .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
+
+    if (searchables.length) {
+      for (const { text, type, context } of searchables) {
+        await db
+          .insert(searchTable)
+          .values(getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })))
+          .onConflictDoUpdate({
+            target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
+            set: { usageCount: sql`${searchTable.usageCount} + 1` },
+          });
+      }
+    }
   });
 
 const listExpenseProcedure = protectedProcedure

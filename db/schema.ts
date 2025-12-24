@@ -1,6 +1,6 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, blob, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid();
@@ -148,3 +148,19 @@ export const expenseRefundsTable = sqliteTable('expense_refunds', {
   sequence: integer().notNull(),
   isDeleted: boolean().notNull().default(false),
 });
+
+export const searchTable = sqliteTable(
+  'search',
+  {
+    chunk: text().notNull(),
+    text: text().notNull(),
+    type: text().notNull(),
+    userId: idColumn(),
+    usageCount: integer().default(1),
+    context: text().notNull().default(''),
+  },
+  t => [
+    primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
+    index('idx_search_chunk').on(t.userId, t.type, t.chunk),
+  ],
+);
