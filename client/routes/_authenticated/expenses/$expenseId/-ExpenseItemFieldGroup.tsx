@@ -50,7 +50,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           }}
         >
           {field => (
-            <field.HeadlessComboBox
+            <field.ComboBox
               suggestionMode
               label={`Item ${itemIndex + 1} name`}
               containerCn='col-span-7 w-full'
@@ -131,7 +131,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
                     {field => (
                       <field.ComboBox
                         suggestionMode
-                        placeholder='None'
                         label='Refund source'
                         containerCn='row-start-3 col-start-1 col-span-4 w-full'
                         options={refundSourceSuggestionMutation.data?.suggestions ?? []}

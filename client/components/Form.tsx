@@ -250,78 +250,7 @@ export type Option = {
   value: string;
 };
 
-type CreatableSelectProps = {
-  label: string;
-  options: (Option | string)[];
-  placeholder?: string;
-  maxMenuHeight?: number;
-  containerCn?: string;
-  labelCn?: string;
-  suggestionMode?: boolean;
-  readOnly?: boolean;
-};
-
-function ComboBox(props: CreatableSelectProps) {
-  const {
-    label,
-    placeholder = 'Unspecified',
-    maxMenuHeight = 124,
-    containerCn,
-    labelCn,
-    suggestionMode,
-    readOnly,
-  } = props;
-  const field = useFieldContext<Option | string | undefined>();
-  const [createOption, setCreateOption] = useState<Option | undefined>();
-
-  const value = (
-    typeof field.state.value === 'string' ? { label: field.state.value, value: field.state.value } : field.state.value
-  ) as Option | undefined;
-
-  const options = suggestionMode
-    ? (props.options as string[]).map(value => ({ label: value, value }))
-    : (props.options as Option[]);
-
-  return (
-    <label htmlFor={field.name} className={cn('floating-label', containerCn)}>
-      <span className={cn('text-lg', labelCn)}>{label}</span>
-      <CreatableSelect
-        options={createOption ? [...options, createOption] : options}
-        placeholder={placeholder}
-        classNamePrefix='react-select-lg'
-        unstyled
-        maxMenuHeight={maxMenuHeight}
-        isClearable
-        isSearchable
-        value={value}
-        getNewOptionData={label => {
-          if (suggestionMode) {
-            label = label.toUpperCase();
-            field.handleChange(label);
-            return { label, value: label };
-          } else {
-            return { label, value: 'create' };
-          }
-        }}
-        createOptionPosition='first'
-        formatCreateLabel={label => 'Create: ' + label}
-        onChange={(v, meta) => {
-          if (v === null) {
-            field.handleChange(undefined);
-            return;
-          }
-          if (meta.action === 'create-option') setCreateOption(v);
-          field.handleChange(suggestionMode ? v.value : v);
-        }}
-        onBlur={() => field.handleBlur()}
-        isDisabled={readOnly}
-      />
-      <FieldError field={field} />
-    </label>
-  );
-}
-
-type HeadlessComboBoxProps = {
+type ComboBoxProps = {
   label: string;
   options: (Option | string)[];
   maxMenuHeight?: number;
@@ -331,7 +260,7 @@ type HeadlessComboBoxProps = {
   readOnly?: boolean;
 };
 
-function HeadlessComboBox({
+function ComboBox({
   label,
   options,
   maxMenuHeight = 300,
@@ -339,7 +268,7 @@ function HeadlessComboBox({
   labelCn,
   suggestionMode = false,
   readOnly = false,
-}: HeadlessComboBoxProps) {
+}: ComboBoxProps) {
   const field = useFieldContext<Option | string | undefined>();
 
   // Normalize options to {label,value} objects
@@ -513,6 +442,5 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     ComboBox,
     NumericInput,
     BooleanInput,
-    HeadlessComboBox,
   },
 });

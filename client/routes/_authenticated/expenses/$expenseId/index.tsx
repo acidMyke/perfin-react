@@ -57,7 +57,7 @@ function RouteComponent() {
         )}
       </form.Field>
       <form.AppField name='category'>
-        {({ HeadlessComboBox }) => <HeadlessComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
+        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
       </form.AppField>
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-2' />}
@@ -241,7 +241,6 @@ const ShopDetailSubForm = withForm({
           {field => (
             <field.ComboBox
               suggestionMode
-              placeholder=''
               label='Shop name'
               containerCn='mt-2'
               options={shopNameSuggestionMutation.data?.suggestions ?? []}
@@ -267,7 +266,6 @@ const ShopDetailSubForm = withForm({
           {field => (
             <field.ComboBox
               suggestionMode
-              placeholder=''
               label='Mall'
               containerCn='mt-2'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}
