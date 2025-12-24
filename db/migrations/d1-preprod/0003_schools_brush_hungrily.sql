@@ -1,0 +1,21 @@
+-- Migration number: 0003 	 2025-12-24T16:07:18.420Z
+CREATE INDEX `idx_accounts_user_seq` ON `accounts` (`user_id`,`sequence`,`created_at`);
+CREATE INDEX `idx_categories_user_seq` ON `categories` (`user_id`,`sequence`,`created_at`);
+CREATE INDEX `idx_email_codes_code` ON `email_codes` (`code`);
+CREATE INDEX `idx_email_codes_email` ON `email_codes` (`email`);
+CREATE INDEX `idx_expense_items_expense_id` ON `expense_items` (`expense_id`);
+CREATE INDEX `idx_expense_refund_expense_id` ON `expense_refunds` (`expense_id`);
+CREATE INDEX `idx_expense_refund_expense_item_id` ON `expense_refunds` (`expense_item_id`);
+CREATE INDEX `idx_expenses_user_billed` ON `expenses` (`user_id`,`billed_at`);
+CREATE INDEX `idx_expenses_user_coord` ON `expenses` (`user_id`,`latitude`,`longitude`);
+CREATE INDEX `idx_expenses_user_billed_account` ON `expenses` (`user_id`,`billed_at`,`account_id`);
+CREATE INDEX `idx_expenses_user_billed_category` ON `expenses` (`user_id`,`billed_at`,`category_id`);
+CREATE INDEX `idx_login_attempts_ip_time` ON `login_attempts` (`ip`,`timestamp`);
+CREATE INDEX `idx_login_attempts_user_time` ON `login_attempts` (`attempted_for_id`,`timestamp`);
+CREATE INDEX `idx_passkeys_user_id` ON `passkeys` (`user_id`);
+CREATE INDEX `idx_sessions_token_expires` ON `sessions` (`token`,`expires_at`);
+CREATE INDEX `idx_sessions_user_expires` ON `sessions` (`user_id`,`expires_at`);
+CREATE INDEX `idx_expense_items_name` ON `expense_items` (`name`);
+CREATE INDEX `idx_expense_refund_source` ON `expense_refunds` (`source`);
+CREATE INDEX `idx_expenses_user_shopName` ON `expenses` (`user_id`,`billed_at`,`shop_name`);
+CREATE INDEX `idx_expenses_user_shopMall` ON `expenses` (`user_id`,`billed_at`,`shop_mall`);

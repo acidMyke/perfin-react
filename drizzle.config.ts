@@ -5,4 +5,5 @@ export default defineConfig({
   schema: './db/schema.ts',
   casing: 'snake_case',
   out: './db/migrations/drizzle',
+  breakpoints: false,
 });
