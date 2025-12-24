@@ -6,6 +6,8 @@ export const getTrigrams = (input: string) =>
     .split(/\s+/)
     .flatMap(phrase =>
       phrase.length < 3
-        ? phrase
-        : Array.from({ length: Math.min(phrase.length, 10) - 2 }).map((_, i) => phrase.slice(i, i + 3).toLowerCase()),
+        ? phrase.toLowerCase()
+        : Array.from({ length: Math.min(phrase.length, 10) }).map((_, i) =>
+            phrase.slice(Math.max(i - 2, 0), i + 1).toLowerCase(),
+          ),
     );

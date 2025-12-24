@@ -272,12 +272,6 @@ function ComboBox({
 }: ComboBoxProps) {
   const field = useFieldContext<Option | string | undefined>();
 
-  // Normalize options to {label,value} objects
-  const normalizedOptions: Option[] = useMemo(
-    () => options.map(opt => (typeof opt === 'string' ? { label: opt, value: opt } : opt)),
-    [options],
-  );
-
   // Compute the input value from form state
   const inputValue = suggestionMode
     ? typeof field.state.value === 'string'
@@ -298,12 +292,14 @@ function ComboBox({
         onChange={option => {
           if (!option) return;
           if (suggestionMode) {
-            field.handleChange(option.label.toUpperCase()); // or .label
+            field.handleChange(option.label); // or .label
+            field.handleBlur();
           } else {
             field.handleChange(option); // store Option object
           }
         }}
         disabled={readOnly}
+        immediate
       >
         <div className='relative'>
           <ComboboxInput
@@ -317,7 +313,7 @@ function ComboBox({
             onChange={e => {
               const val = e.target.value;
               if (suggestionMode) {
-                field.handleChange(val.toUpperCase());
+                field.handleChange(val);
               } else {
                 field.handleChange({ label: val, value: val });
               }
@@ -326,7 +322,7 @@ function ComboBox({
             onFocus={e => {
               if (suggestionMode && triggerChangeOnFocus) {
                 const val = e.target.value;
-                field.handleChange(val.toUpperCase());
+                if (e.target.value === '') field.handleChange(val);
               }
             }}
           />
@@ -334,24 +330,22 @@ function ComboBox({
           <div className='pointer-events-none absolute inset-y-0 right-3 flex items-center'>
             <ChevronDown className='h-5 w-5 text-gray-400' />
           </div>
-          {normalizedOptions.length > 0 && (
-            <ComboboxOptions
-              className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
-              style={{ maxHeight: maxMenuHeight }}
-            >
-              {normalizedOptions.map(opt => (
-                <ComboboxOption
-                  key={opt.value}
-                  value={opt}
-                  className={({ focus, selected }) =>
-                    cn('cursor-pointer rounded px-3 py-2', { 'bg-base-200': focus }, { 'bg-base-300': selected })
-                  }
-                >
-                  {opt.label}
-                </ComboboxOption>
-              ))}
-            </ComboboxOptions>
-          )}
+          <ComboboxOptions
+            className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
+            style={{ maxHeight: maxMenuHeight }}
+          >
+            {options.map(opt => (
+              <ComboboxOption
+                key={typeof opt === 'string' ? opt : opt.value}
+                value={opt}
+                className={({ focus, selected }) =>
+                  cn('cursor-pointer rounded px-3 py-2', { 'bg-base-200': focus }, { 'bg-base-300': selected })
+                }
+              >
+                {typeof opt === 'string' ? opt : opt.label}
+              </ComboboxOption>
+            ))}
+          </ComboboxOptions>
         </div>
       </Combobox>
 

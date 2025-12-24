@@ -28,10 +28,10 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`name`}
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
+            onChangeAsync: async ({ value, signal, fieldApi }) => {
               if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              itenNameSuggestionMutation.mutateAsync({
+              await itenNameSuggestionMutation.mutateAsync({
                 type: 'itemName',
                 search: value,
                 context: getFormField('shopName') ?? undefined,
