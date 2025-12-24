@@ -2,7 +2,6 @@ import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import CreatableSelect from 'react-select/creatable';
 import { twMerge } from '../twMerge';
 import { FieldError } from './FieldError';
 import { ChevronDown, TriangleAlert } from 'lucide-react';
