@@ -398,34 +398,16 @@ const listExpenseProcedure = protectedProcedure
       !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
     ];
 
-    const expenseItemSubquery = db
-      .select({
-        itemOne: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name)).as('itemOne'),
-        itemTwo: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name)).as('itemTwo'),
-        count: count().as('count'),
-        expenseId: expenseItemsTable.expenseId,
-      })
-      .from(expenseItemsTable)
-      .where(eq(expenseItemsTable.isDeleted, false))
-      .groupBy(expenseItemsTable.expenseId)
-      .as('items');
+    const itemCount = count(expenseItemsTable.id);
+    const itemOne = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
+    const itemTwo = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
     const expenses = await db
       .select({
         id: expensesTable.id,
-        description: caseWhen(eq(expenseItemSubquery.count, sql.raw('1')), expenseItemSubquery.itemOne)
-          .whenThen(
-            eq(expenseItemSubquery.count, sql.raw('2')),
-            concat(expenseItemSubquery.itemOne, sql.raw("' and '"), expenseItemSubquery.itemTwo),
-          )
-          .else(
-            concat(
-              expenseItemSubquery.itemOne,
-              sql.raw("' and '"),
-              sql`(${expenseItemSubquery.count} - 1)`,
-              sql.raw("' items'"),
-            ),
-          ),
+        description: caseWhen(eq(itemCount, sql.raw('1')), itemOne)
+          .whenThen(eq(itemCount, sql.raw('2')), concat(itemOne, sql.raw("' and '"), itemTwo))
+          .else(concat(itemOne, sql.raw("' and '"), sql`(${itemCount} - 1)`, sql.raw("' items'"))),
         shopDetail: concat(expensesTable.shopName, coalesce(concat(sql.raw("' @ '"), expensesTable.shopMall))),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
@@ -442,8 +424,12 @@ const listExpenseProcedure = protectedProcedure
       .from(expensesTable)
       .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
       .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
-      .leftJoin(expenseItemSubquery, eq(expensesTable.id, expenseItemSubquery.expenseId))
+      .leftJoin(
+        expenseItemsTable,
+        and(eq(expensesTable.id, expenseItemsTable.expenseId), eq(expenseItemsTable.isDeleted, false)),
+      )
       .where(and(...filterList))
+      .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
 
     return {
