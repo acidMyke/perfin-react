@@ -1,4 +1,4 @@
-import { protectedProcedure, publicProcedure } from '../lib/trpc';
+import { elevatedProcedure, protectedProcedure, publicProcedure } from '../lib/trpc';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -21,7 +21,7 @@ const jsonObjectPassthrough = <T>(input: unknown) => {
   if (input && typeof input === 'object') return input as T;
   throw new Error('Input is not a object');
 };
-const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(async ({ ctx }) => {
+const generatePasskeyRegistrationOptionsProcedure = elevatedProcedure.mutation(async ({ ctx }) => {
   const { db, env, user, resHeaders } = ctx;
 
   const excludeCredentials = await db
@@ -57,7 +57,7 @@ const generatePasskeyRegistrationOptionsProcedure = protectedProcedure.mutation(
   return options;
 });
 
-const verifyPasskeyRegistrationResponseProcedure = protectedProcedure
+const verifyPasskeyRegistrationResponseProcedure = elevatedProcedure
   .input(jsonObjectPassthrough<RegistrationResponseJSON>)
   .mutation(async ({ ctx, input }) => {
     const { db, env, userId, reqCookie } = ctx;
@@ -102,7 +102,7 @@ const verifyPasskeyRegistrationResponseProcedure = protectedProcedure
     return { success: true };
   });
 
-const listRegisteredPasskey = protectedProcedure.query(async ({ ctx }) => {
+const listRegisteredPasskey = elevatedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
   const passkeys = await db
     .select({

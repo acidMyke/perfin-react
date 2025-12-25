@@ -138,4 +138,14 @@ export const protectedProcedure = publicProcedure.use(async opts => {
   });
 });
 
+export const elevatedProcedure = protectedProcedure.use(async opts => {
+  if (!opts.ctx.isAllowElevated) {
+    throw new TRPCError({ code: 'FORBIDDEN', message: 'SUDO failed' });
+  }
+
+  return opts.next({
+    ctx: opts.ctx,
+  });
+});
+
 export type ProtectedContext = inferProcedureBuilderResolverOptions<typeof protectedProcedure>['ctx'];

@@ -8,6 +8,8 @@
 // You should NOT make any changes in this file as it will be overwritten.
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
+import { createFileRoute } from '@tanstack/react-router'
+
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as SigninRouteImport } from './routes/signin'
@@ -18,12 +20,18 @@ import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
-import { Route as AuthenticatedSettingsPasskeyRouteImport } from './routes/_authenticated/settings/passkey'
+import { Route as AuthenticatedSettingsResigninRouteImport } from './routes/_authenticated/settings/resignin'
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
+import { Route as AuthenticatedSettingsElevatedRouteImport } from './routes/_authenticated/settings/_elevated'
 import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './routes/_authenticated/expenses/$expenseId/route'
 import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
+import { Route as AuthenticatedSettingsElevatedPasskeyRouteImport } from './routes/_authenticated/settings/_elevated/passkey'
 import { Route as AuthenticatedExpensesExpenseIdViewRouteImport } from './routes/_authenticated/expenses/$expenseId/view'
 import { Route as AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport } from './routes/_authenticated/expenses/$expenseId/items.$indexStr'
+
+const AuthenticatedSettingsRouteImport = createFileRoute(
+  '/_authenticated/settings',
+)()
 
 const VerifyRoute = VerifyRouteImport.update({
   id: '/verify',
@@ -44,6 +52,11 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
 const SignupIndexRoute = SignupIndexRouteImport.update({
   id: '/signup/',
   path: '/signup/',
@@ -61,9 +74,9 @@ const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
 } as any)
 const AuthenticatedSettingsIndexRoute =
   AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/',
+    path: '/',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedExpensesIndexRoute =
   AuthenticatedExpensesIndexRouteImport.update({
@@ -71,17 +84,22 @@ const AuthenticatedExpensesIndexRoute =
     path: '/expenses/',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedSettingsPasskeyRoute =
-  AuthenticatedSettingsPasskeyRouteImport.update({
-    id: '/settings/passkey',
-    path: '/settings/passkey',
-    getParentRoute: () => AuthenticatedRoute,
+const AuthenticatedSettingsResigninRoute =
+  AuthenticatedSettingsResigninRouteImport.update({
+    id: '/resignin',
+    path: '/resignin',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedSettingsManageSubjectsRoute =
   AuthenticatedSettingsManageSubjectsRouteImport.update({
-    id: '/settings/manage-subjects',
-    path: '/settings/manage-subjects',
-    getParentRoute: () => AuthenticatedRoute,
+    id: '/manage-subjects',
+    path: '/manage-subjects',
+    getParentRoute: () => AuthenticatedSettingsRoute,
+  } as any)
+const AuthenticatedSettingsElevatedRoute =
+  AuthenticatedSettingsElevatedRouteImport.update({
+    id: '/_elevated',
+    getParentRoute: () => AuthenticatedSettingsRoute,
   } as any)
 const AuthenticatedExpensesExpenseIdRouteRoute =
   AuthenticatedExpensesExpenseIdRouteRouteImport.update({
@@ -94,6 +112,12 @@ const AuthenticatedExpensesExpenseIdIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
+  } as any)
+const AuthenticatedSettingsElevatedPasskeyRoute =
+  AuthenticatedSettingsElevatedPasskeyRouteImport.update({
+    id: '/passkey',
+    path: '/passkey',
+    getParentRoute: () => AuthenticatedSettingsElevatedRoute,
   } as any)
 const AuthenticatedExpensesExpenseIdViewRoute =
   AuthenticatedExpensesExpenseIdViewRouteImport.update({
@@ -116,11 +140,13 @@ export interface FileRoutesByFullPath {
   '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
+  '/settings': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
-  '/settings/passkey': typeof AuthenticatedSettingsPasskeyRoute
+  '/settings/resignin': typeof AuthenticatedSettingsResigninRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
-  '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
+  '/settings/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -131,11 +157,12 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
-  '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
-  '/settings/passkey': typeof AuthenticatedSettingsPasskeyRoute
-  '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
+  '/settings/resignin': typeof AuthenticatedSettingsResigninRoute
+  '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
+  '/settings/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -149,11 +176,14 @@ export interface FileRoutesById {
   '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
   '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
+  '/_authenticated/settings': typeof AuthenticatedSettingsRouteWithChildren
+  '/_authenticated/settings/_elevated': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
-  '/_authenticated/settings/passkey': typeof AuthenticatedSettingsPasskeyRoute
+  '/_authenticated/settings/resignin': typeof AuthenticatedSettingsResigninRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
+  '/_authenticated/settings/_elevated/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/_authenticated/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
   '/_authenticated/expenses/$expenseId/items/$indexStr': typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
 }
@@ -167,11 +197,13 @@ export interface FileRouteTypes {
     | '/signup/verify'
     | '/signup'
     | '/expenses/$expenseId'
-    | '/settings/manage-subjects'
-    | '/settings/passkey'
-    | '/expenses'
     | '/settings'
+    | '/settings/manage-subjects'
+    | '/settings/resignin'
+    | '/expenses'
+    | '/settings/'
     | '/expenses/$expenseId/view'
+    | '/settings/passkey'
     | '/expenses/$expenseId/'
     | '/expenses/$expenseId/items/$indexStr'
   fileRoutesByTo: FileRoutesByTo
@@ -182,11 +214,12 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/signup/verify'
     | '/signup'
-    | '/settings/manage-subjects'
-    | '/settings/passkey'
-    | '/expenses'
     | '/settings'
+    | '/settings/manage-subjects'
+    | '/settings/resignin'
+    | '/expenses'
     | '/expenses/$expenseId/view'
+    | '/settings/passkey'
     | '/expenses/$expenseId'
     | '/expenses/$expenseId/items/$indexStr'
   id:
@@ -199,11 +232,14 @@ export interface FileRouteTypes {
     | '/signup/verify'
     | '/signup/'
     | '/_authenticated/expenses/$expenseId'
+    | '/_authenticated/settings'
+    | '/_authenticated/settings/_elevated'
     | '/_authenticated/settings/manage-subjects'
-    | '/_authenticated/settings/passkey'
+    | '/_authenticated/settings/resignin'
     | '/_authenticated/expenses/'
     | '/_authenticated/settings/'
     | '/_authenticated/expenses/$expenseId/view'
+    | '/_authenticated/settings/_elevated/passkey'
     | '/_authenticated/expenses/$expenseId/'
     | '/_authenticated/expenses/$expenseId/items/$indexStr'
   fileRoutesById: FileRoutesById
@@ -247,6 +283,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/signup/': {
       id: '/signup/'
       path: '/signup'
@@ -270,10 +313,10 @@ declare module '@tanstack/react-router' {
     }
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
-      path: '/settings'
-      fullPath: '/settings'
+      path: '/'
+      fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/expenses/': {
       id: '/_authenticated/expenses/'
@@ -282,19 +325,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/settings/passkey': {
-      id: '/_authenticated/settings/passkey'
-      path: '/settings/passkey'
-      fullPath: '/settings/passkey'
-      preLoaderRoute: typeof AuthenticatedSettingsPasskeyRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/_authenticated/settings/resignin': {
+      id: '/_authenticated/settings/resignin'
+      path: '/resignin'
+      fullPath: '/settings/resignin'
+      preLoaderRoute: typeof AuthenticatedSettingsResigninRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/settings/manage-subjects': {
       id: '/_authenticated/settings/manage-subjects'
-      path: '/settings/manage-subjects'
+      path: '/manage-subjects'
       fullPath: '/settings/manage-subjects'
       preLoaderRoute: typeof AuthenticatedSettingsManageSubjectsRouteImport
-      parentRoute: typeof AuthenticatedRoute
+      parentRoute: typeof AuthenticatedSettingsRoute
+    }
+    '/_authenticated/settings/_elevated': {
+      id: '/_authenticated/settings/_elevated'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsElevatedRouteImport
+      parentRoute: typeof AuthenticatedSettingsRoute
     }
     '/_authenticated/expenses/$expenseId': {
       id: '/_authenticated/expenses/$expenseId'
@@ -309,6 +359,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/expenses/$expenseId/'
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdIndexRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
+    }
+    '/_authenticated/settings/_elevated/passkey': {
+      id: '/_authenticated/settings/_elevated/passkey'
+      path: '/passkey'
+      fullPath: '/settings/passkey'
+      preLoaderRoute: typeof AuthenticatedSettingsElevatedPasskeyRouteImport
+      parentRoute: typeof AuthenticatedSettingsElevatedRoute
     }
     '/_authenticated/expenses/$expenseId/view': {
       id: '/_authenticated/expenses/$expenseId/view'
@@ -348,24 +405,55 @@ const AuthenticatedExpensesExpenseIdRouteRouteWithChildren =
     AuthenticatedExpensesExpenseIdRouteRouteChildren,
   )
 
+interface AuthenticatedSettingsElevatedRouteChildren {
+  AuthenticatedSettingsElevatedPasskeyRoute: typeof AuthenticatedSettingsElevatedPasskeyRoute
+}
+
+const AuthenticatedSettingsElevatedRouteChildren: AuthenticatedSettingsElevatedRouteChildren =
+  {
+    AuthenticatedSettingsElevatedPasskeyRoute:
+      AuthenticatedSettingsElevatedPasskeyRoute,
+  }
+
+const AuthenticatedSettingsElevatedRouteWithChildren =
+  AuthenticatedSettingsElevatedRoute._addFileChildren(
+    AuthenticatedSettingsElevatedRouteChildren,
+  )
+
+interface AuthenticatedSettingsRouteChildren {
+  AuthenticatedSettingsElevatedRoute: typeof AuthenticatedSettingsElevatedRouteWithChildren
+  AuthenticatedSettingsManageSubjectsRoute: typeof AuthenticatedSettingsManageSubjectsRoute
+  AuthenticatedSettingsResigninRoute: typeof AuthenticatedSettingsResigninRoute
+  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
+}
+
+const AuthenticatedSettingsRouteChildren: AuthenticatedSettingsRouteChildren = {
+  AuthenticatedSettingsElevatedRoute:
+    AuthenticatedSettingsElevatedRouteWithChildren,
+  AuthenticatedSettingsManageSubjectsRoute:
+    AuthenticatedSettingsManageSubjectsRoute,
+  AuthenticatedSettingsResigninRoute: AuthenticatedSettingsResigninRoute,
+  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
+}
+
+const AuthenticatedSettingsRouteWithChildren =
+  AuthenticatedSettingsRoute._addFileChildren(
+    AuthenticatedSettingsRouteChildren,
+  )
+
 interface AuthenticatedRouteChildren {
   AuthenticatedDashboardRoute: typeof AuthenticatedDashboardRoute
   AuthenticatedExpensesExpenseIdRouteRoute: typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
-  AuthenticatedSettingsManageSubjectsRoute: typeof AuthenticatedSettingsManageSubjectsRoute
-  AuthenticatedSettingsPasskeyRoute: typeof AuthenticatedSettingsPasskeyRoute
+  AuthenticatedSettingsRoute: typeof AuthenticatedSettingsRouteWithChildren
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
-  AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
 const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
   AuthenticatedDashboardRoute: AuthenticatedDashboardRoute,
   AuthenticatedExpensesExpenseIdRouteRoute:
     AuthenticatedExpensesExpenseIdRouteRouteWithChildren,
-  AuthenticatedSettingsManageSubjectsRoute:
-    AuthenticatedSettingsManageSubjectsRoute,
-  AuthenticatedSettingsPasskeyRoute: AuthenticatedSettingsPasskeyRoute,
+  AuthenticatedSettingsRoute: AuthenticatedSettingsRouteWithChildren,
   AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
-  AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
 const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(

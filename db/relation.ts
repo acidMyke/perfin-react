@@ -35,9 +35,10 @@ export const relations = defineRelations(schema, r => ({
       to: r.usersTable.id,
       optional: false,
     }),
-    loginAttempts: r.one.loginAttemptsTable({
+    loginAttempt: r.one.loginAttemptsTable({
       from: r.sessionsTable.loginAttemptId,
       to: r.loginAttemptsTable.id,
+      optional: false,
     }),
   },
   expensesTable: {
