@@ -146,4 +146,5 @@ export function throwIfNotFound(error: unknown) {
       }
     }
   }
+  throw error;
 }
