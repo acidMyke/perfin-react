@@ -39,9 +39,7 @@ export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseR
     source: '',
     expectedAmountCents,
     isDeleted: false,
-    note: null,
     actualAmountCents: 0,
-    confirmedAt: null,
     expenseItemId: null,
   };
 }

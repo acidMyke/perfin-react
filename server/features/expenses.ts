@@ -24,7 +24,6 @@ import {
   notInArray,
   sql,
   SQL,
-  type AnyColumn,
 } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -63,69 +62,71 @@ const loadExpenseDetailProcedure = protectedProcedure
   .query(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
-    const expense = await db.query.expensesTable.findFirst({
-      where: { AND: [{ userId }, { id: input.expenseId }] },
-      columns: {
-        amountCents: true,
-        amountCentsPreRefund: true,
-        billedAt: true,
-        accountId: true,
-        categoryId: true,
-        latitude: true,
-        longitude: true,
-        geoAccuracy: true,
-        shopMall: true,
-        shopName: true,
-        version: true,
-        isGstExcluded: true,
-        additionalServiceChargePercent: true,
-        isDeleted: true,
-      },
-      with: {
-        items: {
-          where: { isDeleted: false },
-          orderBy: { sequence: 'asc' },
-          columns: {
-            id: true,
-            name: true,
-            quantity: true,
-            priceCents: true,
-            isDeleted: true,
-          },
-          with: {
-            expenseRefund: {
-              columns: {
-                id: true,
-                source: true,
-                expectedAmountCents: true,
-                actualAmountCents: true,
-                confirmedAt: true,
-              },
-            },
-          },
-        },
-        refunds: {
-          where: { AND: [{ isDeleted: false, expenseItemId: { isNull: true } }] },
-          orderBy: { sequence: 'asc' },
-          columns: {
-            id: true,
-            source: true,
-            expectedAmountCents: true,
-            actualAmountCents: true,
-            confirmedAt: true,
-            note: true,
-            isDeleted: true,
-            expenseItemId: true,
-          },
-        },
-      },
-    });
+
+    const [[expense], rawItems, rawRefunds] = await db.batch([
+      db
+        .select({
+          amountCents: expensesTable.amountCents,
+          amountCentsPreRefund: expensesTable.amountCentsPreRefund,
+          billedAt: expensesTable.billedAt,
+          accountId: expensesTable.accountId,
+          categoryId: expensesTable.categoryId,
+          latitude: expensesTable.latitude,
+          longitude: expensesTable.longitude,
+          geoAccuracy: expensesTable.geoAccuracy,
+          shopMall: expensesTable.shopMall,
+          shopName: expensesTable.shopName,
+          version: expensesTable.version,
+          isGstExcluded: expensesTable.isGstExcluded,
+          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
+          isDeleted: expensesTable.isDeleted,
+        })
+        .from(expensesTable)
+        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
+        .limit(1),
+      db
+        .select({
+          id: expenseItemsTable.id,
+          name: expenseItemsTable.name,
+          quantity: expenseItemsTable.quantity,
+          priceCents: expenseItemsTable.priceCents,
+          isDeleted: expenseItemsTable.isDeleted,
+          itemRefundId: expenseItemsTable.expenseRefundId,
+        })
+        .from(expenseItemsTable)
+        .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
+      db
+        .select({
+          id: expenseRefundsTable.id,
+          source: expenseRefundsTable.source,
+          expectedAmountCents: expenseRefundsTable.expectedAmountCents,
+          actualAmountCents: expenseRefundsTable.actualAmountCents,
+          isDeleted: expenseRefundsTable.isDeleted,
+          expenseItemId: expenseRefundsTable.expenseItemId,
+        })
+        .from(expenseRefundsTable)
+        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), eq(expenseRefundsTable.isDeleted, false))),
+    ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return expense;
+    const items = rawItems.map(({ itemRefundId, ...item }) => ({
+      ...item,
+      expenseRefund: itemRefundId
+        ? rawRefunds.splice(
+            rawRefunds.findIndex(({ id }) => id == itemRefundId),
+            1,
+          )[0]
+        : null,
+    }));
+
+    return {
+      ...expense,
+      items,
+      refunds: rawRefunds,
+    };
   });
 
 async function safelyCreateSubject(
