@@ -1,6 +1,6 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { eq, sql } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer, real, primaryKey, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid();
@@ -20,6 +20,11 @@ const createdAtColumn = () => dateColumn().$default(() => new Date());
 const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
 const boolean = () => integer({ mode: 'boolean' });
+const citext = customType<{ data: string }>({
+  dataType() {
+    return 'text COLLATE NOCASE';
+  },
+});
 
 const baseColumns = () => ({
   id: pkIdColumn(),
@@ -34,7 +39,7 @@ export const emailCodesTable = sqliteTable(
   'email_codes',
   {
     ...baseColumns(),
-    email: text().notNull(),
+    email: citext().notNull(),
     code: text({ length: 16 }).notNull(),
     purpose: text().notNull(),
     validUntil: dateColumn(),
@@ -66,8 +71,8 @@ export const loginAttemptsTable = sqliteTable(
 
 export const usersTable = sqliteTable('users', {
   ...baseColumns(),
-  name: text().unique().notNull(),
-  email: text().unique().notNull(),
+  name: citext().unique().notNull(),
+  email: citext().unique().notNull(),
   passSalt: blob({ mode: 'buffer' }).notNull(),
   passDigest: blob({ mode: 'buffer' }).notNull(),
   failedAttempts: integer().notNull().default(0),
@@ -149,8 +154,8 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
-    shopName: text(),
-    shopMall: text(),
+    shopName: citext(),
+    shopMall: citext(),
     additionalServiceChargePercent: integer(),
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
@@ -170,7 +175,7 @@ export const expenseItemsTable = sqliteTable(
   {
     ...baseColumns(),
     sequence: integer().notNull(),
-    name: text().notNull(),
+    name: citext().notNull(),
     quantity: integer().default(1).notNull(),
     priceCents: centsColumn(),
     expenseId: idColumn(),
@@ -190,7 +195,7 @@ export const expenseRefundsTable = sqliteTable(
     expectedAmountCents: centsColumn(),
     actualAmountCents: integer(),
     confirmedAt: integer({ mode: 'timestamp' }),
-    source: text().notNull(),
+    source: citext().notNull(),
     note: text(),
     sequence: integer().notNull(),
     isDeleted: boolean().notNull().default(false),
@@ -206,11 +211,11 @@ export const searchTable = sqliteTable(
   'search',
   {
     chunk: text().notNull(),
-    text: text().notNull(),
+    text: citext().notNull(),
     type: text().notNull(),
     userId: idColumn(),
     usageCount: integer().default(1),
-    context: text().notNull().default(''),
+    context: citext().notNull().default(''),
   },
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
