@@ -42,7 +42,9 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
           .catch(error => throwIfNotFound(error)),
       );
     }
+    return Promise.all(promises);
   },
+  preload: false,
 });
 
 function RouteComponent() {
