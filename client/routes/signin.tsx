@@ -25,7 +25,7 @@ export const Route = createFileRoute('/signin')({
     const needSignIn = search.elevation ? !isAllowElevated : !isAuthenticated;
 
     if (search.elevation && !isAuthenticated) {
-      throw redirect({ to: '.', search: { redirect: search.redirect, elevation: false } });
+      throw redirect({ to: '.', search: { redirect: search.redirect } });
     }
     if (needSignIn) {
       return;
