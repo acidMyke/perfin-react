@@ -28,18 +28,18 @@ export const ItemDetailFieldGroup = withFieldGroup({
           name={`name`}
           validators={{
             onChangeAsyncDebounceMs: 500,
-            onChangeAsync: async ({ value, signal, fieldApi }) => {
+            onChangeAsync: ({ value, signal, fieldApi }) => {
               if (fieldApi.form.state.isSubmitting) return;
               signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              await itenNameSuggestionMutation.mutateAsync({
+              itenNameSuggestionMutation.mutate({
                 type: 'itemName',
-                search: value,
+                search: value ?? '',
                 context: getFormField('shopName') ?? undefined,
               });
             },
             onBlurAsync: async ({ value }) => {
               const shopName = getFormField('shopName');
-              if (!value.trim() || !shopName?.trim()) return;
+              if (!value?.trim() || !shopName?.trim()) return;
               const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
               if (itemDetail) {
                 group.setFieldValue('priceCents', itemDetail.priceCents);

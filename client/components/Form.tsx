@@ -291,8 +291,9 @@ function ComboBox({
         value={comboboxValue}
         onChange={option => {
           if (!option) return;
+          const opt = option as Option | string;
           if (suggestionMode) {
-            field.handleChange(option.label); // or .label
+            field.handleChange(typeof opt === 'string' ? opt : opt.label); // or .label
             field.handleBlur();
           } else {
             field.handleChange(option); // store Option object
