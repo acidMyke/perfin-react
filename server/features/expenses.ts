@@ -24,7 +24,6 @@ import {
   notInArray,
   sql,
   SQL,
-  type AnyColumn,
 } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -63,69 +62,71 @@ const loadExpenseDetailProcedure = protectedProcedure
   .query(async ({ input, ctx }) => {
     const { user, db } = ctx;
     const userId = user.id;
-    const expense = await db.query.expensesTable.findFirst({
-      where: { AND: [{ userId }, { id: input.expenseId }] },
-      columns: {
-        amountCents: true,
-        amountCentsPreRefund: true,
-        billedAt: true,
-        accountId: true,
-        categoryId: true,
-        latitude: true,
-        longitude: true,
-        geoAccuracy: true,
-        shopMall: true,
-        shopName: true,
-        version: true,
-        isGstExcluded: true,
-        additionalServiceChargePercent: true,
-        isDeleted: true,
-      },
-      with: {
-        items: {
-          where: { isDeleted: false },
-          orderBy: { sequence: 'asc' },
-          columns: {
-            id: true,
-            name: true,
-            quantity: true,
-            priceCents: true,
-            isDeleted: true,
-          },
-          with: {
-            expenseRefund: {
-              columns: {
-                id: true,
-                source: true,
-                expectedAmountCents: true,
-                actualAmountCents: true,
-                confirmedAt: true,
-              },
-            },
-          },
-        },
-        refunds: {
-          where: { AND: [{ isDeleted: false, expenseItemId: { isNull: true } }] },
-          orderBy: { sequence: 'asc' },
-          columns: {
-            id: true,
-            source: true,
-            expectedAmountCents: true,
-            actualAmountCents: true,
-            confirmedAt: true,
-            note: true,
-            isDeleted: true,
-            expenseItemId: true,
-          },
-        },
-      },
-    });
+
+    const [[expense], rawItems, rawRefunds] = await db.batch([
+      db
+        .select({
+          amountCents: expensesTable.amountCents,
+          amountCentsPreRefund: expensesTable.amountCentsPreRefund,
+          billedAt: expensesTable.billedAt,
+          accountId: expensesTable.accountId,
+          categoryId: expensesTable.categoryId,
+          latitude: expensesTable.latitude,
+          longitude: expensesTable.longitude,
+          geoAccuracy: expensesTable.geoAccuracy,
+          shopMall: expensesTable.shopMall,
+          shopName: expensesTable.shopName,
+          version: expensesTable.version,
+          isGstExcluded: expensesTable.isGstExcluded,
+          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
+          isDeleted: expensesTable.isDeleted,
+        })
+        .from(expensesTable)
+        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
+        .limit(1),
+      db
+        .select({
+          id: expenseItemsTable.id,
+          name: expenseItemsTable.name,
+          quantity: expenseItemsTable.quantity,
+          priceCents: expenseItemsTable.priceCents,
+          isDeleted: expenseItemsTable.isDeleted,
+          itemRefundId: expenseItemsTable.expenseRefundId,
+        })
+        .from(expenseItemsTable)
+        .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
+      db
+        .select({
+          id: expenseRefundsTable.id,
+          source: expenseRefundsTable.source,
+          expectedAmountCents: expenseRefundsTable.expectedAmountCents,
+          actualAmountCents: expenseRefundsTable.actualAmountCents,
+          isDeleted: expenseRefundsTable.isDeleted,
+          expenseItemId: expenseRefundsTable.expenseItemId,
+        })
+        .from(expenseRefundsTable)
+        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), eq(expenseRefundsTable.isDeleted, false))),
+    ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return expense;
+    const items = rawItems.map(({ itemRefundId, ...item }) => ({
+      ...item,
+      expenseRefund: itemRefundId
+        ? rawRefunds.splice(
+            rawRefunds.findIndex(({ id }) => id == itemRefundId),
+            1,
+          )[0]
+        : null,
+    }));
+
+    return {
+      ...expense,
+      items,
+      refunds: rawRefunds,
+    };
   });
 
 async function safelyCreateSubject(
@@ -398,34 +399,16 @@ const listExpenseProcedure = protectedProcedure
       !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
     ];
 
-    const expenseItemSubquery = db
-      .select({
-        itemOne: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name)).as('itemOne'),
-        itemTwo: max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name)).as('itemTwo'),
-        count: count().as('count'),
-        expenseId: expenseItemsTable.expenseId,
-      })
-      .from(expenseItemsTable)
-      .where(eq(expenseItemsTable.isDeleted, false))
-      .groupBy(expenseItemsTable.expenseId)
-      .as('items');
+    const itemCount = count(expenseItemsTable.id);
+    const itemOne = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
+    const itemTwo = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
     const expenses = await db
       .select({
         id: expensesTable.id,
-        description: caseWhen(eq(expenseItemSubquery.count, sql.raw('1')), expenseItemSubquery.itemOne)
-          .whenThen(
-            eq(expenseItemSubquery.count, sql.raw('2')),
-            concat(expenseItemSubquery.itemOne, sql.raw("' and '"), expenseItemSubquery.itemTwo),
-          )
-          .else(
-            concat(
-              expenseItemSubquery.itemOne,
-              sql.raw("' and '"),
-              sql`(${expenseItemSubquery.count} - 1)`,
-              sql.raw("' items'"),
-            ),
-          ),
+        description: caseWhen(eq(itemCount, sql.raw('1')), itemOne)
+          .whenThen(eq(itemCount, sql.raw('2')), concat(itemOne, sql.raw("' and '"), itemTwo))
+          .else(concat(itemOne, sql.raw("' and '"), sql`(${itemCount} - 1)`, sql.raw("' items'"))),
         shopDetail: concat(expensesTable.shopName, coalesce(concat(sql.raw("' @ '"), expensesTable.shopMall))),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
@@ -442,8 +425,12 @@ const listExpenseProcedure = protectedProcedure
       .from(expensesTable)
       .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
       .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
-      .leftJoin(expenseItemSubquery, eq(expensesTable.id, expenseItemSubquery.expenseId))
+      .leftJoin(
+        expenseItemsTable,
+        and(eq(expensesTable.id, expenseItemsTable.expenseId), eq(expenseItemsTable.isDeleted, false)),
+      )
       .where(and(...filterList))
+      .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
 
     return {

@@ -1,14 +1,14 @@
 import type { Context, ProtectedContext } from './trpc';
 import { addDays } from 'date-fns/addDays';
 import { randomBytes } from 'node:crypto';
-import * as schema from '../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, gt } from 'drizzle-orm';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { addMinutes } from 'date-fns/addMinutes';
 import { UAParser } from 'ua-parser-js';
 import type { AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
 import { differenceInMinutes } from 'date-fns';
+import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
 
 export function generateTokenParam() {
   return {
@@ -45,7 +45,7 @@ async function createAndSaveToken(
   const tokenParam = generateTokenParam();
   const { token, expiresAt } = tokenParam;
 
-  await db.insert(schema.sessionsTable).values({
+  await db.insert(sessionsTable).values({
     token,
     expiresAt,
     userId,
@@ -61,9 +61,9 @@ async function revokeToken(db: AppDatabase, userId: string, sessionId: string, r
     expiresAt = addMinutes(expiresAt, 2);
   }
   const result = await db
-    .update(schema.sessionsTable)
+    .update(sessionsTable)
     .set({ expiresAt })
-    .where(and(eq(schema.sessionsTable.id, sessionId), eq(schema.sessionsTable.userId, userId)));
+    .where(and(eq(sessionsTable.id, sessionId), eq(sessionsTable.userId, userId)));
 
   console.log('revoke_token', { result: result.meta });
 }
@@ -76,7 +76,7 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   const parsedUa = new UAParser(ua).getResult();
   const userAgent = `${parsedUa.browser.name} ${parsedUa.browser.version} / ${parsedUa.os.name} ${parsedUa.os.version}`;
 
-  const attempt: typeof schema.loginAttemptsTable.$inferInsert = {
+  const attempt: typeof loginAttemptsTable.$inferInsert = {
     ip: headers.get('cf-connecting-ip') ?? '',
     userAgent,
     isSuccess,
@@ -92,9 +92,9 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   }
 
   const [{ id: loginAttemptId }] = await db
-    .insert(schema.loginAttemptsTable)
+    .insert(loginAttemptsTable)
     .values(attempt)
-    .returning({ id: schema.loginAttemptsTable.id });
+    .returning({ id: loginAttemptsTable.id });
 
   return loginAttemptId;
 }
@@ -141,14 +141,27 @@ async function check(
     };
   }
 
-  const session = await db.query.sessionsTable.findFirst({
-    where: { token: authToken, expiresAt: { gt: new Date() } },
-    columns: { id: true, createdAt: true, expiresAt: true },
-    with: {
-      user: { columns: { id: true, name: true } },
-      loginAttempt: { columns: { id: true, timestamp: true } },
-    },
-  });
+  const [session] = await db
+    .select({
+      id: sessionsTable.id,
+      createdAt: sessionsTable.createdAt,
+      expiresAt: sessionsTable.expiresAt,
+
+      user: {
+        id: usersTable.id,
+        name: usersTable.name,
+      },
+
+      loginAttempt: {
+        id: loginAttemptsTable.id,
+        timestamp: loginAttemptsTable.timestamp,
+      },
+    })
+    .from(sessionsTable)
+    .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
+    .innerJoin(loginAttemptsTable, eq(sessionsTable.loginAttemptId, loginAttemptsTable.id))
+    .where(and(eq(sessionsTable.token, authToken), gt(sessionsTable.expiresAt, new Date())))
+    .limit(1);
 
   if (!session) {
     resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);

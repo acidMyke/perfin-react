@@ -1,6 +1,7 @@
 import { getColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import relations from '../../db/relation';
+import { defineRelations } from 'drizzle-orm';
+import * as schema from '../../db/schema';
 
 export const sankeCaseFromCamelCase = (camelCase: string) =>
   camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
@@ -82,8 +83,9 @@ export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,
     casing: 'snake_case',
-    relations,
+    relations: defineRelations(schema),
   });
 }
 
+export type AppSchema = typeof schema;
 export type AppDatabase = ReturnType<typeof createDatabase>;

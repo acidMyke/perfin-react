@@ -1,8 +1,9 @@
-import { endOfToday, getUnixTime, sub, subDays } from 'date-fns';
+import { endOfToday, sub, subDays } from 'date-fns';
 import { protectedProcedure } from '../lib/trpc';
 import { and, between, count, eq, gt, sql } from 'drizzle-orm';
 import { expensesTable } from '../../db/schema';
 import z from 'zod';
+import { caseWhen } from '../lib/db';
 
 const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
@@ -14,11 +15,11 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
 
   const segmentResult = await db
     .select({
-      rangeId: sql<number>`CASE
-        WHEN ${expensesTable.billedAt} BETWEEN ${getUnixTime(dMinus7)} AND ${getUnixTime(d)} THEN 0
-        WHEN ${expensesTable.billedAt} BETWEEN ${getUnixTime(dMinus14)} AND ${getUnixTime(dMinus7)} THEN 1
-        WHEN ${expensesTable.billedAt} BETWEEN ${getUnixTime(dMinus28)} AND ${getUnixTime(dMinus14)} THEN 2
-        ELSE NULL END AS rangeId`,
+      rangeId: caseWhen(between(expensesTable.billedAt, dMinus7, d), 0)
+        .whenThen(between(expensesTable.billedAt, dMinus14, dMinus7), 1)
+        .whenThen(between(expensesTable.billedAt, dMinus28, dMinus14), 2)
+        .elseNull()
+        .as('rangeId'),
       expensesSum: sql<number>`ROUND(SUM(${expensesTable.amountCents}) / CAST(100 AS REAL), 2)`,
       expensesCount: count(),
     })
