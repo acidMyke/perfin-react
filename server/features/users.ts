@@ -241,10 +241,11 @@ const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
 });
 
 export const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
-  const { isAuthenticated, user, session } = ctx;
+  const { isAuthenticated, user, session, isAllowElevated } = ctx;
 
   return {
     isAuthenticated,
+    isAllowElevated,
     userName: user?.name,
     userId: user?.id,
     sessionExpiresAt: session?.expiresAt,

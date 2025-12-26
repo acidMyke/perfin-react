@@ -8,6 +8,7 @@ import { addMinutes } from 'date-fns/addMinutes';
 import { UAParser } from 'ua-parser-js';
 import type { AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
+import { differenceInMinutes } from 'date-fns';
 
 export function generateTokenParam() {
   return {
@@ -142,8 +143,11 @@ async function check(
 
   const session = await db.query.sessionsTable.findFirst({
     where: { token: authToken, expiresAt: { gt: new Date() } },
-    columns: { id: true, createdAt: true, expiresAt: true, loginAttemptId: true },
-    with: { user: { columns: { id: true, name: true } } },
+    columns: { id: true, createdAt: true, expiresAt: true },
+    with: {
+      user: { columns: { id: true, name: true } },
+      loginAttempt: { columns: { id: true, timestamp: true } },
+    },
   });
 
   if (!session) {
@@ -158,7 +162,7 @@ async function check(
 
   // if the token is older then 2 days, refresh it
   if (differenceInDays(new Date(), session.createdAt) > 2) {
-    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttemptId);
+    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id);
     await revokeToken(db, userId, session.id, true);
   }
 
@@ -167,12 +171,15 @@ async function check(
     isCsrfValid = req.headers.get('X-CSRF-Token') == csrfToken;
   }
 
+  const isAllowElevated = differenceInMinutes(new Date(), session.loginAttempt.timestamp) < 5;
+
   return {
     isCsrfValid,
     isAuthenticated: true as const,
     session,
     user: session.user,
     userId,
+    isAllowElevated,
   };
 }
 
