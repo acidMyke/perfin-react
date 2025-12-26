@@ -9,8 +9,8 @@ export const Route = createFileRoute('/_authenticated/settings/_elevated')({
     const { isAllowElevated } = await queryClient.ensureQueryData(whoamiQueryOptions);
     if (!isAllowElevated) {
       throw redirect({
-        to: '/settings/resignin',
-        search: { redirect: location.href },
+        to: '/signin',
+        search: { redirect: location.href, elevation: true },
       });
     }
   },

@@ -1,4 +1,4 @@
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect, Link } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
 import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
@@ -13,12 +13,21 @@ export const Route = createFileRoute('/signin')({
   component: RouteComponent,
   validateSearch(search) {
     return {
-      redirect: search.redirect as string | undefined,
+      redirect: search.redirect,
+      elevation: search.elevation,
+    } as {
+      redirect?: string | undefined;
+      elevation?: boolean | undefined;
     };
   },
   async beforeLoad({ search }) {
-    const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
-    if (!isAuthenticated) {
+    const { isAuthenticated, isAllowElevated } = await queryClient.ensureQueryData(whoamiQueryOptions);
+    const needSignIn = search.elevation ? !isAllowElevated : !isAuthenticated;
+
+    if (search.elevation && !isAuthenticated) {
+      throw redirect({ to: '.', search: { redirect: search.redirect, elevation: false } });
+    }
+    if (needSignIn) {
       return;
     }
     if (search.redirect) {
@@ -89,11 +98,18 @@ function RouteComponent() {
     },
   });
   const hasStarted = useRef(false);
+  const whoamiQuery = useSuspenseQuery(whoamiQueryOptions);
 
   useEffect(() => {
     if (!hasStarted.current) {
       hasStarted.current = true;
-      passkeyAuthOptionsMutation.mutate();
+      const { isAuthenticated, userName } = whoamiQuery.data;
+      if (search.elevation && isAuthenticated) {
+        form.reset({ username: userName!, password: '' }, { keepDefaultValues: true });
+        passkeyAuthOptionsMutation.mutate({ username: userName! });
+      } else {
+        passkeyAuthOptionsMutation.mutate();
+      }
     }
   }, []);
 
@@ -109,10 +125,17 @@ function RouteComponent() {
         e.stopPropagation();
       }}
     >
-      <h1 className='mt-20 text-center text-3xl font-black'>Sign In</h1>
+      <h1 className='mt-20 text-center text-3xl font-black'>
+        {search.elevation ? "Just checking it's you" : 'Sign In'}
+      </h1>
+      {search.elevation && (
+        <p className='mt-2 text-center text-gray-500'>We need you to log in one more time to keep your account safe.</p>
+      )}
       <form.AppForm>
         <form.AppField name='username'>
-          {({ TextInput }) => <TextInput type='text' label='Username' autoComplete='username webauthn' />}
+          {({ TextInput }) => (
+            <TextInput type='text' label='Username' autoComplete='username webauthn' readOnly={search.elevation} />
+          )}
         </form.AppField>
         <form.AppField name='password'>
           {({ TextInput }) => <TextInput type='password' label='Password' />}
