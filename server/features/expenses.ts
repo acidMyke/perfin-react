@@ -8,29 +8,13 @@ import {
   generateId,
   searchTable,
 } from '../../db/schema';
-import {
-  and,
-  asc,
-  between,
-  count,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  like,
-  lt,
-  max,
-  notInArray,
-  sql,
-  SQL,
-} from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getTrigrams } from '../lib/utils';
+import { getLocationBoxId, getTrigrams } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -299,6 +283,10 @@ const saveExpenseProcedure = protectedProcedure
     ]);
 
     const { amountCents, grossAmountCents } = calculateExpense(input);
+    const [boxId] =
+      input.latitude && input.longitude
+        ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
+        : [null];
 
     await db
       .insert(expensesTable)
@@ -314,6 +302,7 @@ const saveExpenseProcedure = protectedProcedure
         latitude: input.latitude,
         longitude: input.longitude,
         geoAccuracy: input.geoAccuracy,
+        boxId,
         shopName: input.shopName,
         shopMall: input.shopMall,
         additionalServiceChargePercent: input.additionalServiceChargePercent,
@@ -482,8 +471,6 @@ const getSuggestionsProcedure = protectedProcedure
     };
   });
 
-const COORD_THRESHOLD = 0.0009; // ~100m
-
 const inferShopDetailsProcedure = protectedProcedure
   .input(
     z.object({
@@ -507,6 +494,8 @@ const inferShopDetailsProcedure = protectedProcedure
 
     // Infer shop / mall and shopdetails by coordinate
     if (!input.shopName && input.latitude && input.longitude) {
+      const boxIds = getLocationBoxId({ latitude: input.latitude, longitude: input.longitude }, true);
+
       const nearbyShopsColumns = {
         shopName: expensesTable.shopName,
         shopMall: expensesTable.shopMall,
@@ -515,22 +504,24 @@ const inferShopDetailsProcedure = protectedProcedure
         categoryId: expensesTable.categoryId,
         accountId: expensesTable.accountId,
       } as const;
-      const nearbyShopsCondition = and(
-        eq(expensesTable.userId, userId),
-        between(expensesTable.latitude, input.latitude - COORD_THRESHOLD, input.latitude + COORD_THRESHOLD),
-        between(expensesTable.longitude, input.longitude - COORD_THRESHOLD, input.longitude + COORD_THRESHOLD),
-        isNotNull(expensesTable.shopName),
-      );
+      const nearbyShopsCondition = and(eq(expensesTable.userId, userId), inArray(expensesTable.boxId, boxIds));
 
-      const distance = sql<number>`(${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
-                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude})`;
+      const distance = sql<number>`min((${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
+                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude}))`;
+
+      const groupByColumns = [
+        nearbyShopsColumns.shopName,
+        nearbyShopsColumns.categoryId,
+        nearbyShopsColumns.accountId,
+      ] as const;
 
       if (itemNames.length === 0) {
         return await db
-          .selectDistinct(nearbyShopsColumns)
+          .select(nearbyShopsColumns)
           .from(expensesTable)
           .where(nearbyShopsCondition)
-          .orderBy(distance, desc(expensesTable.billedAt))
+          .groupBy(...groupByColumns)
+          .orderBy(distance, desc(max(expensesTable.billedAt)))
           .limit(5);
       } else {
         const hasMatchingItems = sql<number>`MIN(CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END)`;
@@ -539,8 +530,8 @@ const inferShopDetailsProcedure = protectedProcedure
           .from(expensesTable)
           .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
           .where(nearbyShopsCondition)
-          .groupBy(...Object.values(nearbyShopsColumns))
-          .orderBy(hasMatchingItems, distance, desc(expensesTable.billedAt))
+          .groupBy(...groupByColumns)
+          .orderBy(hasMatchingItems, distance, desc(max(expensesTable.billedAt)))
           .limit(5);
       }
     } else if (input.shopName) {

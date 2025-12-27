@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
@@ -154,6 +154,7 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
+    boxId: integer(),
     shopName: citext(),
     shopMall: citext(),
     additionalServiceChargePercent: integer(),
@@ -162,6 +163,7 @@ export const expensesTable = sqliteTable(
   },
   t => [
     index('idx_expenses_user_billed').on(t.userId, t.billedAt),
+    index('idx_expenses_user_box_id_coord').on(t.userId, t.boxId, t.latitude, t.longitude),
     index('idx_expenses_user_coord').on(t.userId, t.latitude, t.longitude),
     index('idx_expenses_user_billed_account').on(t.userId, t.billedAt, t.accountId),
     index('idx_expenses_user_billed_category').on(t.userId, t.billedAt, t.categoryId),
