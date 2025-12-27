@@ -30,7 +30,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getTrigrams } from '../lib/utils';
+import { getLocationBoxId, getTrigrams } from '../lib/utils';
 
 type Option = {
   label: string;
@@ -299,6 +299,10 @@ const saveExpenseProcedure = protectedProcedure
     ]);
 
     const { amountCents, grossAmountCents } = calculateExpense(input);
+    const [boxId] =
+      input.latitude && input.longitude
+        ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
+        : [null];
 
     await db
       .insert(expensesTable)
@@ -314,6 +318,7 @@ const saveExpenseProcedure = protectedProcedure
         latitude: input.latitude,
         longitude: input.longitude,
         geoAccuracy: input.geoAccuracy,
+        boxId,
         shopName: input.shopName,
         shopMall: input.shopMall,
         additionalServiceChargePercent: input.additionalServiceChargePercent,
