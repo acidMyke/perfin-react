@@ -159,9 +159,9 @@ const signUpEmailProcedure = publicProcedure
       }
     }
 
-    const { verificationUrl } = await createEmailCode(ctx, 'signup/verify', input.email);
+    const { verificationUrl, code } = await createEmailCode(ctx, 'signup/verify', input.email);
     verificationUrl!.searchParams.set('username', input.name);
-    await signUpVerificationEmail(input.name, verificationUrl!.toString())
+    await signUpVerificationEmail(input.name, verificationUrl!.toString(), code)
       .addRecipient(input.email, input.name)
       .send(ctx);
     return { success: true };

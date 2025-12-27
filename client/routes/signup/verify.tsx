@@ -1,21 +1,17 @@
-import { createFileRoute, Link, notFound } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { handleFormMutateAsync, queryClient, trpc } from '../../trpc';
 import { useMutation } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppForm } from '../../components/Form';
 import { sleep } from '../../../server/lib/utils';
 import { signUpValidator } from '../../../server/validators';
+import { PageHeader } from '../../components/PageHeader';
 
 export const Route = createFileRoute('/signup/verify')({
   component: RouteComponent,
   validateSearch(search) {
-    if (!search || typeof search.code !== 'string') {
-      throw notFound();
-    }
-
-    return { code: search.code as string, username: search.username as string | undefined };
+    return { code: search.code as string | undefined, username: search.username as string | undefined };
   },
-  loaderDeps: ({ search }) => ({ code: search.code }),
 });
 
 function RouteComponent() {
@@ -51,16 +47,56 @@ function RouteComponent() {
     },
   });
 
+  const [autoSubmissionTimeout, setAutoSubmissionTimeout] = useState<ReturnType<typeof setTimeout>>();
+  const otpForm = useAppForm({
+    defaultValues: { otp: '' },
+    validators: {
+      onSubmitAsync: ({ value }) => handleFormMutateAsync(verificationMutation.mutateAsync({ code: value.otp })),
+    },
+  });
+
   useEffect(() => {
-    verificationMutation.mutateAsync({ code });
+    if (code) {
+      otpForm.setFieldValue('otp', code);
+    }
   }, []);
 
-  if (verificationMutation.isPending || verificationMutation.isIdle) {
+  if (!verificationMutation.isSuccess) {
     return (
-      <div className='mx-auto max-w-md'>
-        <h1 className='mt-20 text-center text-3xl font-black'>Sign Up</h1>
-        <p className='mt-20 text-center'>Verifying code...</p>
-      </div>
+      <otpForm.AppForm>
+        <div className='mx-auto mt-20 max-w-md'>
+          <PageHeader title='Check your inbox' />
+          <p className='mt-2 mb-8 text-center text-sm text-gray-500'>
+            We've sent a code to your email. Enter it below or simply click the link inside to verify.
+          </p>
+          <otpForm.AppField
+            name='otp'
+            listeners={{
+              onChangeDebounceMs: 200,
+              onChange: ({ value }) => {
+                setAutoSubmissionTimeout(timeout => {
+                  if (timeout) {
+                    clearTimeout(timeout);
+                  }
+                  if (value.length === 6) {
+                    return setTimeout(() => {
+                      otpForm.handleSubmit();
+                      setAutoSubmissionTimeout(undefined);
+                    }, 300);
+                  }
+                });
+              },
+            }}
+            children={({ OtpInput }) => <OtpInput />}
+          />
+          <form.StatusMessage />
+          <form.SubmitButton
+            showSpinner={!!autoSubmissionTimeout}
+            label={!!autoSubmissionTimeout ? 'Auto submitting' : 'Verify'}
+            inProgressLabel='Verifying'
+          />
+        </div>
+      </otpForm.AppForm>
     );
   } else if (verificationMutation.isSuccess) {
     if (!finalizeMutation.isSuccess) {

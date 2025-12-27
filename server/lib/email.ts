@@ -5,6 +5,7 @@ import { nanoid } from 'nanoid';
 import { emailCodesTable } from '../../db/schema';
 import { addSeconds } from 'date-fns';
 import { and, eq, gt, SQL } from 'drizzle-orm';
+import { randomInt } from 'node:crypto';
 
 export interface MailjetAddrObject {
   Email: string;
@@ -127,10 +128,14 @@ export class MailjetMessage {
   }
 }
 
-export function signUpVerificationEmail(username: string, verificationLink: string) {
+export function signUpVerificationEmail(username: string, verificationLink: string, otp: string) {
   const text = `Hi ${username},
 
-Thank you for signing up! Please verify your email address by clicking the link below:
+Thank you for signing up! Please verify your email address using the code below:
+
+Verification Code: ${otp}
+
+Or by clicking the link below:
 
 ${verificationLink}
 
@@ -139,11 +144,25 @@ If you did not sign up, please ignore this email.
 Cheers,
 The Team`;
 
-  const html = `<p>Hi ${username},</p>
-<p>Thank you for signing up! Please verify your email address by clicking the link below:</p>
-<p><a href="${verificationLink}">Verify Email</a></p>
-<p>If you did not sign up, please ignore this email.</p>
-<p>Cheers,<br>The Team</p>`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333;">
+      <p>Hi ${username},</p>
+      <p>Thank you for signing up! Please verify your email address using the code below:</p>
+      
+      <div style="background-color: #f4f4f4; border-radius: 4px; padding: 15px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; font-family: 'Courier New', monospace; color: #000;">
+          ${otp}
+        </span>
+      </div>
+
+      <p>Or by clicking the link below:</p>
+      <p><a href="${verificationLink}" style="color: #007bff; text-decoration: none;">Verify Email</a></p>
+      
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      
+      <p style="font-size: 12px; color: #888;">If you did not sign up, please ignore this email.</p>
+      <p>Cheers,<br>The Team</p>
+    </div>`;
 
   return new MailjetMessage().setSubject('Verify Your Email Address').setText(text).setHtml(html);
 }
@@ -240,6 +259,10 @@ type CreateEmailCodeOption = {
    * @default 300 (5mins)
    */
   expiresIn?: number;
+  /**
+   * @default 6
+   */
+  length?: number;
 };
 
 export async function createEmailCode(
@@ -249,9 +272,9 @@ export async function createEmailCode(
   options?: CreateEmailCodeOption,
 ) {
   const { db, url } = ctx;
-  const { expiresIn = 300 } = options ?? {};
+  const { expiresIn = 300, length = 6 } = options ?? {};
 
-  const code = nanoid(16);
+  const code = randomInt(0, Math.pow(10, length)).toString().padStart(length, '0');
   await db.insert(emailCodesTable).values({
     email,
     code,
