@@ -1,6 +1,5 @@
 import type { Context, ProtectedContext } from './trpc';
 import { addDays } from 'date-fns/addDays';
-import { randomBytes } from 'node:crypto';
 import { and, eq, gt } from 'drizzle-orm';
 import { differenceInDays } from 'date-fns/differenceInDays';
 import { addMinutes } from 'date-fns/addMinutes';
@@ -10,12 +9,14 @@ import type { CookieHeaders } from './CookieHeaders';
 import { differenceInMinutes } from 'date-fns';
 import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
+import { nanoid } from 'nanoid';
 
+const DAYS_TOKEN_EXPIRE = 4;
 export function generateTokenParam() {
   return {
-    maxAge: 7 * 24 * 60 * 60,
-    expiresAt: addDays(new Date(), 7),
-    token: randomBytes(12).toString('hex').substring(0, 16),
+    maxAge: DAYS_TOKEN_EXPIRE * 24 * 60 * 60,
+    expiresAt: addDays(new Date(), DAYS_TOKEN_EXPIRE),
+    token: nanoid(),
   };
 }
 
