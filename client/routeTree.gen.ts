@@ -12,6 +12,7 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as SigninRouteImport } from './routes/signin'
 import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as SignupRouteRouteImport } from './routes/signup/route'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SignupIndexRouteImport } from './routes/signup/index'
 import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
@@ -40,20 +41,25 @@ const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SignupRouteRoute = SignupRouteRouteImport.update({
+  id: '/signup',
+  path: '/signup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SignupIndexRoute = SignupIndexRouteImport.update({
-  id: '/signup/',
-  path: '/signup/',
-  getParentRoute: () => rootRouteImport,
+  id: '/',
+  path: '/',
+  getParentRoute: () => SignupRouteRoute,
 } as any)
 const SignupVerifyRoute = SignupVerifyRouteImport.update({
-  id: '/signup/verify',
-  path: '/signup/verify',
-  getParentRoute: () => rootRouteImport,
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => SignupRouteRoute,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
@@ -117,11 +123,12 @@ const AuthenticatedExpensesExpenseIdItemsIndexStrRoute =
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/signup': typeof SignupRouteRouteWithChildren
   '/signin': typeof SigninRoute
   '/verify': typeof VerifyRoute
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
-  '/signup': typeof SignupIndexRoute
+  '/signup/': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
@@ -149,6 +156,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/signup': typeof SignupRouteRouteWithChildren
   '/_authenticated': typeof AuthenticatedRouteWithChildren
   '/signin': typeof SigninRoute
   '/verify': typeof VerifyRoute
@@ -169,11 +177,12 @@ export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
     | '/'
+    | '/signup'
     | '/signin'
     | '/verify'
     | '/dashboard'
     | '/signup/verify'
-    | '/signup'
+    | '/signup/'
     | '/expenses/$expenseId'
     | '/settings'
     | '/settings/manage-subjects'
@@ -200,6 +209,7 @@ export interface FileRouteTypes {
   id:
     | '__root__'
     | '/'
+    | '/signup'
     | '/_authenticated'
     | '/signin'
     | '/verify'
@@ -219,11 +229,10 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  SignupRouteRoute: typeof SignupRouteRouteWithChildren
   AuthenticatedRoute: typeof AuthenticatedRouteWithChildren
   SigninRoute: typeof SigninRoute
   VerifyRoute: typeof VerifyRoute
-  SignupVerifyRoute: typeof SignupVerifyRoute
-  SignupIndexRoute: typeof SignupIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -249,6 +258,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signup': {
+      id: '/signup'
+      path: '/signup'
+      fullPath: '/signup'
+      preLoaderRoute: typeof SignupRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/': {
       id: '/'
       path: '/'
@@ -258,17 +274,17 @@ declare module '@tanstack/react-router' {
     }
     '/signup/': {
       id: '/signup/'
-      path: '/signup'
-      fullPath: '/signup'
+      path: '/'
+      fullPath: '/signup/'
       preLoaderRoute: typeof SignupIndexRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SignupRouteRoute
     }
     '/signup/verify': {
       id: '/signup/verify'
-      path: '/signup/verify'
+      path: '/verify'
       fullPath: '/signup/verify'
       preLoaderRoute: typeof SignupVerifyRouteImport
-      parentRoute: typeof rootRouteImport
+      parentRoute: typeof SignupRouteRoute
     }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
@@ -343,6 +359,20 @@ declare module '@tanstack/react-router' {
   }
 }
 
+interface SignupRouteRouteChildren {
+  SignupVerifyRoute: typeof SignupVerifyRoute
+  SignupIndexRoute: typeof SignupIndexRoute
+}
+
+const SignupRouteRouteChildren: SignupRouteRouteChildren = {
+  SignupVerifyRoute: SignupVerifyRoute,
+  SignupIndexRoute: SignupIndexRoute,
+}
+
+const SignupRouteRouteWithChildren = SignupRouteRoute._addFileChildren(
+  SignupRouteRouteChildren,
+)
+
 interface AuthenticatedExpensesExpenseIdRouteRouteChildren {
   AuthenticatedExpensesExpenseIdViewRoute: typeof AuthenticatedExpensesExpenseIdViewRoute
   AuthenticatedExpensesExpenseIdIndexRoute: typeof AuthenticatedExpensesExpenseIdIndexRoute
@@ -406,11 +436,10 @@ const AuthenticatedRouteWithChildren = AuthenticatedRoute._addFileChildren(
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  SignupRouteRoute: SignupRouteRouteWithChildren,
   AuthenticatedRoute: AuthenticatedRouteWithChildren,
   SigninRoute: SigninRoute,
   VerifyRoute: VerifyRoute,
-  SignupVerifyRoute: SignupVerifyRoute,
-  SignupIndexRoute: SignupIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

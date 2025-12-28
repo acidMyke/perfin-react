@@ -132,6 +132,8 @@ const signInProcedure = publicProcedure
     }
   });
 
+const canSignUpProcedure = publicProcedure.query(async ({ ctx }) => ctx.env.ALLOW_SIGNUP === 'true');
+
 const usernameSchema = z
   .string()
   .nonempty()
@@ -141,6 +143,13 @@ const usernameSchema = z
 const signUpEmailProcedure = publicProcedure
   .input(z.object({ name: usernameSchema, email: z.email() }))
   .mutation(async ({ ctx, input }) => {
+    if (ctx.env.ALLOW_SIGNUP !== 'true') {
+      await sleep(2000);
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        cause: new FormInputError({ formErrors: ["Sorry, Sorry, We aren't accepting new users!"] }),
+      });
+    }
     const { db } = ctx;
     const { email, name } = input;
     const existingUser = await db.query.usersTable.findFirst({
@@ -198,6 +207,14 @@ const signUpFinalizeProcedure = publicProcedure
     }),
   )
   .mutation(async ({ input: { username, password, code }, ctx }) => {
+    if (ctx.env.ALLOW_SIGNUP !== 'true') {
+      await sleep(2000);
+      throw new TRPCError({
+        code: 'FORBIDDEN',
+        cause: new FormInputError({ formErrors: ["Sorry, We aren't accepting new users!"] }),
+      });
+    }
+
     const [{ isValid, purpose, email }, inUsedUsername] = await Promise.all([
       verifyEmailCode(ctx, code),
       ctx.db.$count(usersTable, eq(usersTable.name, username)).then(count => count > 0),
@@ -271,6 +288,7 @@ export const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
 export const sessionProcedures = {
   signIn: signInProcedure,
   signOut: signOutProcedure,
+  canSignUp: canSignUpProcedure,
   signUpEmail: signUpEmailProcedure,
   signUpVerify: signUpVerifyProcedure,
   signUpFinalize: signUpFinalizeProcedure,

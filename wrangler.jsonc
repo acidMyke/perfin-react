@@ -22,6 +22,7 @@
     "ORIGIN": "http://localhost:5173",
     "PASSKEYS_RP_NAME": "Perfin",
     "PASSKEYS_RP_ID": "localhost",
+    "ALLOW_SIGNUP": "true",
   },
   "env": {
     "production": {
@@ -41,6 +42,7 @@
         "ORIGIN": "https://perfin.acidmyke.link",
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
+        "ALLOW_SIGNUP": "true",
       },
     },
   },

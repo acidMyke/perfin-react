@@ -45,6 +45,7 @@ function RouteComponent() {
         <form.AppField validators={{ onChange: z.string().min(4) }} name='name'>
           {({ TextInput }) => <TextInput type='text' label='Username' />}
         </form.AppField>
+        <form.StatusMessage />
         <form.SubmitButton label='Sign me up' inProgressLabel='Checking...' />
         <p className='mt-4 text-center'>Already have an account?</p>
         <Link to='/signin' search={{ redirect: undefined }} className='link block w-full text-center'>
