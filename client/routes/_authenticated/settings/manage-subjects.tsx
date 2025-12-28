@@ -29,7 +29,6 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { subjectType } = Route.useLoaderDeps();
   const { data: subjects } = useSuspenseQuery(trpc.subject.list.queryOptions({ subjectType }));
-  const originalSubjectMap = new Map<string, (typeof subjects)[number]>(subjects.map(s => [s.id, s]));
   const saveMutation = useMutation(trpc.subject.save.mutationOptions());
   const form = useAppForm({
     defaultValues: { subjects },

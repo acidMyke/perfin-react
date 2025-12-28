@@ -1,7 +1,5 @@
 // import { createMimeMessage, MIMEMessage, type MailboxAddrObject } from 'mimetext';
 import type { Context } from './trpc';
-// import { EmailMessage } from 'cloudflare:email';
-import { nanoid } from 'nanoid';
 import { emailCodesTable } from '../../db/schema';
 import { addSeconds } from 'date-fns';
 import { and, eq, gt, SQL } from 'drizzle-orm';

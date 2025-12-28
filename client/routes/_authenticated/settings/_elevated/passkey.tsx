@@ -3,7 +3,7 @@ import { handleFormMutateAsync, queryClient, trpc } from '../../../../trpc';
 import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { PageHeader } from '../../../../components/PageHeader';
-import { CircleCheck, CircleX, Form, Pencil, Trash } from 'lucide-react';
+import { CircleCheck, CircleX, Pencil, Trash } from 'lucide-react';
 import { monthDayFormat } from '../../../../utils';
 import { useRef } from 'react';
 import { useAppForm } from '../../../../components/Form';
