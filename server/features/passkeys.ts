@@ -257,12 +257,12 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
     await db.update(passkeysTable).set({ counter: newCounter, lastUsedAt: new Date() });
 
     const [user] = await db
-      .select({ name: usersTable.name })
+      .select({ name: usersTable.name, email: usersTable.email })
       .from(usersTable)
       .where(eq(usersTable.id, credential.userId));
 
     // Create session
-    await sessions.create(ctx, credential.userId);
+    await sessions.create(ctx, { id: credential.userId, ...user });
 
     return {
       userName: user?.name,

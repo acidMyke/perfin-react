@@ -167,7 +167,13 @@ The Team`;
   return new MailjetMessage().setSubject('Verify Your Email Address').setText(text).setHtml(html);
 }
 
-export function signInAlertEmail(username: string, ipAddress: string, location: string, dateTime: string) {
+export function signInAlertEmail(
+  username: string,
+  ipAddress: string,
+  location: string,
+  dateTime: string,
+  userAgent: string,
+) {
   const text = `Hi ${username},
 
 We noticed a sign-in to your account from a new location:
@@ -175,6 +181,7 @@ We noticed a sign-in to your account from a new location:
 IP Address: ${ipAddress}
 Location: ${location}
 Time: ${dateTime}
+Device: ${userAgent}
 
 If this was you, no action is needed. If not, please secure your account immediately.
 
@@ -187,6 +194,7 @@ The Team`;
 <li><strong>IP Address:</strong> ${ipAddress}</li>
 <li><strong>Location:</strong> ${location}</li>
 <li><strong>Time:</strong> ${dateTime}</li>
+<li><strong>Device:</strong> ${userAgent}</li>
 </ul>
 <p>If this was you, no action is needed. If not, please secure your account immediately.</p>
 <p>Cheers,<br>The Team</p>`;
