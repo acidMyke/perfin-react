@@ -28,6 +28,7 @@ function setTokenCookie(env: Env, resHeaders: CookieHeaders, param: ReturnType<t
     path: '/',
     expires: expiresAt,
     maxAge,
+    sameSite: 'Strict',
   });
 }
 
