@@ -1,10 +1,10 @@
 import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from '../twMerge';
 import { FieldError } from './FieldError';
-import { ChevronDown, TriangleAlert } from 'lucide-react';
+import { ChevronDown, Clipboard, TriangleAlert } from 'lucide-react';
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
@@ -211,6 +211,77 @@ function TextInput(props: TextInputProps) {
   );
 }
 
+type OtpInputProps = {
+  length?: number;
+};
+
+function OtpInput(props: OtpInputProps) {
+  const { length = 6 } = props;
+  const inputRefs = useRef<(HTMLInputElement | undefined)[]>([]);
+  const field = useFieldContext<string>();
+
+  return (
+    <div>
+      <div className={cn('flex w-full justify-center gap-2')}>
+        {Array.from({ length }).map((_, inputIndex) => (
+          <input
+            key={inputIndex}
+            type='text'
+            inputMode='numeric'
+            className='input input-bordered input-primary h-12 w-12 text-center text-2xl font-bold'
+            enterKeyHint={inputIndex === length + 1 ? 'enter' : 'next'}
+            maxLength={2}
+            value={field.state.value[inputIndex] ?? ''}
+            ref={iRef => void (inputRefs.current[inputIndex] = iRef ?? undefined)}
+            onFocus={e => e.target.setSelectionRange(1, 1)}
+            onChange={e => {
+              const value = e.target.value;
+              if (isNaN(parseInt(value))) return;
+              field.handleChange(current =>
+                [...current]
+                  .toSpliced(inputIndex, value.length, ...value.split(''))
+                  .join('')
+                  .slice(0, 6),
+              );
+              if (value && inputIndex < length - 1 && inputRefs.current[inputIndex + 1]) {
+                inputRefs.current[inputIndex + 1]?.focus();
+              }
+            }}
+            onKeyDown={e => {
+              if (e.key === 'Backspace') {
+                field.handleChange(current => [...current].toSpliced(inputIndex, 1, '').join('').slice(0, 6));
+                if (inputIndex > 0) inputRefs.current[inputIndex - 1]?.focus();
+              }
+            }}
+            onPaste={e => {
+              e.preventDefault();
+              const data = e.clipboardData.getData('text');
+              const matchResult = new RegExp(`(\\d{${length}})`).exec(data);
+              console.log(matchResult);
+              if (matchResult?.[1]) {
+                field.handleChange(matchResult[0]);
+              }
+            }}
+          />
+        ))}
+        <button
+          className='btn btn-sm ml-4 h-12 w-12'
+          onClick={async () => {
+            const data = await navigator.clipboard.readText();
+            const matchResult = new RegExp(`(\\d{${length}})`).exec(data);
+            if (matchResult?.[0]) {
+              field.handleChange(matchResult[0]);
+            }
+          }}
+        >
+          <Clipboard />
+        </button>
+      </div>
+      <FieldError field={field} />
+    </div>
+  );
+}
+
 type BooleanInputProps = {
   label?: string;
   style?: 'toggle' | 'checkbox';
@@ -363,10 +434,11 @@ type SubmitButtonProps = {
   loadingCn?: string;
   disabled?: boolean;
   allowPristine?: boolean;
+  showSpinner?: boolean;
 };
 
 function SubmitButton(props: SubmitButtonProps) {
-  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn, disabled, allowPristine } = props;
+  const { label, doneLabel, inProgressLabel, buttonCn, loadingCn, disabled, allowPristine, showSpinner } = props;
   const form = useFormContext();
 
   return (
@@ -380,7 +452,7 @@ function SubmitButton(props: SubmitButtonProps) {
           disabled={(!allowPristine && isPristine) || !canSubmit || isSubmitting || disabled}
           onClick={() => form.handleSubmit()}
         >
-          {isSubmitting && <span className={cn('loading loading-dots loading-md', loadingCn)}></span>}
+          {(isSubmitting || showSpinner) && <span className={cn('loading loading-dots loading-md', loadingCn)}></span>}
           {isSubmitting ? (inProgressLabel ?? label) : isSubmitSuccessful ? (doneLabel ?? label) : label}
         </button>
       )}
@@ -444,5 +516,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     ComboBox,
     NumericInput,
     BooleanInput,
+    OtpInput,
   },
 });

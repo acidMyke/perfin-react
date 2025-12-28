@@ -18,7 +18,14 @@ export const Route = createFileRoute('/signup/')({
 });
 
 function RouteComponent() {
-  const signUpEmail = useMutation(trpc.session.signUpEmail.mutationOptions());
+  const navigate = Route.useNavigate();
+  const signUpEmail = useMutation(
+    trpc.session.signUpEmail.mutationOptions({
+      onSuccess: async () => {
+        await navigate({ to: '/signup/verify', search: { code: undefined, username: form.getFieldValue('name') } });
+      },
+    }),
+  );
   const form = useAppForm({
     defaultValues: { name: '', email: '' },
     validators: {
@@ -27,26 +34,23 @@ function RouteComponent() {
       },
     },
   });
+
   return (
     <div className='mx-auto max-w-md'>
       <h1 className='mt-20 text-center text-3xl font-black'>Sign Up</h1>
-      {signUpEmail.isSuccess && signUpEmail.data.success ? (
-        <p>Please click the link in the email to verify!</p>
-      ) : (
-        <form.AppForm>
-          <form.AppField validators={{ onChange: z.email() }} name='email'>
-            {({ TextInput }) => <TextInput type='email' label='Email' />}
-          </form.AppField>
-          <form.AppField validators={{ onChange: z.string().min(4) }} name='name'>
-            {({ TextInput }) => <TextInput type='text' label='Username' />}
-          </form.AppField>
-          <form.SubmitButton label='Sign me up' inProgressLabel='Checking...' />
-          <p className='mt-4 text-center'>Already have an account?</p>
-          <Link to='/signin' search={{ redirect: undefined }} className='link block w-full text-center'>
-            Sign in here <ChevronRight className='inline-block' />
-          </Link>
-        </form.AppForm>
-      )}
+      <form.AppForm>
+        <form.AppField validators={{ onChange: z.email() }} name='email'>
+          {({ TextInput }) => <TextInput type='email' label='Email' />}
+        </form.AppField>
+        <form.AppField validators={{ onChange: z.string().min(4) }} name='name'>
+          {({ TextInput }) => <TextInput type='text' label='Username' />}
+        </form.AppField>
+        <form.SubmitButton label='Sign me up' inProgressLabel='Checking...' />
+        <p className='mt-4 text-center'>Already have an account?</p>
+        <Link to='/signin' search={{ redirect: undefined }} className='link block w-full text-center'>
+          Sign in here <ChevronRight className='inline-block' />
+        </Link>
+      </form.AppForm>
     </div>
   );
 }

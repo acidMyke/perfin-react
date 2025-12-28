@@ -9,6 +9,7 @@ import type { AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
 import { differenceInMinutes } from 'date-fns';
 import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
+import { signInAlertEmail } from './email';
 
 export function generateTokenParam() {
   return {
@@ -96,13 +97,22 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
     .values(attempt)
     .returning({ id: loginAttemptsTable.id });
 
-  return loginAttemptId;
+  return { ...attempt, id: loginAttemptId };
 }
 
-async function create(ctx: Context, userId: string) {
+async function create(ctx: Context, user: { id: string; name: string; email: string }) {
   const { db, env, resHeaders } = ctx;
-  const loginAttemptId = await saveLoginAttempt(ctx, true, userId);
-  await createAndSaveToken(db, env, resHeaders, userId, loginAttemptId);
+  const loginAttempt = await saveLoginAttempt(ctx, true, user.id);
+  const { ip, city, country, userAgent } = loginAttempt;
+  const alertEmail = signInAlertEmail(
+    user.name,
+    ip,
+    `${city ?? 'unknown'}, ${country ?? 'unknown'}`,
+    new Date().toISOString(),
+    userAgent ?? 'unknown',
+  ).addRecipient(user.email, user.name);
+
+  await Promise.all([createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id), alertEmail.send(ctx)]);
 }
 
 async function revoke(ctx: ProtectedContext, otherSessionId?: string) {

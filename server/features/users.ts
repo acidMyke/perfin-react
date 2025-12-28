@@ -56,10 +56,11 @@ const signInProcedure = publicProcedure
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
-      where: { name: { like: username } },
+      where: { OR: [{ name: username }, { email: username }] },
       columns: {
         id: true,
         name: true,
+        email: true,
         passSalt: true,
         passDigest: true,
         failedAttempts: true,
@@ -115,7 +116,7 @@ const signInProcedure = publicProcedure
       );
 
       // Create session
-      await sessions.create(ctx, user.id);
+      await sessions.create(ctx, user);
 
       return {
         userName: user?.name,
@@ -159,9 +160,9 @@ const signUpEmailProcedure = publicProcedure
       }
     }
 
-    const { verificationUrl } = await createEmailCode(ctx, 'signup/verify', input.email);
+    const { verificationUrl, code } = await createEmailCode(ctx, 'signup/verify', input.email);
     verificationUrl!.searchParams.set('username', input.name);
-    await signUpVerificationEmail(input.name, verificationUrl!.toString())
+    await signUpVerificationEmail(input.name, verificationUrl!.toString(), code)
       .addRecipient(input.email, input.name)
       .send(ctx);
     return { success: true };
@@ -216,6 +217,7 @@ const signUpFinalizeProcedure = publicProcedure
       .returning({
         id: usersTable.id,
         name: usersTable.name,
+        email: usersTable.email,
       });
 
     await invalidateEmailCode(ctx, { email });
@@ -228,7 +230,7 @@ const signUpFinalizeProcedure = publicProcedure
     }
 
     // Create session
-    await sessions.create(ctx, user.id);
+    await sessions.create(ctx, user);
 
     return {
       userName: user.name,
