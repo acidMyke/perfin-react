@@ -121,20 +121,24 @@ export async function handleFormMutateAsync(mutatePromise: Promise<unknown>) {
   try {
     await mutatePromise;
   } catch (error: unknown) {
-    if (isTRPCClientError(error)) {
-      if ('data' in error.shape) {
-        const shapeData = error.shape.data as AppErrorShapeData;
-        if (shapeData.fieldErrors || shapeData.formErrors) {
-          return {
-            form: shapeData.formErrors,
-            fields: shapeData.fieldErrors,
-          };
-        }
+    return extractMutationError(error);
+  }
+}
+
+export async function extractMutationError(error: unknown) {
+  if (isTRPCClientError(error)) {
+    if ('data' in error.shape) {
+      const shapeData = error.shape.data as AppErrorShapeData;
+      if (shapeData.fieldErrors || shapeData.formErrors) {
+        return {
+          form: shapeData.formErrors,
+          fields: shapeData.fieldErrors,
+        };
       }
     }
-    console.log('Unknown Error', typeof error === 'object' ? { ...error } : error);
-    throw error;
   }
+  console.log('Unknown Error', typeof error === 'object' ? { ...error } : error);
+  throw error;
 }
 
 export function throwIfNotFound(error: unknown) {

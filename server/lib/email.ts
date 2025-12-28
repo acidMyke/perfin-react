@@ -329,6 +329,6 @@ export async function invalidateEmailCode(ctx: Context, option: EmailInvalidatio
 
   await db
     .update(emailCodesTable)
-    .set({ validUntil: addSeconds(new Date(), 5) })
+    .set({ validUntil: addSeconds(new Date(), -1) })
     .where(and(...conditions));
 }
