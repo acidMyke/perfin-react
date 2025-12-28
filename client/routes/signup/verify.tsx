@@ -4,8 +4,8 @@ import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useAppForm } from '../../components/Form';
 import { sleep } from '../../../server/lib/utils';
-import { signUpValidator } from '../../../server/validators';
 import { PageHeader } from '../../components/PageHeader';
+import z from 'zod';
 
 export const Route = createFileRoute('/signup/verify')({
   component: RouteComponent,
@@ -116,10 +116,27 @@ function RouteComponent() {
             />
           </label>
           <form.AppForm>
-            <form.AppField name='username' validators={{ onChange: signUpValidator.shape.username }}>
+            <form.AppField
+              name='username'
+              validators={{
+                onChange: z
+                  .string()
+                  .nonempty()
+                  .max(100, 'Input too long')
+                  .regex(/^[a-zA-Z0-9_ -]*$/, 'Invalid characters detected'),
+              }}
+            >
               {({ TextInput }) => <TextInput type='text' label='Username' />}
             </form.AppField>
-            <form.AppField name='password' validators={{ onChange: signUpValidator.shape.password }}>
+            <form.AppField
+              name='password'
+              validators={{
+                onChange: z
+                  .string()
+                  .min(12)
+                  .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
+              }}
+            >
               {({ TextInput }) => <TextInput type='password' label='Password' />}
             </form.AppField>
             <form.AppField

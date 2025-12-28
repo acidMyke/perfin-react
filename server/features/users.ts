@@ -5,7 +5,6 @@ import { usersTable } from '../../db/schema';
 import { TRPCError } from '@trpc/server';
 import { sleep } from '../lib/utils';
 import sessions from '../lib/sessions';
-import { signInValidator, signUpValidator } from '../validators';
 import { addSeconds, isBefore } from 'date-fns';
 import z from 'zod';
 import { createEmailCode, invalidateEmailCode, signUpVerificationEmail, verifyEmailCode } from '../lib/email';
@@ -52,7 +51,12 @@ function verifyPassword(input: string | Buffer, storedHash: Buffer, salt: Buffer
 }
 
 const signInProcedure = publicProcedure
-  .input(signInValidator)
+  .input(
+    z.object({
+      username: z.string(),
+      password: z.string(),
+    }),
+  )
   .mutation(async ({ input: { username, password }, ctx }) => {
     const timeStart = Date.now();
     const user = await ctx.db.query.usersTable.findFirst({
@@ -132,13 +136,14 @@ const signInProcedure = publicProcedure
     }
   });
 
+const usernameSchema = z
+  .string()
+  .nonempty()
+  .max(100, 'Input too long')
+  .regex(/^[a-zA-Z0-9_-]*$/, 'Invalid characters detected');
+
 const signUpEmailProcedure = publicProcedure
-  .input(
-    z.object({
-      name: z.string().min(5),
-      email: z.email(),
-    }),
-  )
+  .input(z.object({ name: usernameSchema, email: z.email() }))
   .mutation(async ({ ctx, input }) => {
     const { db } = ctx;
     const { email, name } = input;
@@ -183,7 +188,19 @@ const signUpVerifyProcedure = publicProcedure.input(z.object({ code: z.string() 
 });
 
 const signUpFinalizeProcedure = publicProcedure
-  .input(signUpValidator.extend({ code: z.string() }))
+  .input(
+    z.object({
+      username: usernameSchema,
+      password: z
+        .string()
+        .min(12)
+        .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
+      code: z
+        .string()
+        .length(6)
+        .regex(/^\d{6}$/, 'Invalid characters detected'),
+    }),
+  )
   .mutation(async ({ input: { username, password, code }, ctx }) => {
     const [{ isValid, purpose, email }, inUsedUsername] = await Promise.all([
       verifyEmailCode(ctx, code),
