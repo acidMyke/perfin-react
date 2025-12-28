@@ -1,7 +1,7 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect, Link } from '@tanstack/react-router';
 import { whoamiQueryOptions } from '../queryOptions';
-import { trpc, queryClient, handleFormMutateAsync } from '../trpc';
+import { trpc, queryClient, handleFormMutateAsync, extractMutationError } from '../trpc';
 import { sleep } from '../../server/lib/utils';
 import { useAppForm } from '../components/Form';
 import { ChevronRight } from 'lucide-react';
@@ -72,6 +72,10 @@ function RouteComponent() {
   const verifyPasskeyAuthMutation = useMutation(
     trpc.passkey.authentication.verifyResponse.mutationOptions({
       onSuccess: () => invalidateAndRedirect(),
+      onError: async error => {
+        const formError = await extractMutationError(error);
+        form.setErrorMap({ onSubmit: formError });
+      },
     }),
   );
   const signInMutation = useMutation(
@@ -140,6 +144,7 @@ function RouteComponent() {
         <form.AppField name='password'>
           {({ TextInput }) => <TextInput type='password' label='Password' />}
         </form.AppField>
+        <form.StatusMessage />
         <form.Subscribe
           selector={state => [
             state.isPristine,

@@ -1,4 +1,4 @@
-import { elevatedProcedure, protectedProcedure, publicProcedure } from '../lib/trpc';
+import { elevatedProcedure, FormInputError, protectedProcedure, publicProcedure } from '../lib/trpc';
 import {
   generateAuthenticationOptions,
   generateRegistrationOptions,
@@ -186,11 +186,7 @@ const generatePasskeyAuthenticationOptionsProcedure = publicProcedure
         .where(eq(usersTable.name, input.username.trim()));
     }
 
-    if (allowCredentials && allowCredentials.length === 0) {
-      throw new TRPCError({ code: 'NOT_FOUND', message: 'No passkeys found' });
-    }
-
-    const userVerification = allowCredentials ? undefined : 'preferred';
+    const userVerification = allowCredentials && allowCredentials.length > 0 ? undefined : 'preferred';
     const options = await generateAuthenticationOptions({
       rpID: env.PASSKEYS_RP_ID,
       allowCredentials,
@@ -230,7 +226,12 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
       .where(eq(passkeysTable.id, input.id));
 
     if (!credential) {
-      throw new TRPCError({ code: 'NOT_FOUND' });
+      throw new TRPCError({
+        code: 'UNAUTHORIZED',
+        cause: new FormInputError({
+          formErrors: ['Invalid credentials'],
+        }),
+      });
     }
 
     let verification: VerifiedAuthenticationResponse | undefined;

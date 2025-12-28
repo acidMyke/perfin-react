@@ -75,11 +75,9 @@ const signInProcedure = publicProcedure
     try {
       if (!user) {
         throw new TRPCError({
-          code: 'NOT_FOUND',
+          code: 'UNAUTHORIZED',
           cause: new FormInputError({
-            fieldErrors: {
-              username: ['Unable to find username'],
-            },
+            formErrors: ['Invalid credentials'],
           }),
         });
       }
@@ -108,9 +106,7 @@ const signInProcedure = publicProcedure
         throw new TRPCError({
           code: 'UNAUTHORIZED',
           cause: new FormInputError({
-            fieldErrors: {
-              password: ['Password mismatch'],
-            },
+            formErrors: ['Invalid credentials'],
           }),
         });
       }
