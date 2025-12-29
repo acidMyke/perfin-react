@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { eq, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
@@ -162,9 +162,15 @@ export const expensesTable = sqliteTable(
   },
   t => [
     index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
-    index('idx_expenses_user_box_id_active').on(t.userId, t.boxId).where(eq(t.isDeleted, false)),
-    index('idx_expenses_user_shopName_active').on(t.userId, t.billedAt, t.shopName).where(eq(t.isDeleted, false)),
-    index('idx_expenses_user_shopMall_active').on(t.userId, t.billedAt, t.shopMall).where(eq(t.isDeleted, false)),
+    index('idx_expenses_user_box_id_active')
+      .on(t.userId, t.boxId)
+      .where(sql`${t.isDeleted} = 0`),
+    index('idx_expenses_user_shopName_active')
+      .on(t.userId, t.billedAt, t.shopName)
+      .where(sql`${t.isDeleted} = 0`),
+    index('idx_expenses_user_shopMall_active')
+      .on(t.userId, t.billedAt, t.shopMall)
+      .where(sql`${t.isDeleted} = 0`),
   ],
 );
 
