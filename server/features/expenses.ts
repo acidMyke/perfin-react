@@ -8,7 +8,7 @@ import {
   generateId,
   searchTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, or, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -444,25 +444,32 @@ const getSuggestionsProcedure = protectedProcedure
       input.search ? inArray(searchTable.chunk, getTrigrams(input.search)) : undefined,
     );
 
+    const descLikelyness = desc(
+      max(caseWhen(like(searchTable.text, input.search + '%'), sql.raw('1')).else(sql.raw('0'))),
+    );
     const descMatchCount = desc(max(searchTable.usageCount));
     const descPopularity = desc(count(searchTable.chunk));
 
     let suggestions: { value: string }[];
     if (input.context) {
-      const hasMatchingContext = sql<number>`MAX(CASE WHEN ${eq(searchTable.context, input.context)} THEN 0 ELSE 1 END)`;
+      const hasMatchingContext = max(
+        caseWhen(eq(searchTable.context, input.context), sql.raw('0'))
+          .whenThen(isNull(searchTable.context), sql.raw('1'))
+          .else(sql.raw('2')),
+      );
       suggestions = await db
         .select({ value: searchTable.text })
         .from(searchTable)
         .where(condition)
         .groupBy(searchTable.text)
-        .orderBy(hasMatchingContext, descMatchCount, descPopularity);
+        .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
     } else {
       suggestions = await db
         .select({ value: searchTable.text })
         .from(searchTable)
         .where(condition)
         .groupBy(searchTable.text)
-        .orderBy(descMatchCount, descPopularity);
+        .orderBy(descLikelyness, descMatchCount, descPopularity);
     }
 
     return {

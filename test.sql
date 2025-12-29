@@ -1,8 +1,10 @@
-explain query plan select distinct "shop_name", "shop_mall", "additional_service_charge_percent", "is_gst_excluded", "category_id", "account_id" 
-from "expenses" INDEXED BY idx_expenses_user_box_id_coord
-where ("expenses"."user_id" = 'f9i2H47sFk3oBaWTHodBT' 
-  and "expenses"."box_id" in (45140638, 45140637, 45206174, 45206173)) 
-order by ("expenses"."latitude" - 1.37707) * ("expenses"."latitude" - 1.37707)
-       + ("expenses"."longitude" - 103.74014300000002) * ("expenses"."longitude" - 103.74014300000002), 
-"expenses"."billed_at" desc 
-limit 5
+explain query plan select "text"
+from "search" 
+where ("search"."user_id" = 'f9i2H47sFk3oBaWTHodBT' 
+  and "search"."type" = 'itemName' 
+  and "search"."chunk" in ('a', 'ap', 'app', 'ppl', 'ple', 'les', 'esa', 'sau', 'auc', 'uce', 'b')) 
+group by "search"."text" 
+order by max(CASE WHEN "search"."context" = 'KOPITIAM' THEN 0 WHEN ("search"."context" is null) THEN 1 ELSE 2 END), 
+         max(CASE WHEN "search"."text" like 'APPLESAUCE B%' THEN 1 ELSE 0 END), 
+         max("search"."usage_count") desc, 
+         count("search"."chunk") desc
