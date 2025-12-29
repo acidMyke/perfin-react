@@ -111,7 +111,7 @@ function NumericInput(props: NumericInputProps) {
   }, [formatValue, field.state.value]);
 
   const inputEl = (
-    <label htmlFor='' className={cn('input input-primary w-full', inputCn)}>
+    <label htmlFor='' className={cn('input input-primary w-full text-lg', inputCn)}>
       {prefix && <span>{prefix}</span>}
       <input
         className={innerInputCn}
@@ -194,7 +194,7 @@ function TextInput(props: TextInputProps) {
         type={type}
         id={field.name}
         name={field.name}
-        className={cn('input input-primary input-xl w-full', inputCn)}
+        className={cn('input input-primary w-full text-xl', inputCn)}
         autoComplete={autoComplete}
         value={field.state.value ?? ''}
         onChange={e => {
@@ -376,7 +376,7 @@ function ComboBox({
       >
         <div className='relative'>
           <ComboboxInput
-            className={cn('input input-primary w-full', inputCn)}
+            className={cn('input input-primary w-full text-lg', inputCn)}
             placeholder={label}
             value={inputValue}
             onChange={e => {

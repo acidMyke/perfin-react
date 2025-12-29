@@ -27,19 +27,19 @@ function RouteComponent() {
   const { accountOptions, categoryOptions } = optionsData;
 
   return (
-    <div className='mb-20 grid grid-cols-2 gap-x-2'>
+    <div className='mb-20 grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label col-span-full mt-2'>
+          <label htmlFor={field.name} className='floating-label col-span-4 mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
               id={field.name}
               name={field.name}
               placeholder='Date'
-              className='input input-primary w-full'
+              className='input input-primary w-full text-lg'
               value={format(field.state.value, "yyyy-MM-dd'T'HH:mm")}
               onChange={e => {
                 if (e.target.value === '') {
@@ -57,10 +57,10 @@ function RouteComponent() {
         )}
       </form.Field>
       <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='mt-2' />}
+        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-2 mt-2' />}
       </form.AppField>
       <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='mt-2' />}
+        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-2 mt-2' />}
       </form.AppField>
       <form.AppField name='ui.calculateResult'>
         {field => {
@@ -242,7 +242,7 @@ const ShopDetailSubForm = withForm({
             <field.ComboBox
               suggestionMode
               label='Shop name'
-              containerCn='mt-2'
+              containerCn='col-span-4 mt-2'
               options={shopNameSuggestionMutation.data?.suggestions ?? []}
             />
           )}
@@ -267,7 +267,7 @@ const ShopDetailSubForm = withForm({
             <field.ComboBox
               suggestionMode
               label='Mall'
-              containerCn='mt-2'
+              containerCn='col-span-4 mt-2'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}
             />
           )}
