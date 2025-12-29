@@ -111,7 +111,7 @@ function NumericInput(props: NumericInputProps) {
   }, [formatValue, field.state.value]);
 
   const inputEl = (
-    <label htmlFor='' className={cn('input input-primary input-xl w-full', inputCn)}>
+    <label htmlFor='' className={cn('input input-primary w-full', inputCn)}>
       {prefix && <span>{prefix}</span>}
       <input
         className={innerInputCn}
@@ -257,7 +257,6 @@ function OtpInput(props: OtpInputProps) {
               e.preventDefault();
               const data = e.clipboardData.getData('text');
               const matchResult = new RegExp(`(\\d{${length}})`).exec(data);
-              console.log(matchResult);
               if (matchResult?.[1]) {
                 field.handleChange(matchResult[0]);
               }
@@ -303,7 +302,7 @@ function BooleanInput(props: BooleanInputProps) {
       <input
         type='checkbox'
         checked={!!field.state.value}
-        className={cn(style, styleIsToggle ? 'toggle-primary toggle-xl' : 'checkbox-primary checkbox-xl', inputCn)}
+        className={cn(style, styleIsToggle ? 'toggle-primary toggle' : 'checkbox-primary checkbox', inputCn)}
         onChange={e => {
           const checked = e.currentTarget.checked;
           if (nullIfFalse && !checked) field.handleChange(null);
@@ -326,6 +325,7 @@ type ComboBoxProps = {
   maxMenuHeight?: number;
   containerCn?: string;
   labelCn?: string;
+  inputCn?: string;
   suggestionMode?: boolean;
   readOnly?: boolean;
   triggerChangeOnFocus?: boolean;
@@ -337,6 +337,7 @@ function ComboBox({
   maxMenuHeight = 300,
   containerCn,
   labelCn,
+  inputCn,
   suggestionMode = false,
   readOnly = false,
   triggerChangeOnFocus = false,
@@ -355,8 +356,8 @@ function ComboBox({
     : (field.state.value as Option | null) || null;
 
   return (
-    <label className={cn('floating-label z-10 flex flex-col gap-1', containerCn)}>
-      <span className={cn('text-lg', labelCn)}>{label}</span>
+    <label className={cn('floating-label mt-0', containerCn)}>
+      <span className={labelCn}>{label}</span>
 
       <Combobox
         value={comboboxValue}
@@ -375,11 +376,7 @@ function ComboBox({
       >
         <div className='relative'>
           <ComboboxInput
-            className={cn(
-              'w-full rounded border border-gray-300 px-3 py-2',
-              'focus:ring-primary border-primary focus:ring-2 focus:outline-none',
-              'bg-base-100 text-lg',
-            )}
+            className={cn('input input-primary w-full', inputCn)}
             placeholder={label}
             value={inputValue}
             onChange={e => {

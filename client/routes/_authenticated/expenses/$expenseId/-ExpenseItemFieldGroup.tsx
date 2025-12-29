@@ -67,14 +67,13 @@ export const ItemDetailFieldGroup = withFieldGroup({
               label='Price'
               transforms={['amountInCents']}
               numberFormat={currencyNumberFormat}
-              inputCn='input-lg'
               containerCn='mt-2 col-span-3'
             />
           )}
         </group.AppField>
         <group.AppField name={`quantity`} listeners={{ onChange: () => onPricingChange() }}>
           {({ NumericInput }) => (
-            <NumericInput label='Quantity' inputCn='input-lg' containerCn='mt-2 col-span-2 w-full' step={1} min={1} />
+            <NumericInput label='Quantity' containerCn='mt-2 col-span-2 w-full' step={1} min={1} />
           )}
         </group.AppField>
 
@@ -147,7 +146,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
                             label='Refunded amount'
                             transforms={['amountInCents']}
                             numberFormat={currencyNumberFormat}
-                            inputCn='input-lg'
                             containerCn='mt-0 col-span-4'
                             additionalSuffix={
                               expectedAmountCents !== undefined

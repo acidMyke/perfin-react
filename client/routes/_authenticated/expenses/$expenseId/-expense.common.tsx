@@ -46,7 +46,6 @@ export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseR
 
 export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: ExpenseOptions, param?: { isCopy: boolean }) {
   if (detail && options) {
-    console.log('remap', param);
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
     const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;

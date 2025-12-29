@@ -10,7 +10,6 @@ export const Route = createFileRoute('/signup')({
 
 function RouteComponent() {
   const { data: canSignUp } = useSuspenseQuery(trpc.session.canSignUp.queryOptions());
-  console.log(canSignUp);
   if (!canSignUp) {
     return (
       <div className='mx-auto mt-20 max-w-md'>
