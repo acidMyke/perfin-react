@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { sql } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
@@ -40,11 +40,11 @@ export const emailCodesTable = sqliteTable(
   {
     ...baseColumns(),
     email: citext().notNull(),
-    code: text({ length: 16 }).notNull(),
+    code: text({ length: 6 }).notNull(),
     purpose: text().notNull(),
     validUntil: dateColumn(),
   },
-  t => [index('idx_email_codes_code').on(t.code), index('idx_email_codes_email').on(t.email)],
+  t => [index('idx_email_codes_code').on(t.code), index('idx_email_codes_email_valid_until').on(t.email, t.validUntil)],
 );
 
 export const loginAttemptsTable = sqliteTable(
@@ -102,7 +102,7 @@ export const sessionsTable = sqliteTable(
   'sessions',
   {
     ...baseColumns(),
-    token: text({ length: 16 }).notNull(),
+    token: idColumn(),
     userId: idColumn(),
     lastUsedAt: dateColumn(),
     expiresAt: dateColumn(),
@@ -145,7 +145,6 @@ export const expensesTable = sqliteTable(
   {
     ...baseColumns(),
     amountCents: centsColumn(),
-    amountCentsPreRefund: centsColumn(),
     billedAt: dateColumn(),
     userId: idColumn(),
     accountId: nullableIdColumn(),
@@ -162,13 +161,10 @@ export const expensesTable = sqliteTable(
     isDeleted: boolean().notNull().default(false),
   },
   t => [
-    index('idx_expenses_user_billed').on(t.userId, t.billedAt),
-    index('idx_expenses_user_box_id_coord').on(t.userId, t.boxId, t.latitude, t.longitude),
-    index('idx_expenses_user_coord').on(t.userId, t.latitude, t.longitude),
-    index('idx_expenses_user_billed_account').on(t.userId, t.billedAt, t.accountId),
-    index('idx_expenses_user_billed_category').on(t.userId, t.billedAt, t.categoryId),
-    index('idx_expenses_user_shopName').on(t.userId, t.billedAt, t.shopName),
-    index('idx_expenses_user_shopMall').on(t.userId, t.billedAt, t.shopMall),
+    index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
+    index('idx_expenses_user_box_id_active').on(t.userId, t.boxId).where(eq(t.isDeleted, false)),
+    index('idx_expenses_user_shopName_active').on(t.userId, t.billedAt, t.shopName).where(eq(t.isDeleted, false)),
+    index('idx_expenses_user_shopMall_active').on(t.userId, t.billedAt, t.shopMall).where(eq(t.isDeleted, false)),
   ],
 );
 

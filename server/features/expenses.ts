@@ -51,7 +51,6 @@ const loadExpenseDetailProcedure = protectedProcedure
       db
         .select({
           amountCents: expensesTable.amountCents,
-          amountCentsPreRefund: expensesTable.amountCentsPreRefund,
           billedAt: expensesTable.billedAt,
           accountId: expensesTable.accountId,
           categoryId: expensesTable.categoryId,
@@ -202,11 +201,6 @@ const saveExpenseProcedure = protectedProcedure
               .datetime({ error: 'Invalid date time' })
               .nullish()
               .transform(val => (val ? parseISO(val) : null)),
-            note: z
-              .string()
-              .nullish()
-              .transform(v => v ?? null)
-              .optional(),
             isDeleted: z.boolean().default(false).optional(),
             expenseItemId: z
               .string()
@@ -282,7 +276,7 @@ const saveExpenseProcedure = protectedProcedure
       input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
     ]);
 
-    const { amountCents, grossAmountCents } = calculateExpense(input);
+    const { amountCents } = calculateExpense(input);
     const [boxId] =
       input.latitude && input.longitude
         ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
@@ -293,7 +287,6 @@ const saveExpenseProcedure = protectedProcedure
       .values({
         id: input.expenseId,
         amountCents,
-        amountCentsPreRefund: grossAmountCents,
         billedAt: input.billedAt,
         userId: userId,
         accountId: accountId,
