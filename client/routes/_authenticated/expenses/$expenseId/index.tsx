@@ -39,7 +39,7 @@ function RouteComponent() {
               id={field.name}
               name={field.name}
               placeholder='Date'
-              className='input input-primary input-lg w-full'
+              className='input input-primary w-full'
               value={format(field.state.value, "yyyy-MM-dd'T'HH:mm")}
               onChange={e => {
                 if (e.target.value === '') {
