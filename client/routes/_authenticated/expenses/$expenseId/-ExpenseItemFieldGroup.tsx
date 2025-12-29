@@ -37,12 +37,16 @@ export const ItemDetailFieldGroup = withFieldGroup({
                 context: getFormField('shopName') ?? undefined,
               });
             },
-            onBlurAsync: async ({ value }) => {
-              const shopName = getFormField('shopName');
-              if (!value?.trim() || !shopName?.trim()) return;
-              const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
-              if (itemDetail) {
-                group.setFieldValue('priceCents', itemDetail.priceCents);
+            onBlurAsync: async ({ value, fieldApi }) => {
+              if (fieldApi.form.state.isSubmitting) return;
+              const isPriceCentsDirty = group.getFieldMeta('priceCents')?.isDirty;
+              if (!isPriceCentsDirty) {
+                const shopName = getFormField('shopName');
+                if (!value?.trim() || !shopName?.trim()) return;
+                const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
+                if (itemDetail) {
+                  group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+                }
               }
             },
           }}
