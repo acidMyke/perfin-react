@@ -45,5 +45,24 @@
         "ALLOW_SIGNUP": "true",
       },
     },
+    "staging": {
+      "d1_databases": [
+        {
+          "binding": "db",
+          "database_name": "perfin",
+          "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
+          "migrations_dir": "./db/migrations/d1-preprod",
+        },
+      ],
+      "vars": {
+        "TOKEN_COOKIE_NAME": "__Host-token",
+        "EMAIL_SENDER_NAME": "PreProd-Pefin",
+        "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+        "ORIGIN": "https://perfin.acidmyke.link",
+        "PASSKEYS_RP_NAME": "Perfin",
+        "PASSKEYS_RP_ID": "perfin.acidmyke.link",
+        "ALLOW_SIGNUP": "true",
+      },
+    },
   },
 }
