@@ -13,7 +13,8 @@
     "migration:apply": "wrangler d1 migrations apply perfin-staging --local",
     "migration:apply-staging": "wrangler d1 migrations apply perfin-staging --remote",
     "runsql": "wrangler d1 execute perfin-staging --local --command",
-    "runsqlfile": "wrangler d1 execute perfin-staging --local --file"
+    "runsqlfile": "wrangler d1 execute perfin-staging --local --file",
+    "deploy:staging": "wrangler d1 migrations apply perfin-staging --remote --env staging & wrangler deploy --keep-vars --env staging"
   },
   "dependencies": {
     "@headlessui/react": "^2.2.9",
