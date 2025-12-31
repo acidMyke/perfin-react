@@ -32,7 +32,7 @@
   },
   "vars": {
     "TOKEN_COOKIE_NAME": "token",
-    "EMAIL_SENDER_NAME": "PreProd-Pefin",
+    "EMAIL_SENDER_NAME": "PreProd-Perfin",
     "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
     "ORIGIN": "http://localhost:5173",
     "PASSKEYS_RP_NAME": "Perfin",
@@ -52,7 +52,7 @@
       ],
       "vars": {
         "TOKEN_COOKIE_NAME": "__Host-token",
-        "EMAIL_SENDER_NAME": "Pefin",
+        "EMAIL_SENDER_NAME": "Perfin",
         "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
         "ORIGIN": "https://perfin.acidmyke.link",
         "PASSKEYS_RP_NAME": "Perfin",
@@ -72,7 +72,7 @@
       ],
       "vars": {
         "TOKEN_COOKIE_NAME": "__Host-token",
-        "EMAIL_SENDER_NAME": "Pefin-Staging",
+        "EMAIL_SENDER_NAME": "Perfin-Staging",
         "EMAIL_SENDER_ADDR": "no-reply@perfin-staging.acidmyke.link",
         "ORIGIN": "https://perfin-staging.acidmyke.link",
         "PASSKEYS_RP_NAME": "Perfin",
