@@ -51,13 +51,13 @@
         },
       ],
       "vars": {
-        "TOKEN_COOKIE_NAME": "__Host-token",
+        "TOKEN_COOKIE_NAME": "__Host-Http-token",
         "EMAIL_SENDER_NAME": "Perfin",
         "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
         "ORIGIN": "https://perfin.acidmyke.link",
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
-        "ALLOW_SIGNUP": "true",
+        "ALLOW_SIGNUP": "false",
       },
     },
     "staging": {
