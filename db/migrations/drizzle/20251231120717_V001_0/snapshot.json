@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "b79855dd-6317-49e3-8882-0bbb4fdd8ed9",
+  "id": "774ed12a-ca04-4d54-a451-a2247138d5b8",
   "prevIds": [
-    "b38bb050-301f-4bd7-9ba8-939eb8dbe90c"
+    "00000000-0000-0000-0000-000000000000"
   ],
   "ddl": [
     {
@@ -281,7 +281,7 @@
       "table": "email_codes"
     },
     {
-      "type": "text(16)",
+      "type": "text(6)",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -607,16 +607,6 @@
       "default": "0",
       "generated": null,
       "name": "amount_cents",
-      "entityType": "columns",
-      "table": "expenses"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "0",
-      "generated": null,
-      "name": "amount_cents_pre_refund",
       "entityType": "columns",
       "table": "expenses"
     },
@@ -1071,7 +1061,7 @@
       "table": "sessions"
     },
     {
-      "type": "text(16)",
+      "type": "text(21)",
       "notNull": true,
       "autoincrement": false,
       "default": null,
@@ -1386,12 +1376,16 @@
         {
           "value": "email",
           "isExpression": false
+        },
+        {
+          "value": "valid_until",
+          "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "idx_email_codes_email",
+      "name": "idx_email_codes_email_valid_until",
       "entityType": "indexes",
       "table": "email_codes"
     },
@@ -1474,6 +1468,10 @@
         {
           "value": "billed_at",
           "isExpression": false
+        },
+        {
+          "value": "is_deleted",
+          "isExpression": false
         }
       ],
       "isUnique": false,
@@ -1492,86 +1490,12 @@
         {
           "value": "box_id",
           "isExpression": false
-        },
-        {
-          "value": "latitude",
-          "isExpression": false
-        },
-        {
-          "value": "longitude",
-          "isExpression": false
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"expenses\".\"is_deleted\" = 0",
       "origin": "manual",
-      "name": "idx_expenses_user_box_id_coord",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "latitude",
-          "isExpression": false
-        },
-        {
-          "value": "longitude",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_user_coord",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "billed_at",
-          "isExpression": false
-        },
-        {
-          "value": "account_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_user_billed_account",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "billed_at",
-          "isExpression": false
-        },
-        {
-          "value": "category_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_user_billed_category",
+      "name": "idx_expenses_user_box_id_active",
       "entityType": "indexes",
       "table": "expenses"
     },
@@ -1591,9 +1515,9 @@
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"expenses\".\"is_deleted\" = 0",
       "origin": "manual",
-      "name": "idx_expenses_user_shopName",
+      "name": "idx_expenses_user_shopName_active",
       "entityType": "indexes",
       "table": "expenses"
     },
@@ -1613,9 +1537,9 @@
         }
       ],
       "isUnique": false,
-      "where": null,
+      "where": "\"expenses\".\"is_deleted\" = 0",
       "origin": "manual",
-      "name": "idx_expenses_user_shopMall",
+      "name": "idx_expenses_user_shopMall_active",
       "entityType": "indexes",
       "table": "expenses"
     },

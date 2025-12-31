@@ -8,7 +8,7 @@ import {
   generateId,
   searchTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, or, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';

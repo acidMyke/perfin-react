@@ -2,6 +2,8 @@
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "perfin",
   "compatibility_date": "2025-04-03",
+  "workers_dev": false,
+  "preview_urls": false,
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "not_found_handling": "single-page-application",
@@ -15,9 +17,22 @@
       "migrations_dir": "./db/migrations/d1-preprod",
     },
   ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true,
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true,
+    },
+  },
   "vars": {
     "TOKEN_COOKIE_NAME": "token",
-    "EMAIL_SENDER_NAME": "PreProd-Pefin",
+    "EMAIL_SENDER_NAME": "PreProd-Perfin",
     "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
     "ORIGIN": "http://localhost:5173",
     "PASSKEYS_RP_NAME": "Perfin",
@@ -37,11 +52,31 @@
       ],
       "vars": {
         "TOKEN_COOKIE_NAME": "__Host-token",
-        "EMAIL_SENDER_NAME": "Pefin",
+        "EMAIL_SENDER_NAME": "Perfin",
         "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
         "ORIGIN": "https://perfin.acidmyke.link",
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
+        "ALLOW_SIGNUP": "true",
+      },
+    },
+    "staging": {
+      "name": "perfin-staging",
+      "d1_databases": [
+        {
+          "binding": "db",
+          "database_name": "perfin-staging",
+          "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
+          "migrations_dir": "./db/migrations/d1-preprod",
+        },
+      ],
+      "vars": {
+        "TOKEN_COOKIE_NAME": "__Host-token",
+        "EMAIL_SENDER_NAME": "Perfin-Staging",
+        "EMAIL_SENDER_ADDR": "no-reply@perfin-staging.acidmyke.link",
+        "ORIGIN": "https://perfin-staging.acidmyke.link",
+        "PASSKEYS_RP_NAME": "Perfin",
+        "PASSKEYS_RP_ID": "perfin-staging.acidmyke.link",
         "ALLOW_SIGNUP": "true",
       },
     },
