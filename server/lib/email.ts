@@ -277,7 +277,7 @@ export async function createEmailCode(
   email: string,
   options?: CreateEmailCodeOption,
 ) {
-  const { db, url } = ctx;
+  const { db, env } = ctx;
   const { expiresIn = 300, length = 6 } = options ?? {};
 
   const code = randomInt(0, Math.pow(10, length)).toString().padStart(length, '0');
@@ -288,7 +288,7 @@ export async function createEmailCode(
     validUntil: addSeconds(new Date(), expiresIn),
   });
 
-  const verificationUrl = new URL('/' + purpose, url.origin);
+  const verificationUrl = new URL('/' + purpose, env.ORIGIN);
   verificationUrl.searchParams.set('code', code);
   return { code, verificationUrl };
 }
