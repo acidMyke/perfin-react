@@ -15,6 +15,19 @@
       "migrations_dir": "./db/migrations/d1-preprod",
     },
   ],
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "invocation_logs": true,
+      "persist": true,
+    },
+    "traces": {
+      "enabled": false,
+      "head_sampling_rate": 1,
+      "persist": true,
+    },
+  },
   "vars": {
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Pefin",
@@ -46,10 +59,11 @@
       },
     },
     "staging": {
+      "name": "perfin-staging",
       "d1_databases": [
         {
           "binding": "db",
-          "database_name": "perfin",
+          "database_name": "perfin-staging",
           "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
           "migrations_dir": "./db/migrations/d1-preprod",
         },
