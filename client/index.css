@@ -79,46 +79,6 @@ html {
   }
 }
 
-/* React select styling, modified from daisyui input & menu compoenents */
-.react-select-lg__control {
-  --input-color: var(--color-primary);
-  --size: calc(var(--size-field, 0.25rem) * 12);
-  @apply bg-base-100 relative inline-flex shrink appearance-none items-center gap-2 px-3 align-middle whitespace-nowrap;
-  border: var(--border) solid #0000;
-  border-color: var(--input-color);
-  border-radius: var(--radius-field);
-  font-size: 1.125rem;
-  height: var(--size);
-}
-
-.react-select-lg__menu {
-  @apply bg-base-100 rounded-box w-fit p-2 shadow-2xl;
-  --menu-active-fg: var(--color-neutral-content);
-  --menu-active-bg: var(--color-neutral);
-  font-size: 1.125rem;
-  z-index: 10 !important;
-}
-
-.react-select-lg__menu-list {
-  @apply py-1;
-}
-
-.react-select-lg__option {
-  @apply w-full px-3 py-1;
-}
-
-.react-select-lg__option--is-focused {
-  @apply bg-base-200;
-}
-
-.react-select-lg__option--is-selected {
-  @apply bg-base-300;
-}
-
-label.floating-label:has(div.react-select-lg__control) > span {
-  @apply text-lg;
-}
-
 /* Rechart outline removal */
 .recharts-wrapper > svg {
   outline: none;
