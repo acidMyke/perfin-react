@@ -62,25 +62,46 @@ const t = initTRPC.context<Context>().create({
   isDev: import.meta.env.DEV,
   errorFormatter(opts) {
     const { error, shape } = opts;
-    const newShapeData: AppErrorShapeData = {
+    const shapeData: AppErrorShapeData = {
       ...shape.data,
     };
 
     if (isFormInputError(error.cause)) {
       const { fieldErrors, formErrors } = error.cause;
-      newShapeData.fieldErrors = fieldErrors;
-      newShapeData.formErrors = formErrors;
+      shapeData.fieldErrors = fieldErrors;
+      shapeData.formErrors = formErrors;
     }
 
     if (error.cause instanceof $ZodError) {
-      const { fieldErrors, formErrors } = z.flattenError(error.cause);
-      newShapeData.fieldErrors = fieldErrors;
-      newShapeData.formErrors = formErrors;
+      shapeData.fieldErrors = {};
+      for (const { path, message } of error.cause.issues) {
+        if (path.length === 0) {
+          // Form level issue
+          if (shapeData.formErrors) {
+            shapeData.formErrors.push(message);
+          } else {
+            shapeData.formErrors = [message];
+          }
+        } else {
+          const fullpath = path.map(key => (typeof key === 'number' ? `[${key}]` : key)).join('.');
+
+          // ensure array exists
+          if (shapeData.fieldErrors == undefined) {
+            shapeData.fieldErrors = { [fullpath]: [message] };
+          } else if (fullpath in shapeData.fieldErrors && shapeData.fieldErrors[fullpath]) {
+            shapeData.fieldErrors[fullpath]!.push(message);
+          } else {
+            shapeData.fieldErrors[fullpath] = [message];
+          }
+          shapeData.fieldErrors ??= {};
+          shapeData.fieldErrors[fullpath] ??= [];
+        }
+      }
     }
 
     return {
       ...shape,
-      data: newShapeData,
+      data: shapeData,
     };
   },
 });
