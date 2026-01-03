@@ -238,7 +238,7 @@ function OtpInput(props: OtpInputProps) {
               const value = e.target.value;
               if (isNaN(parseInt(value))) return;
               field.handleChange(current =>
-                [...current]
+                [...(current ?? '')]
                   .toSpliced(inputIndex, value.length, ...value.split(''))
                   .join('')
                   .slice(0, 6),
@@ -249,7 +249,7 @@ function OtpInput(props: OtpInputProps) {
             }}
             onKeyDown={e => {
               if (e.key === 'Backspace') {
-                field.handleChange(current => [...current].toSpliced(inputIndex, 1, '').join('').slice(0, 6));
+                field.handleChange(current => [...(current ?? '')].toSpliced(inputIndex, 1, '').join('').slice(0, 6));
                 if (inputIndex > 0) inputRefs.current[inputIndex - 1]?.focus();
               }
             }}
