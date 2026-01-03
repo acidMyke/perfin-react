@@ -12,12 +12,12 @@ export const { fieldContext, formContext, useFieldContext, useFormContext } = cr
 
 const NumericTransformers = {
   amountInCents: {
-    transform: v => v * 100,
-    revert: v => v / 100,
+    transform: v => Math.round(v * 100),
+    revert: v => Math.round(v) / 100,
   },
   percentage: {
-    transform: v => v * 100,
-    revert: v => v / 100,
+    transform: v => Math.round(v * 100),
+    revert: v => Math.round(v) / 100,
   },
 } satisfies Record<string, { transform: (v: number) => number; revert: (v: number) => number }>;
 
