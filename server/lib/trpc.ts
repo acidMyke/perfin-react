@@ -8,6 +8,7 @@ import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
 import { format } from 'date-fns/format';
 import { createDatabase } from './db';
+import ErrorCodes from './ErrorCodes';
 
 export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = createDatabase(env);
@@ -61,63 +62,82 @@ const t = initTRPC.context<Context>().create({
   isDev: import.meta.env.DEV,
   errorFormatter(opts) {
     const { error, shape } = opts;
-    const newShapeData: AppErrorShapeData = {
+    const shapeData: AppErrorShapeData = {
       ...shape.data,
     };
 
     if (isFormInputError(error.cause)) {
       const { fieldErrors, formErrors } = error.cause;
-      newShapeData.fieldErrors = fieldErrors;
-      newShapeData.formErrors = formErrors;
+      shapeData.fieldErrors = fieldErrors;
+      shapeData.formErrors = formErrors;
     }
 
     if (error.cause instanceof $ZodError) {
-      const { fieldErrors, formErrors } = z.flattenError(error.cause);
-      newShapeData.fieldErrors = fieldErrors;
-      newShapeData.formErrors = formErrors;
+      shapeData.fieldErrors = {};
+      for (const { path, message } of error.cause.issues) {
+        if (path.length === 0) {
+          // Form level issue
+          if (shapeData.formErrors) {
+            shapeData.formErrors.push(message);
+          } else {
+            shapeData.formErrors = [message];
+          }
+        } else {
+          const fullpath = path.map(key => (typeof key === 'number' ? `[${key}]` : key)).join('.');
+
+          // ensure array exists
+          if (shapeData.fieldErrors == undefined) {
+            shapeData.fieldErrors = { [fullpath]: [message] };
+          } else if (fullpath in shapeData.fieldErrors && shapeData.fieldErrors[fullpath]) {
+            shapeData.fieldErrors[fullpath]!.push(message);
+          } else {
+            shapeData.fieldErrors[fullpath] = [message];
+          }
+          shapeData.fieldErrors ??= {};
+          shapeData.fieldErrors[fullpath] ??= [];
+        }
+      }
     }
 
     return {
       ...shape,
-      data: newShapeData,
+      data: shapeData,
     };
   },
 });
 
 export const router = t.router;
 export const publicProcedure = t.procedure.use(async opts => {
-  if (import.meta.env.DEV) {
-    const start = Date.now();
-    console.log(format(start, 'yyyy-MM-dd HH:mm:ss'), opts.path, opts.input);
-    const result = await opts.next();
-    const durationMs = Date.now() - start;
-    const meta: Record<string, any> = { path: opts.path, type: opts.type, durationMs };
-    if (!result.ok) {
-      // result.error is TRPCError
-      const { cause: innerCause, code } = result.error;
-      if (code == 'INTERNAL_SERVER_ERROR') {
-        // innerCause can be DrizzleQueryError
-        if (innerCause instanceof DrizzleQueryError) {
-          // Which has error that is throw by D1
-          // https://developers.cloudflare.com/d1/observability/debug-d1/
-          const d1Error = innerCause.cause as Error;
-          // Which has error that is throw internally
-          const dbError = d1Error.cause as Error;
-          meta.innerCause = 'DB Error: ' + dbError.message;
-          return {
-            ok: false,
-            error: new TRPCError({ code: 'INTERNAL_SERVER_ERROR', cause: dbError }),
-            marker: result.marker,
-          };
-        }
+  const result = await opts.next();
+  console.log();
+  if (!result.ok) {
+    // result.error is TRPCError
+    const { cause: innerCause, code, message } = result.error;
+    if (code == 'INTERNAL_SERVER_ERROR') {
+      // innerCause can be DrizzleQueryError
+      if (innerCause instanceof DrizzleQueryError) {
+        // Which has error that is throw by D1
+        // https://developers.cloudflare.com/d1/observability/debug-d1/
+        const d1Error = innerCause.cause as Error;
+        // Which has error that is throw internally
+        const dbError = d1Error.cause as Error;
+        console.error('SQLite error: ', dbError);
+        return {
+          ok: false,
+          marker: result.marker,
+          error: new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: ErrorCodes.SQLITE_ERROR }),
+        };
       }
-      console.error('Non-OK request:', meta);
-    } else {
-      console.info('OK request:', meta);
+      console.error('Unhandled error: ', innerCause);
+      return {
+        ok: false,
+        marker: result.marker,
+        error: new TRPCError({ code: 'INTERNAL_SERVER_ERROR', message: ErrorCodes.UNHANDLED_EXCEPTION }),
+      };
     }
-    return result;
+    console.warn('Non-ok response: ', { code, path: opts.path, input: opts.input, message });
   }
-  return opts.next();
+  return result;
 });
 
 export const protectedProcedure = publicProcedure.use(async opts => {
@@ -130,7 +150,7 @@ export const protectedProcedure = publicProcedure.use(async opts => {
   }
 
   if (opts.type === 'mutation' && !opts.ctx.isCsrfValid) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'CSRF verification failed' });
+    throw new TRPCError({ code: 'FORBIDDEN', message: ErrorCodes.CSRF_FAILED });
   }
 
   return opts.next({
@@ -140,7 +160,7 @@ export const protectedProcedure = publicProcedure.use(async opts => {
 
 export const elevatedProcedure = protectedProcedure.use(async opts => {
   if (!opts.ctx.isAllowElevated) {
-    throw new TRPCError({ code: 'FORBIDDEN', message: 'SUDO failed' });
+    throw new TRPCError({ code: 'FORBIDDEN', message: ErrorCodes.ELEVATION_REQUIRED });
   }
 
   return opts.next({

@@ -84,6 +84,7 @@ function RouteComponent() {
             </ul>
           )}
         </form.Field>
+        <form.StatusMessage />
         <form.SubmitButton label='Save' />
       </form.AppForm>
     </div>
