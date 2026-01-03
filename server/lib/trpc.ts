@@ -4,9 +4,7 @@ import { DrizzleQueryError } from 'drizzle-orm/errors';
 import { parseCookie, type CookieHeaders } from './CookieHeaders';
 import sessions from './sessions';
 import { $ZodError } from 'zod/v4/core';
-import z from 'zod';
 import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import';
-import { format } from 'date-fns/format';
 import { createDatabase } from './db';
 import ErrorCodes from './ErrorCodes';
 
