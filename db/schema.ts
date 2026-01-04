@@ -224,5 +224,6 @@ export const searchTable = sqliteTable(
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
     index('idx_search_chunk').on(t.userId, t.type, t.chunk),
+    index('idx_search_context').on(t.userId, t.type, t.context),
   ],
 );

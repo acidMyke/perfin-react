@@ -168,3 +168,4 @@ CREATE INDEX `idx_passkeys_user_id` ON `passkeys` (`user_id`);
 CREATE INDEX `idx_search_chunk` ON `search` (`user_id`,`type`,`chunk`);
 CREATE INDEX `idx_sessions_token_expires` ON `sessions` (`token`,`expires_at`);
 CREATE INDEX `idx_sessions_user_expires` ON `sessions` (`user_id`,`expires_at`);
+CREATE INDEX `idx_search_context` ON `search` (`user_id`,`type`,`context`);
