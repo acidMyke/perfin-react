@@ -1,4 +1,4 @@
-import { FormInputError, protectedProcedure, type ProtectedContext } from '../lib/trpc';
+import { protectedProcedure } from '../lib/trpc';
 import {
   accountsTable,
   categoriesTable,
@@ -15,11 +15,7 @@ import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTrigrams } from '../lib/utils';
-
-type Option = {
-  label: string;
-  value: string;
-};
+import type { BatchItem } from 'drizzle-orm/batch';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -111,33 +107,6 @@ const loadExpenseDetailProcedure = protectedProcedure
       refunds: rawRefunds,
     };
   });
-
-async function safelyCreateSubject(
-  ctx: ProtectedContext,
-  table: typeof accountsTable | typeof categoriesTable,
-  { value, label }: Option,
-  field: string,
-): Promise<string> {
-  const { db, userId } = ctx;
-  if (value !== 'create') return value;
-  const existings = await db
-    .select({ id: table.id })
-    .from(table)
-    .where(and(eq(table.userId, userId), like(table.name, label), eq(table.isDeleted, false)))
-    .limit(1);
-
-  if (existings.length > 0) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      cause: new FormInputError({
-        fieldErrors: { [field]: [`${label} existed`] },
-      }),
-    });
-  }
-
-  const newRecord = await db.insert(table).values({ name: label, userId: userId }).returning({ id: table.id });
-  return newRecord[0].id;
-}
 
 const saveExpenseProcedure = protectedProcedure
   .input(
@@ -271,10 +240,24 @@ const saveExpenseProcedure = protectedProcedure
       }
     }
 
-    const [accountId, categoryId] = await Promise.all([
-      input.account ? safelyCreateSubject(ctx, accountsTable, input.account, 'accountId') : null,
-      input.category ? safelyCreateSubject(ctx, categoriesTable, input.category, 'categoryId') : null,
-    ]);
+    const batchItems: BatchItem<'sqlite'>[] = [];
+
+    if (input.account?.value === 'create') {
+      input.account.value = generateId();
+      batchItems.push(
+        db.insert(accountsTable).values({ id: input.account.value, name: input.account.label, userId: userId }),
+      );
+    }
+
+    if (input.category?.value === 'create') {
+      input.category.value = generateId();
+      batchItems.push(
+        db.insert(categoriesTable).values({ id: input.category.value, name: input.category.label, userId: userId }),
+      );
+    }
+
+    const accountId = input.account?.value ?? null;
+    const categoryId = input.category?.value ?? null;
 
     const { amountCents } = calculateExpense(input);
     const [boxId] =
@@ -282,69 +265,79 @@ const saveExpenseProcedure = protectedProcedure
         ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
         : [null];
 
-    await db
-      .insert(expensesTable)
-      .values({
-        id: input.expenseId,
-        amountCents,
-        billedAt: input.billedAt,
-        userId: userId,
-        accountId: accountId,
-        categoryId: categoryId,
-        updatedBy: userId,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        geoAccuracy: input.geoAccuracy,
-        boxId,
-        shopName: input.shopName,
-        shopMall: input.shopMall,
-        additionalServiceChargePercent: input.additionalServiceChargePercent,
-        isGstExcluded: input.isGstExcluded,
-      })
-      .onConflictDoUpdate({
-        target: expensesTable.id,
-        set: excludedAll(expensesTable, ['userId']),
-      });
+    batchItems.push(
+      db
+        .insert(expensesTable)
+        .values({
+          id: input.expenseId,
+          amountCents,
+          billedAt: input.billedAt,
+          userId: userId,
+          accountId: accountId,
+          categoryId: categoryId,
+          updatedBy: userId,
+          latitude: input.latitude,
+          longitude: input.longitude,
+          geoAccuracy: input.geoAccuracy,
+          boxId,
+          shopName: input.shopName,
+          shopMall: input.shopMall,
+          additionalServiceChargePercent: input.additionalServiceChargePercent,
+          isGstExcluded: input.isGstExcluded,
+        })
+        .onConflictDoUpdate({
+          target: expensesTable.id,
+          set: excludedAll(expensesTable, ['userId']),
+        }),
+    );
 
-    await db
-      .insert(expenseItemsTable)
-      .values(
-        input.items.map((item, idx) => ({
-          ...item,
-          sequence: idx,
-          expenseId: input.expenseId,
-        })),
-      )
-      .onConflictDoUpdate({
-        target: expenseItemsTable.id,
-        set: excludedAll(expenseItemsTable),
-      });
-
-    await db
-      .update(expenseItemsTable)
-      .set({ isDeleted: true })
-      .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds)));
-
-    if (refunds.length > 0) {
-      await db
-        .insert(expenseRefundsTable)
+    batchItems.push(
+      db
+        .insert(expenseItemsTable)
         .values(
-          refunds.map((refund, idx) => ({
-            ...refund,
+          input.items.map((item, idx) => ({
+            ...item,
             sequence: idx,
             expenseId: input.expenseId,
           })),
         )
         .onConflictDoUpdate({
-          target: expenseRefundsTable.id,
-          set: excludedAll(expenseRefundsTable),
-        });
+          target: expenseItemsTable.id,
+          set: excludedAll(expenseItemsTable),
+        }),
+    );
+
+    batchItems.push(
+      db
+        .update(expenseItemsTable)
+        .set({ isDeleted: true })
+        .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds))),
+    );
+
+    if (refunds.length > 0) {
+      batchItems.push(
+        db
+          .insert(expenseRefundsTable)
+          .values(
+            refunds.map((refund, idx) => ({
+              ...refund,
+              sequence: idx,
+              expenseId: input.expenseId,
+            })),
+          )
+          .onConflictDoUpdate({
+            target: expenseRefundsTable.id,
+            set: excludedAll(expenseRefundsTable),
+          }),
+      );
     }
 
-    await db
-      .update(expenseRefundsTable)
-      .set({ isDeleted: true })
-      .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
+    batchItems.push(
+      db
+        .update(expenseRefundsTable)
+        .set({ isDeleted: true })
+        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds))),
+    );
 
     if (searchables.length) {
       const records = searchables.flatMap(({ text, type, context }) =>
@@ -357,15 +350,20 @@ const saveExpenseProcedure = protectedProcedure
       const groupsCount = Math.ceil(records.length / groupSize);
       for (let i = 0; i < groupsCount; i++) {
         const values = records.slice(i * groupSize, (i + 1) * groupSize);
-        await db
-          .insert(searchTable)
-          .values(values)
-          .onConflictDoUpdate({
-            target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
-            set: { usageCount: sql`${searchTable.usageCount} + 1` },
-          });
+        batchItems.push(
+          db
+            .insert(searchTable)
+            .values(values)
+            .onConflictDoUpdate({
+              target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
+              set: { usageCount: sql`${searchTable.usageCount} + 1` },
+            }),
+        );
       }
     }
+
+    // @ts-ignore
+    await db.batch(batchItems);
   });
 
 const listExpenseProcedure = protectedProcedure
@@ -440,20 +438,25 @@ const getSuggestionsProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
 
+    const search = input.search.trim();
+    const context = input.context?.trim();
+
+    if (!search || !context) {
+      return { suggestions: [] as string[] };
+    }
+
     const condition = and(
       eq(searchTable.userId, userId),
       eq(searchTable.type, input.type),
-      input.search ? inArray(searchTable.chunk, getTrigrams(input.search)) : undefined,
+      search ? inArray(searchTable.chunk, getTrigrams(search)) : eq(searchTable.context, context),
     );
 
-    const descLikelyness = desc(
-      max(caseWhen(like(searchTable.text, input.search + '%'), sql.raw('1')).else(sql.raw('0'))),
-    );
+    const descLikelyness = desc(max(caseWhen(like(searchTable.text, search + '%'), sql.raw('1')).else(sql.raw('0'))));
     const descMatchCount = desc(max(searchTable.usageCount));
     const descPopularity = desc(count(searchTable.chunk));
 
     let suggestions: { value: string }[];
-    if (input.context) {
+    if (input.context && input.search) {
       const hasMatchingContext = max(
         caseWhen(eq(searchTable.context, input.context), sql.raw('0'))
           .whenThen(isNull(searchTable.context), sql.raw('1'))
@@ -465,19 +468,23 @@ const getSuggestionsProcedure = protectedProcedure
         .where(condition)
         .groupBy(searchTable.text)
         .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
-    } else {
+    } else if (input.search) {
       suggestions = await db
         .select({ value: searchTable.text })
         .from(searchTable)
         .where(condition)
         .groupBy(searchTable.text)
         .orderBy(descLikelyness, descMatchCount, descPopularity);
+    } else {
+      suggestions = await db
+        .select({ value: searchTable.text })
+        .from(searchTable)
+        .where(condition)
+        .groupBy(searchTable.text)
+        .orderBy(descMatchCount, descPopularity);
     }
 
-    return {
-      ...input,
-      suggestions: suggestions.map(({ value }) => value),
-    };
+    return { suggestions: suggestions.map(({ value }) => value) };
   });
 
 const inferShopDetailsProcedure = protectedProcedure
