@@ -6,6 +6,7 @@ import { observable, type Unsubscribable } from '@trpc/server/observable';
 import type { AppErrorShapeData } from '../server/lib/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { notFound } from '@tanstack/react-router';
+import ErrorCodes, { type ErrorCodesValues } from '../server/lib/ErrorCodes';
 
 export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;
@@ -50,7 +51,8 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
                 // TODO: add some logging
                 shouldRetry = true;
               } else if (code === 'FORBIDDEN') {
-                if (err.message.startsWith('CSRF')) {
+                if (err.message === ErrorCodes.CSRF_FAILED) {
+                  // Server should have set CSRF by now, so just retry
                   shouldRetry = true;
                 }
               }
@@ -125,6 +127,10 @@ export async function handleFormMutateAsync(mutatePromise: Promise<unknown>) {
   }
 }
 
+const ErrorDescription = {
+  sqlite_error: 'SQLite error: please contact support',
+} satisfies Partial<Record<ErrorCodesValues, string>>;
+
 export async function extractMutationError(error: unknown) {
   if (isTRPCClientError(error)) {
     if ('data' in error.shape) {
@@ -135,6 +141,10 @@ export async function extractMutationError(error: unknown) {
           fields: shapeData.fieldErrors,
         };
       }
+    } else if (error.message in ErrorDescription) {
+      return {
+        form: [ErrorDescription[error.message as keyof typeof ErrorDescription]],
+      };
     }
   }
   console.log('Unknown Error', typeof error === 'object' ? { ...error } : error);

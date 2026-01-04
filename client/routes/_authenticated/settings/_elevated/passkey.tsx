@@ -159,6 +159,7 @@ function RouteComponent() {
                       />
                     )}
                   />
+                  <form.StatusMessage />
                 </>
               )}
             />

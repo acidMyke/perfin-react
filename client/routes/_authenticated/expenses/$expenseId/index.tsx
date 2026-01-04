@@ -81,6 +81,7 @@ function RouteComponent() {
           );
         }}
       </form.AppField>
+      <form.StatusMessage />
       <form.SubmitButton
         buttonCn='col-span-full mb-4'
         label='Submit'

@@ -347,10 +347,19 @@ const saveExpenseProcedure = protectedProcedure
       .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds)));
 
     if (searchables.length) {
-      for (const { text, type, context } of searchables) {
+      const records = searchables.flatMap(({ text, type, context }) =>
+        getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })),
+      );
+
+      // each record have 6 params, cloudflare D1 max params is 100.
+      // 100 / 6 = 16.666, keep it safe, insert records in batches of 15 to stay under D1's 100-parameter limit
+      const groupSize = 15;
+      const groupsCount = Math.ceil(records.length / groupSize);
+      for (let i = 0; i < groupsCount; i++) {
+        const values = records.slice(i * groupSize, (i + 1) * groupSize);
         await db
           .insert(searchTable)
-          .values(getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })))
+          .values(values)
           .onConflictDoUpdate({
             target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
             set: { usageCount: sql`${searchTable.usageCount} + 1` },
