@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useExpenseForm } from './-expense.common';
+import { setCurrentLocation, useExpenseForm } from './-expense.common';
 import { coordinateFormat, SG_CENTER } from '../../../../utils';
 import { APIProvider, ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
 
@@ -18,10 +18,16 @@ function RouteComponent() {
       <form.AppField name='geolocation.longitude'>
         {({ NumericInput }) => <NumericInput label='Longitude' containerCn='mt-2' numberFormat={coordinateFormat} />}
       </form.AppField>
+      <button className='btn-primary btn' onClick={() => setCurrentLocation(form)}>
+        Use my location
+      </button>
+      <button className='btn-warning btn' onClick={() => form.setFieldValue('geolocation', undefined)}>
+        Clear
+      </button>
 
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Map
-          className='col-span-2 h-100'
+          className='col-span-2 mt-4 h-100'
           gestureHandling='greedy'
           disableDefaultUI={false}
           zoomControl
