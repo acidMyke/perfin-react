@@ -1,0 +1,1 @@
+CREATE INDEX `idx_search_context` ON `search` (`user_id`,`type`,`context`);
