@@ -440,20 +440,25 @@ const getSuggestionsProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
 
+    const search = input.search.trim();
+    const context = input.context?.trim();
+
+    if (!search || !context) {
+      return { suggestions: [] as string[] };
+    }
+
     const condition = and(
       eq(searchTable.userId, userId),
       eq(searchTable.type, input.type),
-      input.search ? inArray(searchTable.chunk, getTrigrams(input.search)) : undefined,
+      search ? inArray(searchTable.chunk, getTrigrams(search)) : eq(searchTable.context, context),
     );
 
-    const descLikelyness = desc(
-      max(caseWhen(like(searchTable.text, input.search + '%'), sql.raw('1')).else(sql.raw('0'))),
-    );
+    const descLikelyness = desc(max(caseWhen(like(searchTable.text, search + '%'), sql.raw('1')).else(sql.raw('0'))));
     const descMatchCount = desc(max(searchTable.usageCount));
     const descPopularity = desc(count(searchTable.chunk));
 
     let suggestions: { value: string }[];
-    if (input.context) {
+    if (input.context && input.search) {
       const hasMatchingContext = max(
         caseWhen(eq(searchTable.context, input.context), sql.raw('0'))
           .whenThen(isNull(searchTable.context), sql.raw('1'))
@@ -465,19 +470,23 @@ const getSuggestionsProcedure = protectedProcedure
         .where(condition)
         .groupBy(searchTable.text)
         .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
-    } else {
+    } else if (input.search) {
       suggestions = await db
         .select({ value: searchTable.text })
         .from(searchTable)
         .where(condition)
         .groupBy(searchTable.text)
         .orderBy(descLikelyness, descMatchCount, descPopularity);
+    } else {
+      suggestions = await db
+        .select({ value: searchTable.text })
+        .from(searchTable)
+        .where(condition)
+        .groupBy(searchTable.text)
+        .orderBy(descMatchCount, descPopularity);
     }
 
-    return {
-      ...input,
-      suggestions: suggestions.map(({ value }) => value),
-    };
+    return { suggestions: suggestions.map(({ value }) => value) };
   });
 
 const inferShopDetailsProcedure = protectedProcedure
