@@ -342,6 +342,7 @@ function ComboBox({
   readOnly = false,
   triggerChangeOnFocus = false,
 }: ComboBoxProps) {
+  const [query, setQuery] = useState('');
   const field = useFieldContext<Option | string | undefined>();
 
   // Compute the input value from form state
@@ -349,11 +350,22 @@ function ComboBox({
     ? typeof field.state.value === 'string'
       ? field.state.value
       : ''
-    : (field.state.value as Option)?.label || '';
+    : query !== ''
+      ? query
+      : (field.state.value as Option)?.label || '';
 
   const comboboxValue = suggestionMode
     ? null // free-text, menu selection does not control value
     : (field.state.value as Option | null) || null;
+
+  const displayOption =
+    query === '' || suggestionMode
+      ? options
+      : options.filter(opt => {
+          return typeof opt === 'string'
+            ? opt.toLowerCase().includes(query.toLowerCase())
+            : opt.label.toLowerCase().includes(query.toLowerCase());
+        });
 
   return (
     <label className={cn('floating-label mt-0', containerCn)}>
@@ -384,7 +396,7 @@ function ComboBox({
               if (suggestionMode) {
                 field.handleChange(val);
               } else {
-                field.handleChange({ label: val, value: val });
+                setQuery(val);
               }
             }}
             onBlur={() => field.handleBlur()}
@@ -403,13 +415,19 @@ function ComboBox({
             className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
             style={{ maxHeight: maxMenuHeight }}
           >
-            {options.map(opt => (
+            {query.length > 0 && (
+              <ComboboxOption
+                value={{ label: query, value: 'create' } satisfies Option}
+                className='data-focus:bg-base-200 data-selected:bg-base-300 cursor-pointer rounded px-3 py-2'
+              >
+                Create <span className='font-bold'>"{query}"</span>
+              </ComboboxOption>
+            )}
+            {displayOption.map(opt => (
               <ComboboxOption
                 key={typeof opt === 'string' ? opt : opt.value}
                 value={opt}
-                className={({ focus, selected }) =>
-                  cn('cursor-pointer rounded px-3 py-2', { 'bg-base-200': focus }, { 'bg-base-300': selected })
-                }
+                className='data-focus:bg-base-200 data-selected:bg-base-300 cursor-pointer rounded px-3 py-2'
               >
                 {typeof opt === 'string' ? opt : opt.label}
               </ComboboxOption>

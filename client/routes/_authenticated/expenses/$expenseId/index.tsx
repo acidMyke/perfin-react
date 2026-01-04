@@ -32,7 +32,7 @@ function RouteComponent() {
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label col-span-4 mt-2'>
+          <label htmlFor={field.name} className='floating-label col-span-8 mt-2'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -57,10 +57,10 @@ function RouteComponent() {
         )}
       </form.Field>
       <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-2 mt-2' />}
+        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-4 mt-2' />}
       </form.AppField>
       <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-2 mt-2' />}
+        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
       </form.AppField>
       <form.AppField name='ui.calculateResult'>
         {field => {
