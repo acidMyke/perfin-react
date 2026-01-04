@@ -22,3 +22,5 @@ export const coordinateFormat = new Intl.NumberFormat(SG_LOCALE, {
   maximumFractionDigits: 6,
   useGrouping: false,
 });
+
+export const SG_CENTER = { lat: 1.3521, lng: 103.8198 };
