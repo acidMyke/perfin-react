@@ -190,6 +190,7 @@ const ItemsDetailsSubForm = withForm({
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const { expenseId } = Route.useParams();
     const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
@@ -207,18 +208,19 @@ const ShopDetailSubForm = withForm({
               );
             } else {
               return (
-                <p className='col-span-full mt-2 mb-4'>
-                  Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
-                    target='_blank'
-                    className='link'
+                <>
+                  <p className='col-span-6 mt-2 mb-4'>
+                    Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)}
+                  </p>
+
+                  <Link
+                    className='btn btn-sm btn-primary col-span-1'
+                    to='/expenses/$expenseId/geolocation'
+                    params={{ expenseId }}
                   >
-                    Open in maps
-                    <ExternalLink className='ml-2 inline-block' size='1em' />
-                  </a>
-                  )
-                </p>
+                    Edit
+                  </Link>
+                </>
               );
             }
           }}

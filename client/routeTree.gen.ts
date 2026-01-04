@@ -25,6 +25,7 @@ import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './route
 import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
 import { Route as AuthenticatedSettingsElevatedPasskeyRouteImport } from './routes/_authenticated/settings/_elevated/passkey'
 import { Route as AuthenticatedExpensesExpenseIdViewRouteImport } from './routes/_authenticated/expenses/$expenseId/view'
+import { Route as AuthenticatedExpensesExpenseIdGeolocationRouteImport } from './routes/_authenticated/expenses/$expenseId/geolocation'
 import { Route as AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport } from './routes/_authenticated/expenses/$expenseId/items.$indexStr'
 
 const VerifyRoute = VerifyRouteImport.update({
@@ -114,6 +115,12 @@ const AuthenticatedExpensesExpenseIdViewRoute =
     path: '/view',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
+const AuthenticatedExpensesExpenseIdGeolocationRoute =
+  AuthenticatedExpensesExpenseIdGeolocationRouteImport.update({
+    id: '/geolocation',
+    path: '/geolocation',
+    getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
+  } as any)
 const AuthenticatedExpensesExpenseIdItemsIndexStrRoute =
   AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport.update({
     id: '/items/$indexStr',
@@ -133,6 +140,7 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
+  '/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/settings/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
@@ -148,6 +156,7 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
+  '/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/settings/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdIndexRoute
@@ -168,6 +177,7 @@ export interface FileRoutesById {
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
+  '/_authenticated/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   '/_authenticated/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/_authenticated/settings/_elevated/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
   '/_authenticated/expenses/$expenseId/': typeof AuthenticatedExpensesExpenseIdIndexRoute
@@ -187,6 +197,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/manage-subjects'
     | '/expenses'
+    | '/expenses/$expenseId/geolocation'
     | '/expenses/$expenseId/view'
     | '/settings/passkey'
     | '/expenses/$expenseId/'
@@ -202,6 +213,7 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/manage-subjects'
     | '/expenses'
+    | '/expenses/$expenseId/geolocation'
     | '/expenses/$expenseId/view'
     | '/settings/passkey'
     | '/expenses/$expenseId'
@@ -221,6 +233,7 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/expenses/'
     | '/_authenticated/settings/'
+    | '/_authenticated/expenses/$expenseId/geolocation'
     | '/_authenticated/expenses/$expenseId/view'
     | '/_authenticated/settings/_elevated/passkey'
     | '/_authenticated/expenses/$expenseId/'
@@ -349,6 +362,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdViewRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
+    '/_authenticated/expenses/$expenseId/geolocation': {
+      id: '/_authenticated/expenses/$expenseId/geolocation'
+      path: '/geolocation'
+      fullPath: '/expenses/$expenseId/geolocation'
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdGeolocationRouteImport
+      parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
+    }
     '/_authenticated/expenses/$expenseId/items/$indexStr': {
       id: '/_authenticated/expenses/$expenseId/items/$indexStr'
       path: '/items/$indexStr'
@@ -374,6 +394,7 @@ const SignupRouteRouteWithChildren = SignupRouteRoute._addFileChildren(
 )
 
 interface AuthenticatedExpensesExpenseIdRouteRouteChildren {
+  AuthenticatedExpensesExpenseIdGeolocationRoute: typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   AuthenticatedExpensesExpenseIdViewRoute: typeof AuthenticatedExpensesExpenseIdViewRoute
   AuthenticatedExpensesExpenseIdIndexRoute: typeof AuthenticatedExpensesExpenseIdIndexRoute
   AuthenticatedExpensesExpenseIdItemsIndexStrRoute: typeof AuthenticatedExpensesExpenseIdItemsIndexStrRoute
@@ -381,6 +402,8 @@ interface AuthenticatedExpensesExpenseIdRouteRouteChildren {
 
 const AuthenticatedExpensesExpenseIdRouteRouteChildren: AuthenticatedExpensesExpenseIdRouteRouteChildren =
   {
+    AuthenticatedExpensesExpenseIdGeolocationRoute:
+      AuthenticatedExpensesExpenseIdGeolocationRoute,
     AuthenticatedExpensesExpenseIdViewRoute:
       AuthenticatedExpensesExpenseIdViewRoute,
     AuthenticatedExpensesExpenseIdIndexRoute:
