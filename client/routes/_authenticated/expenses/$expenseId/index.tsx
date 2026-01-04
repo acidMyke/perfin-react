@@ -12,7 +12,7 @@ import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { ExternalLink, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
@@ -190,37 +190,35 @@ const ItemsDetailsSubForm = withForm({
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const { expenseId } = Route.useParams();
     const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const isCurrentLocationError = useStore(form.store, state => state.values.ui.isCurrentLocationError);
 
     return (
       <>
         <form.AppField name='geolocation'>
           {field => {
             const geolocation = field.state.value;
-            const isCreate = form.getFieldValue('ui.isCreate');
-            if (!geolocation) {
-              return (
-                <p className='col-span-full mt-2 mb-4'>
-                  Coordinate: {isCreate ? 'Unable to retrieve your location' : 'Unspecified'}
+            return (
+              <>
+                <p className='col-span-6 mt-2 mb-4'>
+                  Coordinate:{' '}
+                  {geolocation
+                    ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
+                    : isCurrentLocationError
+                      ? 'Unable to retrieve location'
+                      : 'Unspecified'}
                 </p>
-              );
-            } else {
-              return (
-                <p className='col-span-full mt-2 mb-4'>
-                  Coordinate: {geolocation.latitude.toPrecision(8)}, {geolocation.longitude.toPrecision(8)} (
-                  <a
-                    href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
-                    target='_blank'
-                    className='link'
-                  >
-                    Open in maps
-                    <ExternalLink className='ml-2 inline-block' size='1em' />
-                  </a>
-                  )
-                </p>
-              );
-            }
+                <Link
+                  className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
+                  to='/expenses/$expenseId/geolocation'
+                  params={{ expenseId }}
+                >
+                  View / Edit
+                </Link>
+              </>
+            );
           }}
         </form.AppField>
         <form.AppField
