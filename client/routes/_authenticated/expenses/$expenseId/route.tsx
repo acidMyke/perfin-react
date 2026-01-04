@@ -8,6 +8,7 @@ import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
+  setCurrentLocation,
   type ExpenseFormData,
 } from './-expense.common';
 import type { DeepKeys } from '@tanstack/react-form';
@@ -139,16 +140,8 @@ function RouteComponent() {
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError, isCopy]);
 
   useEffect(() => {
-    if (isCreate && navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        ({ coords }) => {
-          const { latitude, longitude, accuracy } = coords;
-          form.setFieldValue('geolocation', { latitude, longitude, accuracy });
-        },
-        () => {
-          form.setFieldMeta('geolocation', meta => ({ ...meta, isTouched: true, isDirty: true }));
-        },
-      );
+    if (isCreate) {
+      setCurrentLocation(form);
     }
   }, [isCreate]);
 

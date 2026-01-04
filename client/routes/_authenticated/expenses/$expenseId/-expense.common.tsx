@@ -69,6 +69,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       ui: {
         isCreate: false,
         isItemsSubpage,
+        isCurrentLocationError: false,
         shouldInferShopDetail: false,
         calculateResult: calculateExpense(detail),
       },
@@ -86,6 +87,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       ui: {
         isCreate: true,
         isItemsSubpage: false,
+        isCurrentLocationError: false,
         shouldInferShopDetail: true,
         calculateResult: calculateExpense({
           items: [],
@@ -226,4 +228,20 @@ export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirec
   }
   await Promise.all(promises);
   return navigate({ to: '/expenses', search: monthYear });
+}
+
+export async function setCurrentLocation(form: TExpenseForm) {
+  if (navigator.geolocation) {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const { latitude, longitude, accuracy } = coords;
+        form.setFieldValue('geolocation', { latitude, longitude, accuracy });
+        form.setFieldValue('ui.isCurrentLocationError', false);
+      },
+      () => {
+        form.setFieldMeta('geolocation', meta => ({ ...meta, isTouched: true, isDirty: true }));
+        form.setFieldValue('ui.isCurrentLocationError', true);
+      },
+    );
+  }
 }
