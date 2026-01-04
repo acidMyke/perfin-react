@@ -12,7 +12,7 @@ import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { ExternalLink, Plus } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
