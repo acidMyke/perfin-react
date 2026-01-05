@@ -76,10 +76,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
       billedAt: param?.isCopy ? new Date() : new Date(billedAt),
       account,
       category,
-      geolocation:
-        latitude !== null && longitude !== null && geoAccuracy !== null
-          ? { latitude, longitude, accuracy: geoAccuracy }
-          : undefined,
+      geolocation: latitude !== null && longitude !== null ? { latitude, longitude, accuracy: geoAccuracy } : undefined,
       ...rest,
     };
   } else {
