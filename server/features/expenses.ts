@@ -441,14 +441,15 @@ const getSuggestionsProcedure = protectedProcedure
     const search = input.search.trim();
     const context = input.context?.trim();
 
-    if (!search || !context) {
+    if (!search && !context) {
       return { suggestions: [] as string[] };
     }
 
     const condition = and(
       eq(searchTable.userId, userId),
       eq(searchTable.type, input.type),
-      search ? inArray(searchTable.chunk, getTrigrams(search)) : eq(searchTable.context, context),
+      search ? inArray(searchTable.chunk, getTrigrams(search)) : undefined,
+      context ? eq(searchTable.context, context) : undefined,
     );
 
     const descLikelyness = desc(max(caseWhen(like(searchTable.text, search + '%'), sql.raw('1')).else(sql.raw('0'))));
@@ -456,9 +457,9 @@ const getSuggestionsProcedure = protectedProcedure
     const descPopularity = desc(count(searchTable.chunk));
 
     let suggestions: { value: string }[];
-    if (input.context && input.search) {
+    if (context && search) {
       const hasMatchingContext = max(
-        caseWhen(eq(searchTable.context, input.context), sql.raw('0'))
+        caseWhen(eq(searchTable.context, context), sql.raw('0'))
           .whenThen(isNull(searchTable.context), sql.raw('1'))
           .else(sql.raw('2')),
       );
@@ -468,7 +469,7 @@ const getSuggestionsProcedure = protectedProcedure
         .where(condition)
         .groupBy(searchTable.text)
         .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
-    } else if (input.search) {
+    } else if (search) {
       suggestions = await db
         .select({ value: searchTable.text })
         .from(searchTable)
