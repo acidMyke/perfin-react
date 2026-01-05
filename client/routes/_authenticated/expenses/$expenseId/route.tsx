@@ -64,7 +64,12 @@ function RouteComponent() {
   const autocompleteSelectionDialogRef = useRef<HTMLDialogElement>(null);
   const inferShopDetailMutation = useMutation(
     trpc.expense.inferShopDetail.mutationOptions({
-      onSuccess: inferredResults => inferredResults?.length && autocompleteSelectionDialogRef.current?.showModal(),
+      onSuccess: inferredResults => {
+        if (inferredResults?.length) {
+          autocompleteSelectionDialogRef.current?.showModal();
+          form.setFieldValue('ui.shouldInferShopDetail', false);
+        }
+      },
     }),
   );
   const attemptShopDetailInference = useCallback(() => {
@@ -79,7 +84,6 @@ function RouteComponent() {
       ) {
         const { geolocation, shopName, items } = formValues;
         const { latitude, longitude } = geolocation ?? {};
-        form.setFieldValue('ui.shouldInferShopDetail', false);
         inferShopDetailMutation.mutate({
           latitude,
           longitude,
@@ -95,14 +99,14 @@ function RouteComponent() {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (/(geolocation.*)|(shopName)/.test(fieldName)) {
+        if (/(geolocation.*)/.test(fieldName)) {
           attemptShopDetailInference();
         }
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (/(items\[\d+\].name)/.test(fieldName)) {
+        if (/(items\[\d+\].name)|(shopName)/.test(fieldName)) {
           attemptShopDetailInference();
         }
       },

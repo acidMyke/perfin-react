@@ -17,6 +17,7 @@ function formatCents(cents: number) {
 
 function RouteComponent() {
   const form = useExpenseForm();
+  const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
   const { ui, geolocation, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
@@ -27,13 +28,14 @@ function RouteComponent() {
       <div className='border-base-300 col-span-2 grid grid-cols-2 space-y-1 border-b pb-2'>
         <h1 className='col-span-2 text-lg font-bold'>
           {geolocation ? (
-            <a
-              href={`https://www.google.com/maps/search/?api=1&query=${geolocation.latitude}%2C${geolocation.longitude}`}
-              target='_blank'
+            <Link
+              to='/expenses/$expenseId/geolocation'
+              params={{ expenseId }}
+              search={{ readOnly: true }}
               className='link'
             >
               {expense.shopName ?? 'Unknown Shop'}
-            </a>
+            </Link>
           ) : (
             (expense.shopName ?? 'Unknown Shop')
           )}
