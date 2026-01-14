@@ -381,6 +381,7 @@ function ComboBox({
             field.handleBlur();
           } else {
             field.handleChange(option); // store Option object
+            setQuery(option.label);
           }
         }}
         disabled={readOnly}
