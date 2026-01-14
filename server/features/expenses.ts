@@ -484,10 +484,12 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
+    const trigrams = search && getTrigrams(search);
+
     const condition = and(
       eq(searchTable.userId, userId),
       eq(searchTable.type, input.type),
-      search ? inArray(searchTable.chunk, getTrigrams(search)) : undefined,
+      trigrams ? inArray(searchTable.chunk, trigrams) : undefined,
       context ? eq(searchTable.context, context) : undefined,
     );
 
@@ -495,35 +497,30 @@ const getSuggestionsProcedure = protectedProcedure
     const descMatchCount = desc(max(searchTable.usageCount));
     const descPopularity = desc(count(searchTable.chunk));
 
-    let suggestions: { value: string }[];
+    let query = db.select({ value: searchTable.text }).from(searchTable).where(condition).groupBy(searchTable.text);
+
+    if (trigrams.length > 5) {
+      // @ts-expect-error query with having cant be assigned back to query
+      query = query.having(gte(searchTable.usageCount, trigrams.length - 5));
+    }
+
     if (context && search) {
       const hasMatchingContext = max(
         caseWhen(eq(searchTable.context, context), sql.raw('0'))
           .whenThen(isNull(searchTable.context), sql.raw('1'))
           .else(sql.raw('2')),
       );
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
     } else if (search) {
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(descLikelyness, descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(descLikelyness, descMatchCount, descPopularity);
     } else {
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(descMatchCount, descPopularity);
     }
 
+    const suggestions = await query;
     return { suggestions: suggestions.map(({ value }) => value) };
   });
 
