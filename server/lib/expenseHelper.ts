@@ -8,7 +8,7 @@ function applyExpenseSurcharge(baseAmountCents: number, surchargeOption?: Expens
   const serviceChargeCents = additionalServiceChargePercent
     ? Math.floor(baseAmountCents * (additionalServiceChargePercent / 100))
     : 0;
-  const gstCents = isGstExcluded ? Math.floor(baseAmountCents * 0.09) : 0;
+  const gstCents = isGstExcluded ? Math.floor((baseAmountCents + serviceChargeCents) * 0.09) : 0;
 
   return {
     grossAmountCents: baseAmountCents + serviceChargeCents + gstCents,

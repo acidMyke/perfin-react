@@ -183,11 +183,14 @@ const saveExpenseProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
 
+    const existingSearchableSet = new Set<string>();
     if (input.expenseId !== 'create') {
-      const existing = await db.query.expensesTable.findFirst({
-        where: { id: input.expenseId, userId },
-        columns: { userId: true, isDeleted: true, version: true },
-      });
+      const [existing] = await db.batch([
+        db.query.expensesTable.findFirst({
+          where: { id: input.expenseId, userId },
+          columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
+        }),
+      ]);
 
       if (!existing) {
         throw new TRPCError({ code: 'FORBIDDEN' });
@@ -196,13 +199,45 @@ const saveExpenseProcedure = protectedProcedure
       if (existing.version > input.version) {
         throw new TRPCError({ code: 'CONFLICT' });
       }
+
+      if (existing.shopMall) {
+        existingSearchableSet.add(existing.shopMall);
+      }
+
+      if (existing.shopName) {
+        existingSearchableSet.add(existing.shopName);
+      }
+
+      const otherExistingSearchables = await db
+        .select({ text: expenseItemsTable.name })
+        .from(expenseItemsTable)
+        .where(eq(expenseItemsTable.expenseId, input.expenseId))
+        .union(
+          db
+            .select({ text: expenseRefundsTable.source })
+            .from(expenseRefundsTable)
+            .where(eq(expenseRefundsTable.expenseId, input.expenseId)),
+        );
+
+      for (const { text } of otherExistingSearchables) {
+        existingSearchableSet.add(text);
+      }
     } else {
       input.expenseId = generateId();
     }
 
     const searchables: { type: string; text: string; context?: string | null }[] = [];
-    if (input.shopName) searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
-    if (input.shopMall) searchables.push({ type: 'shopMall', text: input.shopMall });
+    if (
+      input.shopName &&
+      existingSearchableSet.has(input.shopName) &&
+      (!input.shopMall || existingSearchableSet.has(input.shopMall))
+    ) {
+      searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
+    }
+
+    if (input.shopMall && existingSearchableSet.has(input.shopMall)) {
+      searchables.push({ type: 'shopMall', text: input.shopMall });
+    }
 
     const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
     const activeIds: string[] = [];
@@ -212,7 +247,9 @@ const saveExpenseProcedure = protectedProcedure
         item.id = generateId();
       }
       activeIds.push(item.id);
-      searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
+      if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
+        searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
+      }
       if (item.expenseRefund) {
         if (item.expenseRefund.id === 'create') {
           item.expenseRefund.id = generateId();
@@ -234,7 +271,9 @@ const saveExpenseProcedure = protectedProcedure
         refund.id = generateId();
       }
       activeIds.push(refund.id!);
-      searchables.push({ type: 'refundSource', text: refund.source, context: input.shopName });
+      if (!existingSearchableSet.has(refund.source)) {
+        searchables.push({ type: 'refundSource', text: refund.source });
+      }
       if (refund.actualAmountCents && !refund.confirmedAt) {
         refund.confirmedAt = new Date();
       }
@@ -445,10 +484,12 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
+    const trigrams = search && getTrigrams(search);
+
     const condition = and(
       eq(searchTable.userId, userId),
       eq(searchTable.type, input.type),
-      search ? inArray(searchTable.chunk, getTrigrams(search)) : undefined,
+      trigrams ? inArray(searchTable.chunk, trigrams) : undefined,
       context ? eq(searchTable.context, context) : undefined,
     );
 
@@ -456,35 +497,30 @@ const getSuggestionsProcedure = protectedProcedure
     const descMatchCount = desc(max(searchTable.usageCount));
     const descPopularity = desc(count(searchTable.chunk));
 
-    let suggestions: { value: string }[];
+    let query = db.select({ value: searchTable.text }).from(searchTable).where(condition).groupBy(searchTable.text);
+
+    if (trigrams.length > 5) {
+      // @ts-expect-error query with having cant be assigned back to query
+      query = query.having(gte(searchTable.usageCount, trigrams.length - 5));
+    }
+
     if (context && search) {
       const hasMatchingContext = max(
         caseWhen(eq(searchTable.context, context), sql.raw('0'))
           .whenThen(isNull(searchTable.context), sql.raw('1'))
           .else(sql.raw('2')),
       );
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
     } else if (search) {
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(descLikelyness, descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(descLikelyness, descMatchCount, descPopularity);
     } else {
-      suggestions = await db
-        .select({ value: searchTable.text })
-        .from(searchTable)
-        .where(condition)
-        .groupBy(searchTable.text)
-        .orderBy(descMatchCount, descPopularity);
+      // @ts-expect-error query with orderBy cant be assigned back to query
+      query = query.orderBy(descMatchCount, descPopularity);
     }
 
+    const suggestions = await query;
     return { suggestions: suggestions.map(({ value }) => value) };
   });
 
