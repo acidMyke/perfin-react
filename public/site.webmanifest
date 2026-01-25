@@ -7,5 +7,17 @@
   ],
   "theme_color": "#47B7FF",
   "background_color": "#1f1f2f",
-  "display": "standalone"
+  "display": "standalone",
+  "shortcuts": [
+    {
+      "name": "Create expense",
+      "short_name": "Create",
+      "description": "Create expense",
+      "url": "/expenses/create",
+      "icons": [
+        { "src": "/shortcut-create-192x192.png", "sizes": "192x192", "type": "image/png" },
+        { "src": "/shortcut-create-512x512.png", "sizes": "512x512", "type": "image/png" }
+      ]
+    }
+  ]
 }
