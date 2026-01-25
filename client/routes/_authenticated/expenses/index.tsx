@@ -2,7 +2,7 @@ import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-r
 import { queryClient, trpc, type RouterInputs } from '../../../trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { format, isBefore, isSameDay, isSameMonth, startOfMonth, subMonths } from 'date-fns';
+import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
@@ -15,7 +15,6 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     return {
       month: search['month'] as number | undefined,
       year: search['year'] as number | undefined,
-      showDeleted: search['showDeleted'] as boolean | undefined,
     } as Partial<RouterInputs['expense']['list']> | undefined;
   },
   loaderDeps: ({ search }) => {
@@ -23,31 +22,35 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     const deps: RouterInputs['expense']['list'] = {
       month: now.getMonth(),
       year: now.getFullYear(),
-      showDeleted: false,
     };
     if (search) {
       if (typeof search['month'] === 'number' && typeof search['year'] === 'number') {
         deps.month = search['month'] as number;
         deps.year = search['year'] as number;
       }
-      if (typeof search['showDeleted'] && typeof search['showDeleted'] === 'boolean') {
-        deps.showDeleted = search['showDeleted'];
-      }
     }
 
     return deps;
   },
   loader: async ({ deps }) => {
-    await queryClient.ensureQueryData(trpc.expense.list.queryOptions(deps));
+    await Promise.all([
+      queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
+      queryClient.ensureQueryData(trpc.expense.list.queryOptions(deps)),
+    ]);
   },
 });
 
-function MonthSelector() {
+function MonthSelector({
+  showDeleted = undefined,
+  setShowDeleted = () => undefined,
+}: {
+  showDeleted?: boolean;
+  setShowDeleted?: (v: boolean) => any;
+}) {
   const router = useRouter();
   const navigate = useNavigate({ from: '/expenses' });
   const loaderDeps = Route.useLoaderDeps();
   const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
-  const showDeleted = loaderDeps.showDeleted || undefined;
 
   return (
     <div className='flex flex-row gap-4'>
@@ -64,10 +67,7 @@ function MonthSelector() {
             const month = formValues.get('month')?.toString();
             const year = formValues.get('year')?.toString();
             if (month && year) {
-              router.preloadRoute({
-                to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year), showDeleted },
-              });
+              router.preloadRoute({ to: '/expenses', search: { month: parseInt(month), year: parseInt(year) } });
             }
           }}
           onSubmit={e => {
@@ -76,10 +76,7 @@ function MonthSelector() {
             const month = formValues.get('month')?.toString();
             const year = formValues.get('year')?.toString();
             if (month && year) {
-              navigate({
-                to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year), showDeleted },
-              });
+              navigate({ to: '/expenses', search: { month: parseInt(month), year: parseInt(year) } });
               e.currentTarget.parentElement?.removeAttribute('open');
             }
           }}
@@ -110,11 +107,7 @@ function MonthSelector() {
           <Link
             key={i}
             to='/expenses'
-            search={{
-              month: date.getMonth(),
-              year: date.getFullYear(),
-              showDeleted,
-            }}
+            search={{ month: date.getMonth(), year: date.getFullYear() }}
             className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
           >
             {format(date, 'MMM yy')}
@@ -122,25 +115,16 @@ function MonthSelector() {
         );
       })}
 
-      <Link
-        key='showDelete'
-        to='/expenses'
-        search={{
-          year: loaderDeps.year,
-          month: loaderDeps.month,
-          showDeleted: !showDeleted || undefined,
-        }}
-        className='label ml-auto'
-        preload='intent'
-      >
+      <div key='showDelete' className='label ml-auto'>
         <input
           type='checkbox'
-          checked={loaderDeps.showDeleted}
+          checked={showDeleted}
           className='toggle checked:toggle-primary pointer-events-none'
+          onChange={() => setShowDeleted(!showDeleted)}
           readOnly
         />
         Deleted
-      </Link>
+      </div>
     </div>
   );
 }

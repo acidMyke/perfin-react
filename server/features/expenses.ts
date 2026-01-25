@@ -410,13 +410,12 @@ const listExpenseProcedure = protectedProcedure
     z.object({
       month: z.number().min(0).max(11),
       year: z.number().min(2020),
-      showDeleted: z.boolean().optional().default(false),
     }),
   )
   .query(async ({ input, ctx }) => {
     const { db } = ctx;
     const userId = ctx.user.id;
-    const { year, month, showDeleted } = input;
+    const { year, month } = input;
     const filterStart = new Date(year, month, 1, 0, 0, 0);
     const filterEnd = endOfMonth(filterStart);
 
@@ -424,7 +423,6 @@ const listExpenseProcedure = protectedProcedure
       eq(expensesTable.userId, userId),
       gte(expensesTable.billedAt, filterStart),
       lt(expensesTable.billedAt, filterEnd),
-      !showDeleted ? eq(expensesTable.isDeleted, false) : undefined,
     ];
 
     const itemCount = count(expenseItemsTable.id);
@@ -441,10 +439,12 @@ const listExpenseProcedure = protectedProcedure
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
         account: {
+          id: accountsTable.id,
           name: accountsTable.name,
           isDeleted: accountsTable.isDeleted,
         },
         category: {
+          id: categoriesTable.id,
           name: categoriesTable.name,
           isDeleted: categoriesTable.isDeleted,
         },
