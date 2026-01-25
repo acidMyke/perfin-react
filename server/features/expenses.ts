@@ -449,6 +449,7 @@ const listExpenseProcedure = protectedProcedure
           isDeleted: categoriesTable.isDeleted,
         },
         createdAt: expensesTable.createdAt,
+        isDeleted: expensesTable.isDeleted,
       })
       .from(expensesTable)
       .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
@@ -477,6 +478,10 @@ const listExpenseProcedure = protectedProcedure
     const dailyExpenses: DayExpense[] = [];
     let monthTotal = 0;
     for (const expense of expenses) {
+      if (expense.isDeleted) {
+        continue;
+      }
+
       monthTotal += expense.amount;
       const fmtDate = dateFormat.format(expense.billedAt);
       const lastIdx = dailyExpenses.length - 1;
