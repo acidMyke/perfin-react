@@ -193,8 +193,8 @@ function RouteComponent() {
                   <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
                     Category: {expense.category?.name ?? 'Unspecified'}
                   </p>
-                  <ChevronRight className='col-start-3 row-start-1 self-center justify-self-end' />
-                  <p className='col-span-1 col-start-3 row-span-3 row-start-2 self-center text-right text-2xl'>
+                  <ChevronRight className='col-start-3 row-span-2 row-start-1 self-start justify-self-end' size={40} />
+                  <p className='col-span-1 col-start-3 row-span-2 row-start-3 self-end pr-2 pb-2 text-right text-xl'>
                     ${expense.amount.toFixed(2)}
                   </p>
                 </Link>
