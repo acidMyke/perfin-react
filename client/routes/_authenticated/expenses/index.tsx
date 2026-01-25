@@ -165,7 +165,7 @@ function RouteComponent() {
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expenses' />
       <MonthSelector />
-      <div className='mt-2 flex w-full flex-col gap-1'>
+      <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
         <h3 className='text-center text-2xl font-bold'>Month Total: {currencyNumberFormat.format(monthTotal)}</h3>
 
         {dailyExpenses.map(({ fmtDate, sum, expenses }, idx) => {
