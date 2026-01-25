@@ -461,8 +461,40 @@ const listExpenseProcedure = protectedProcedure
       .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
 
+    const dateFormat = new Intl.DateTimeFormat('en-SG', {
+      hour12: false,
+      weekday: 'short',
+      day: '2-digit',
+      month: 'short',
+      year: 'numeric',
+      timeZone: 'Asia/Singapore',
+    });
+    type DayExpense = {
+      fmtDate: string;
+      sum: number;
+      expenses: typeof expenses;
+    };
+    const dailyExpenses: DayExpense[] = [];
+    let monthTotal = 0;
+    for (const expense of expenses) {
+      monthTotal += expense.amount;
+      const fmtDate = dateFormat.format(expense.billedAt);
+      const lastIdx = dailyExpenses.length - 1;
+      if (lastIdx >= 0 && fmtDate === dailyExpenses[lastIdx].fmtDate) {
+        dailyExpenses[lastIdx].sum += expense.amount;
+        dailyExpenses[lastIdx].expenses.push(expense);
+      } else {
+        dailyExpenses.push({
+          fmtDate,
+          sum: expense.amount,
+          expenses: [expense],
+        });
+      }
+    }
+
     return {
-      expenses,
+      dailyExpenses,
+      monthTotal,
     };
   });
 

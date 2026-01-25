@@ -6,6 +6,7 @@ import { format, isBefore, isSameDay, isSameMonth, startOfMonth, subMonths } fro
 import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
+import { currencyNumberFormat } from '../../../utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -157,42 +158,47 @@ function RoutePendingComponent() {
 function RouteComponent() {
   const loaderDeps = Route.useLoaderDeps();
   const {
-    data: { expenses },
+    data: { dailyExpenses, monthTotal },
   } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
 
   return (
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expenses' />
       <MonthSelector />
-      <div className='flex w-full flex-col gap-1'>
-        {expenses.map((expense, idx) => {
-          const prev = idx != 0 ? expenses[idx - 1] : undefined;
-          const showDate = !prev || !isSameDay(prev.billedAt, expense.billedAt);
+      <div className='mt-2 flex w-full flex-col gap-1'>
+        <h3 className='text-center text-2xl font-bold'>Month Total: {currencyNumberFormat.format(monthTotal)}</h3>
 
+        {dailyExpenses.map(({ fmtDate, sum, expenses }, idx) => {
           return (
-            <Fragment key={expense.id}>
-              {showDate && <div className='divider divider-start'>{format(expense.billedAt, 'dd MMM yyyy')}</div>}
-              <Link
-                to='/expenses/$expenseId/view'
-                params={{ expenseId: expense.id }}
-                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
-              >
-                <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
-                <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
-                  At: {expense.shopDetail ?? 'Unspecified'}
-                </p>
+            <Fragment key={idx}>
+              <div className='flex'>
+                <div className='divider divider-start grow'>{fmtDate}</div>
+                <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(sum)}</span>
+              </div>
 
-                <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
-                  Account: {expense.account?.name ?? 'Unspecified'}
-                </p>
-                <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
-                  Category: {expense.category?.name ?? 'Unspecified'}
-                </p>
-                <ChevronRight className='col-start-3 row-start-1 self-center justify-self-end' />
-                <p className='col-span-1 col-start-3 row-span-2 row-start-2 text-right text-2xl'>
-                  ${expense.amount.toFixed(2)}
-                </p>
-              </Link>
+              {expenses.map(expense => (
+                <Link
+                  to='/expenses/$expenseId/view'
+                  params={{ expenseId: expense.id }}
+                  className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
+                >
+                  <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
+                  <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
+                    At: {expense.shopDetail ?? 'Unspecified'}
+                  </p>
+
+                  <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
+                    Account: {expense.account?.name ?? 'Unspecified'}
+                  </p>
+                  <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
+                    Category: {expense.category?.name ?? 'Unspecified'}
+                  </p>
+                  <ChevronRight className='col-start-3 row-start-1 self-center justify-self-end' />
+                  <p className='col-span-1 col-start-3 row-span-3 row-start-2 self-center text-right text-2xl'>
+                    ${expense.amount.toFixed(2)}
+                  </p>
+                </Link>
+              ))}
             </Fragment>
           );
         })}
