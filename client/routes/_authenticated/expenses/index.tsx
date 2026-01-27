@@ -8,7 +8,7 @@ import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 import { currencyNumberFormat } from '../../../utils';
 import { useMemo } from 'react';
-import { formOptions, useStore } from '@tanstack/react-form';
+import { formOptions } from '@tanstack/react-form';
 import { useAppForm } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
@@ -138,6 +138,7 @@ const expenseListOptions = formOptions({
 type ExpenseListOptions = (typeof expenseListOptions)['defaultValues'];
 
 function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expenses'], options: ExpenseListOptions) {
+  const { showDeleted } = options;
   const dateFormat = new Intl.DateTimeFormat('en-SG', {
     hour12: false,
     weekday: 'short',
@@ -146,35 +147,33 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
     year: 'numeric',
     timeZone: 'Asia/Singapore',
   });
+
   type GroupedExpense = {
-    fmtDate: string;
+    key: string;
     sum: number;
     expenses: typeof expenses;
   };
-  const expensesGroup: GroupedExpense[] = [];
+  const expensesGroup = new Map<string, GroupedExpense>();
   let monthTotal = 0;
   for (const expense of expenses) {
-    if (expense.isDeleted) {
+    if (!showDeleted && expense.isDeleted) {
       continue;
     }
 
-    monthTotal += expense.amount;
-    const fmtDate = dateFormat.format(new Date(expense.billedAt));
-    const lastIdx = expensesGroup.length - 1;
-    if (lastIdx >= 0 && fmtDate === expensesGroup[lastIdx].fmtDate) {
-      expensesGroup[lastIdx].sum += expense.amount;
-      expensesGroup[lastIdx].expenses.push(expense);
-    } else {
-      expensesGroup.push({
-        fmtDate,
-        sum: expense.amount,
-        expenses: [expense],
-      });
+    if (!expense.isDeleted) {
+      monthTotal += expense.amount;
     }
+    const key = dateFormat.format(new Date(expense.billedAt));
+    const value = expensesGroup.get(key) ?? { key, sum: 0, expenses: [] };
+    if (!expense.isDeleted) {
+      value.sum += expense.amount;
+    }
+    value.expenses.push(expense);
+    expensesGroup.set(key, value);
   }
 
   return {
-    expensesGroup,
+    expensesGroup: Array.from(expensesGroup.values()),
     monthTotal,
   };
 }
@@ -225,19 +224,21 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
   return (
     <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
       <h3 className='text-center text-2xl font-bold'>Month Total: {currencyNumberFormat.format(monthTotal)}</h3>
-      {expensesGroup.map(({ fmtDate, sum, expenses }, idx) => {
+      {expensesGroup.map(({ key, sum, expenses }) => {
         return (
-          <Fragment key={idx}>
-            <div className='flex'>
-              <div className='divider divider-start grow'>{fmtDate}</div>
+          <Fragment key={key}>
+            <div className='flex' key={key + '--'}>
+              <div className='divider divider-start grow'>{key}</div>
               <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(sum)}</span>
             </div>
 
             {expenses.map(expense => (
               <Link
+                key={expense.id}
                 to='/expenses/$expenseId/view'
                 params={{ expenseId: expense.id }}
-                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
+                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto data-[deleted=true]:line-through'
+                data-deleted={expense.isDeleted}
               >
                 <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
                 <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
