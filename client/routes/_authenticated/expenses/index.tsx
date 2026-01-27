@@ -1,5 +1,5 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { queryClient, trpc, type RouterInputs } from '../../../trpc';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
@@ -7,6 +7,9 @@ import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 import { currencyNumberFormat } from '../../../utils';
+import { useMemo } from 'react';
+import { formOptions, useStore } from '@tanstack/react-form';
+import { useAppForm } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -40,13 +43,7 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
   },
 });
 
-function MonthSelector({
-  showDeleted = undefined,
-  setShowDeleted = () => undefined,
-}: {
-  showDeleted?: boolean;
-  setShowDeleted?: (v: boolean) => any;
-}) {
+function MonthSelector() {
   const router = useRouter();
   const navigate = useNavigate({ from: '/expenses' });
   const loaderDeps = Route.useLoaderDeps();
@@ -114,17 +111,6 @@ function MonthSelector({
           </Link>
         );
       })}
-
-      <div key='showDelete' className='label ml-auto'>
-        <input
-          type='checkbox'
-          checked={showDeleted}
-          className='toggle checked:toggle-primary pointer-events-none'
-          onChange={() => setShowDeleted(!showDeleted)}
-          readOnly
-        />
-        Deleted
-      </div>
     </div>
   );
 }
@@ -139,54 +125,140 @@ function RoutePendingComponent() {
   );
 }
 
+const expenseListOptions = formOptions({
+  defaultValues: {
+    showDeleted: false,
+    hideNonDeleted: false,
+    accountIds: undefined as (string | null)[] | undefined,
+    categoryIds: undefined as (string | null)[] | undefined,
+    groupBy: 'day' as 'day' | 'account' | 'category',
+  },
+});
+
+type ExpenseListOptions = (typeof expenseListOptions)['defaultValues'];
+
+function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expenses'], options: ExpenseListOptions) {
+  const dateFormat = new Intl.DateTimeFormat('en-SG', {
+    hour12: false,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Singapore',
+  });
+  type GroupedExpense = {
+    fmtDate: string;
+    sum: number;
+    expenses: typeof expenses;
+  };
+  const expensesGroup: GroupedExpense[] = [];
+  let monthTotal = 0;
+  for (const expense of expenses) {
+    if (expense.isDeleted) {
+      continue;
+    }
+
+    monthTotal += expense.amount;
+    const fmtDate = dateFormat.format(new Date(expense.billedAt));
+    const lastIdx = expensesGroup.length - 1;
+    if (lastIdx >= 0 && fmtDate === expensesGroup[lastIdx].fmtDate) {
+      expensesGroup[lastIdx].sum += expense.amount;
+      expensesGroup[lastIdx].expenses.push(expense);
+    } else {
+      expensesGroup.push({
+        fmtDate,
+        sum: expense.amount,
+        expenses: [expense],
+      });
+    }
+  }
+
+  return {
+    expensesGroup,
+    monthTotal,
+  };
+}
+
 function RouteComponent() {
-  const loaderDeps = Route.useLoaderDeps();
-  const {
-    data: { dailyExpenses, monthTotal },
-  } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
+  const form = useAppForm({ ...expenseListOptions });
 
   return (
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expenses' />
-      <MonthSelector />
-      <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
-        <h3 className='text-center text-2xl font-bold'>Month Total: {currencyNumberFormat.format(monthTotal)}</h3>
+      <form.AppForm>
+        <div className='flex justify-between'>
+          <MonthSelector />
 
-        {dailyExpenses.map(({ fmtDate, sum, expenses }, idx) => {
-          return (
-            <Fragment key={idx}>
-              <div className='flex'>
-                <div className='divider divider-start grow'>{fmtDate}</div>
-                <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(sum)}</span>
-              </div>
+          <form.AppField name='showDeleted'>
+            {field => (
+              <label className='label ml-auto'>
+                <input
+                  type='checkbox'
+                  checked={field.state.value}
+                  className='toggle checked:toggle-primary'
+                  onChange={e => field.handleChange(e.currentTarget.checked)}
+                />
+                Deleted
+              </label>
+            )}
+          </form.AppField>
+        </div>
 
-              {expenses.map(expense => (
-                <Link
-                  to='/expenses/$expenseId/view'
-                  params={{ expenseId: expense.id }}
-                  className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
-                >
-                  <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
-                  <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
-                    At: {expense.shopDetail ?? 'Unspecified'}
-                  </p>
+        <form.Subscribe selector={state => [state.values]}>
+          {([listOptions]) => <ExpensesList listOptions={listOptions} />}
+        </form.Subscribe>
+      </form.AppForm>
+    </div>
+  );
+}
 
-                  <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
-                    Account: {expense.account?.name ?? 'Unspecified'}
-                  </p>
-                  <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
-                    Category: {expense.category?.name ?? 'Unspecified'}
-                  </p>
-                  <ChevronRight className='col-start-3 row-span-2 row-start-1 self-start justify-self-end' size={40} />
-                  <p className='col-span-1 col-start-3 row-span-2 row-start-3 self-end pr-2 pb-2 text-right text-xl'>
-                    ${expense.amount.toFixed(2)}
-                  </p>
-                </Link>
-              ))}
-            </Fragment>
-          );
-        })}
-      </div>
+function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
+  const loaderDeps = Route.useLoaderDeps();
+  const {
+    data: { expenses },
+  } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
+  const { expensesGroup, monthTotal } = useMemo(
+    () => FilterAndGroupExpenses(expenses, listOptions),
+    [expenses, listOptions],
+  );
+
+  return (
+    <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
+      <h3 className='text-center text-2xl font-bold'>Month Total: {currencyNumberFormat.format(monthTotal)}</h3>
+      {expensesGroup.map(({ fmtDate, sum, expenses }, idx) => {
+        return (
+          <Fragment key={idx}>
+            <div className='flex'>
+              <div className='divider divider-start grow'>{fmtDate}</div>
+              <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(sum)}</span>
+            </div>
+
+            {expenses.map(expense => (
+              <Link
+                to='/expenses/$expenseId/view'
+                params={{ expenseId: expense.id }}
+                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
+              >
+                <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
+                <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
+                  At: {expense.shopDetail ?? 'Unspecified'}
+                </p>
+
+                <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
+                  Account: {expense.account?.name ?? 'Unspecified'}
+                </p>
+                <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
+                  Category: {expense.category?.name ?? 'Unspecified'}
+                </p>
+                <ChevronRight className='col-start-3 row-span-2 row-start-1 self-start justify-self-end' size={40} />
+                <p className='col-span-1 col-start-3 row-span-2 row-start-3 self-end pr-2 pb-2 text-right text-xl'>
+                  ${expense.amount.toFixed(2)}
+                </p>
+              </Link>
+            ))}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

@@ -406,12 +406,7 @@ const saveExpenseProcedure = protectedProcedure
   });
 
 const listExpenseProcedure = protectedProcedure
-  .input(
-    z.object({
-      month: z.number().min(0).max(11),
-      year: z.number().min(2020),
-    }),
-  )
+  .input(z.object({ month: z.number().min(0).max(11), year: z.number().min(2020) }))
   .query(async ({ input, ctx }) => {
     const { db } = ctx;
     const userId = ctx.user.id;
@@ -462,45 +457,7 @@ const listExpenseProcedure = protectedProcedure
       .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
 
-    const dateFormat = new Intl.DateTimeFormat('en-SG', {
-      hour12: false,
-      weekday: 'short',
-      day: '2-digit',
-      month: 'short',
-      year: 'numeric',
-      timeZone: 'Asia/Singapore',
-    });
-    type DayExpense = {
-      fmtDate: string;
-      sum: number;
-      expenses: typeof expenses;
-    };
-    const dailyExpenses: DayExpense[] = [];
-    let monthTotal = 0;
-    for (const expense of expenses) {
-      if (expense.isDeleted) {
-        continue;
-      }
-
-      monthTotal += expense.amount;
-      const fmtDate = dateFormat.format(expense.billedAt);
-      const lastIdx = dailyExpenses.length - 1;
-      if (lastIdx >= 0 && fmtDate === dailyExpenses[lastIdx].fmtDate) {
-        dailyExpenses[lastIdx].sum += expense.amount;
-        dailyExpenses[lastIdx].expenses.push(expense);
-      } else {
-        dailyExpenses.push({
-          fmtDate,
-          sum: expense.amount,
-          expenses: [expense],
-        });
-      }
-    }
-
-    return {
-      dailyExpenses,
-      monthTotal,
-    };
+    return { expenses };
   });
 
 const getSuggestionsProcedure = protectedProcedure
