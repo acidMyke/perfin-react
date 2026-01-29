@@ -255,7 +255,10 @@ const verifyPasskeyAuthenticationResponseProcedure = publicProcedure
     }
 
     const { newCounter } = verification.authenticationInfo;
-    await db.update(passkeysTable).set({ counter: newCounter, lastUsedAt: new Date() });
+    await db
+      .update(passkeysTable)
+      .set({ counter: newCounter, lastUsedAt: new Date() })
+      .where(eq(passkeysTable.id, input.id));
 
     const [user] = await db
       .select({ name: usersTable.name, email: usersTable.email })
