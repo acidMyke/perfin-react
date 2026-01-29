@@ -155,12 +155,10 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
   type GroupedExpense = {
     key: string;
     subtotal: number;
-    preFilterSubtotal: number;
     expenses: typeof expenses;
   };
   const expensesGroup = new Map<string, GroupedExpense>();
   let monthTotal = 0;
-  let preFilterMonthTotal = 0;
   for (const expense of expenses) {
     if (!showDeleted && expense.isDeleted) {
       continue;
@@ -175,7 +173,7 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
     }
 
     const key = dateFormat.format(new Date(expense.billedAt));
-    const value = expensesGroup.get(key) ?? { key, subtotal: 0, preFilterSubtotal: 0, expenses: [] };
+    const value = expensesGroup.get(key) ?? { key, subtotal: 0, expenses: [] };
 
     if (expense.isDeleted) {
       if (showDeleted) {
@@ -185,8 +183,6 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
       continue;
     }
 
-    preFilterMonthTotal += expense.amount;
-    value.preFilterSubtotal += expense.amount;
     if (isShown) {
       monthTotal += expense.amount;
       value.subtotal += expense.amount;
@@ -198,7 +194,6 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
   return {
     expensesGroup: Array.from(expensesGroup.values()),
     monthTotal,
-    preFilterMonthTotal,
   };
 }
 
@@ -247,20 +242,12 @@ function RouteComponent() {
   );
 }
 
-function formatAmounts(amount: number, preFilterAmount: number) {
-  const formattedAmount = currencyNumberFormat.format(amount);
-  if (amount === preFilterAmount) {
-    return formattedAmount;
-  }
-  return `${formattedAmount}/${currencyNumberFormat.format(preFilterAmount)}`;
-}
-
 function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
   const loaderDeps = Route.useLoaderDeps();
   const {
     data: { expenses },
   } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
-  const { expensesGroup, monthTotal, preFilterMonthTotal } = useMemo(
+  const { expensesGroup, monthTotal } = useMemo(
     () => FilterAndGroupExpenses(expenses, listOptions),
     [expenses, listOptions],
   );
@@ -269,14 +256,14 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
     <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
       <h3 className='mb-2 flex justify-between text-center text-2xl font-bold'>
         <p>Month Total</p>
-        <p>{formatAmounts(monthTotal, preFilterMonthTotal)}</p>
+        <p>{currencyNumberFormat.format(monthTotal)}</p>
       </h3>
-      {expensesGroup.map(({ key, subtotal, preFilterSubtotal, expenses }) => {
+      {expensesGroup.map(({ key, subtotal, expenses }) => {
         return (
           <Fragment key={key}>
             <div className='flex' key={key + '--'}>
               <div className='divider divider-start grow'>{key}</div>
-              <span className='ml-3 text-2xl font-bold'>{formatAmounts(subtotal, preFilterSubtotal)}</span>
+              <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(subtotal)}</span>
             </div>
 
             {expenses.map(expense => (
