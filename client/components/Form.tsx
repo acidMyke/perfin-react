@@ -442,6 +442,68 @@ function ComboBox({
   );
 }
 
+type MultiSelectBoxProps = {
+  label: string;
+  options: Option[];
+  inputCn?: string;
+  containerCn?: string;
+};
+
+function MultiSelectBox({ label, options, inputCn, containerCn }: MultiSelectBoxProps) {
+  const [query, setQuery] = useState('');
+  const field = useFieldContext<Option[]>();
+
+  const displayOption = options.filter(opt => opt.label.toLowerCase().includes(query.toLowerCase()));
+
+  return (
+    <label className={cn('relative block', containerCn)}>
+      <span className='bg-base-100 absolute start-1 -top-1.5 z-10 translate-x-2 rounded-xs text-xs leading-none'>
+        {label}
+      </span>
+
+      <Combobox
+        value={field.state.value}
+        onChange={option => {
+          if (!option) return;
+          field.handleChange(option);
+        }}
+        immediate
+        multiple
+      >
+        <label className={cn('input input-primary w-full', inputCn)}>
+          <div className='flex max-w-full overflow-clip'>
+            {field.state.value.length > 0 &&
+              field.state.value.map(option => (
+                <div key={option.value} className='badge badge-soft badge-primary'>
+                  {option.label}
+                </div>
+              ))}
+          </div>
+          <ComboboxInput
+            className='min-w-1'
+            placeholder={field.state.value.length > 0 ? '' : 'All'}
+            onChange={event => setQuery(event.target.value)}
+            onBlur={() => field.handleBlur()}
+          />
+        </label>
+        <div className='relative'>
+          <ComboboxOptions className='bg-base-100 absolute z-20 mt-1 w-full overflow-auto rounded-lg border empty:invisible'>
+            {displayOption.map(opt => (
+              <ComboboxOption
+                key={opt.value}
+                value={opt}
+                className='data-focus:bg-base-200 data-selected:bg-base-300 cursor-pointer rounded px-3 py-2'
+              >
+                {opt.label}
+              </ComboboxOption>
+            ))}
+          </ComboboxOptions>
+        </div>
+      </Combobox>
+    </label>
+  );
+}
+
 type SubmitButtonProps = {
   label: string;
   doneLabel?: string;
@@ -533,5 +595,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     NumericInput,
     BooleanInput,
     OtpInput,
+    MultiSelectBox,
   },
 });

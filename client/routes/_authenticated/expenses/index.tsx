@@ -3,13 +3,14 @@ import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
-import { ChevronRight } from 'lucide-react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 import { currencyNumberFormat } from '../../../utils';
 import { useMemo } from 'react';
 import { formOptions } from '@tanstack/react-form';
-import { useAppForm } from '../../../components/Form';
+import { useAppForm, type Option } from '../../../components/Form';
+import { Combobox, ComboboxInput, ComboboxOptions } from '@headlessui/react';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -125,12 +126,13 @@ function RoutePendingComponent() {
   );
 }
 
+const unspecifiedOption = { label: '(Unspecified)', value: '--unspecified--' };
 const expenseListOptions = formOptions({
   defaultValues: {
     showDeleted: false,
     hideNonDeleted: false,
-    accountIds: undefined as (string | null)[] | undefined,
-    categoryIds: undefined as (string | null)[] | undefined,
+    accountIds: [] as Option[],
+    categoryIds: [] as Option[],
     groupBy: 'day' as 'day' | 'account' | 'category',
   },
 });
@@ -180,6 +182,9 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
 
 function RouteComponent() {
   const form = useAppForm({ ...expenseListOptions });
+  const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const accountOptions = useMemo(() => [unspecifiedOption, ...options.accountOptions], [options]);
+  const categoryOptions = useMemo(() => [unspecifiedOption, ...options.categoryOptions], [options]);
 
   return (
     <div className='mx-auto max-w-lg px-2'>
@@ -200,6 +205,15 @@ function RouteComponent() {
                 Deleted
               </label>
             )}
+          </form.AppField>
+        </div>
+
+        <div className='mt-4 flex flex-wrap gap-4'>
+          <form.AppField name='accountIds'>
+            {({ MultiSelectBox }) => <MultiSelectBox label='Account' options={accountOptions} containerCn='flex-1' />}
+          </form.AppField>
+          <form.AppField name='categoryIds'>
+            {({ MultiSelectBox }) => <MultiSelectBox label='Category' options={categoryOptions} containerCn='flex-1' />}
           </form.AppField>
         </div>
 
