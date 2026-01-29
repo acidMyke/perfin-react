@@ -3,14 +3,13 @@ import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
-import { ChevronDown, ChevronRight } from 'lucide-react';
+import { ChevronRight } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 import { currencyNumberFormat } from '../../../utils';
 import { useMemo } from 'react';
 import { formOptions } from '@tanstack/react-form';
 import { useAppForm, type Option } from '../../../components/Form';
-import { Combobox, ComboboxInput, ComboboxOptions } from '@headlessui/react';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -130,10 +129,8 @@ const unspecifiedOption = { label: '(Unspecified)', value: '--unspecified--' };
 const expenseListOptions = formOptions({
   defaultValues: {
     showDeleted: false,
-    hideNonDeleted: false,
     accountIds: [] as Option[],
     categoryIds: [] as Option[],
-    groupBy: 'day' as 'day' | 'account' | 'category',
   },
 });
 
