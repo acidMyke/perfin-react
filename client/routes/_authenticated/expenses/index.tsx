@@ -58,7 +58,7 @@ function MonthSelector() {
           <summary className='btn btn-sm'>Other</summary>
         )}
         <form
-          className='dropdown-content bg-base-200 rounded-b-box z-1 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
+          className='dropdown-content bg-base-200 rounded-b-box z-20 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
           onChange={e => {
             const formValues = new FormData(e.currentTarget);
             const month = formValues.get('month')?.toString();
