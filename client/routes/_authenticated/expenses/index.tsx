@@ -3,7 +3,7 @@ import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, SearchX } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
 import { currencyNumberFormat } from '../../../utils';
@@ -172,17 +172,11 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
     const key = dateFormat.format(new Date(expense.billedAt));
     const value = expensesGroup.get(key) ?? { key, subtotal: 0, expenses: [] };
 
-    if (expense.isDeleted) {
-      if (showDeleted) {
-        value.expenses.push(expense);
-        expensesGroup.set(key, value);
-      }
-      continue;
-    }
-
     if (isShown) {
-      monthTotal += expense.amount;
-      value.subtotal += expense.amount;
+      if (!expense.isDeleted) {
+        monthTotal += expense.amount;
+        value.subtotal += expense.amount;
+      }
       value.expenses.push(expense);
       expensesGroup.set(key, value);
     }
@@ -194,11 +188,36 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
   };
 }
 
+function NoRecordsFound({ dueToFilter }: { dueToFilter?: boolean }) {
+  return (
+    <div className='flex flex-col items-center justify-center py-16 text-center text-gray-500'>
+      <SearchX className='mb-4 h-10 w-10 text-gray-400' />
+      <p className='text-xl font-medium'>No records {dueToFilter || 'found'}</p>
+      {dueToFilter && <p className='text-md mt-1 text-gray-400'>Try adjusting your filters</p>}
+    </div>
+  );
+}
+
 function RouteComponent() {
+  const loaderDeps = Route.useLoaderDeps();
+  const {
+    data: { expenses },
+  } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
   const form = useAppForm({ ...expenseListOptions });
   const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const accountOptions = useMemo(() => [unspecifiedOption, ...options.accountOptions], [options]);
   const categoryOptions = useMemo(() => [unspecifiedOption, ...options.categoryOptions], [options]);
+
+  if (expenses.length == 0) {
+    return (
+      <div className='mx-auto max-w-lg px-2'>
+        <PageHeader title='Expenses' />
+        <MonthSelector />
+        <NoRecordsFound />
+      </div>
+    );
+  } else {
+  }
 
   return (
     <div className='mx-auto max-w-lg px-2'>
@@ -248,6 +267,10 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
     () => FilterAndGroupExpenses(expenses, listOptions),
     [expenses, listOptions],
   );
+
+  if (expensesGroup.length === 0) {
+    return <NoRecordsFound dueToFilter />;
+  }
 
   return (
     <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
