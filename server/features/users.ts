@@ -287,8 +287,9 @@ export const forgetPasswordProcedure = publicProcedure
     });
 
     if (existingUser) {
-      // const { email, name } = existingUser;
-      // const verifyEmail = forgotPasswordEmail(name)
+      const { email, name } = existingUser;
+      const { verificationUrl, code } = await createEmailCode(ctx, 'forget-pwd/verify', input.email);
+      await forgotPasswordEmail(name, verificationUrl.toString(), code).addRecipient(email, name).send(ctx);
     }
 
     return { success: true };

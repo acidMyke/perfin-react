@@ -276,7 +276,7 @@ The Team`;
   return new MailjetMessage().setSubject('Account Temporarily Locked').setText(text).setHtml(html);
 }
 
-type EmailCodePurpose = 'signup/verify' | 'signup/finalize';
+type EmailCodePurpose = 'signup/verify' | 'signup/finalize' | 'forget-pwd/verify' | 'forget-pwd/finalize';
 
 type CreateEmailCodeOption = {
   /**
