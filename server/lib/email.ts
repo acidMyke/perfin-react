@@ -137,6 +137,7 @@ Or by clicking the link below:
 
 ${verificationLink}
 
+This code and link will expire in 5 minutes.
 If you did not sign up, please ignore this email.
 
 Cheers,
@@ -157,7 +158,7 @@ The Team`;
       <p><a href="${verificationLink}" style="color: #007bff; text-decoration: none;">Verify Email</a></p>
       
       <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
-      
+      <p><em>Note: This code and link will expire in 5 minutes.</em></p>
       <p style="font-size: 12px; color: #888;">If you did not sign up, please ignore this email.</p>
       <p>Cheers,<br>The Team</p>
     </div>`;
@@ -200,23 +201,41 @@ The Team`;
   return new MailjetMessage().setSubject('New Sign-in Detected').setText(text).setHtml(html);
 }
 
-export function forgotPasswordEmail(username: string, resetLink: string) {
+export function forgotPasswordEmail(username: string, resetLink: string, otp: string) {
   const text = `Hi ${username},
 
-We received a request to reset your password. Click the link below to reset it:
+We received a request to reset your password. Please verify using the code below:
+
+Verification Code: ${otp}
+
+Or by clicking the link below:
 
 ${resetLink}
-
+This code and link will expire in 5 minutes.
 If you did not request this, please ignore this email.
 
 Cheers,
 The Team`;
 
-  const html = `<p>Hi ${username},</p>
-<p>We received a request to reset your password. Click the link below to reset it:</p>
-<p><a href="${resetLink}">Reset Password</a></p>
-<p>If you did not request this, please ignore this email.</p>
-<p>Cheers,<br>The Team</p>`;
+  const html = `
+    <div style="font-family: Arial, sans-serif; color: #333;">
+      <p>Hi ${username},</p>
+      <p>We received a request to reset your password. Please verify using the code below:</p>
+      
+      <div style="background-color: #f4f4f4; border-radius: 4px; padding: 15px; margin: 20px 0; text-align: center;">
+        <span style="font-size: 24px; font-weight: bold; letter-spacing: 5px; font-family: 'Courier New', monospace; color: #000;">
+          ${otp}
+        </span>
+      </div>
+
+      <p>Or by clicking the link below:</p>
+      <p><a href="${resetLink}" style="color: #007bff; text-decoration: none;">Verify Email</a></p>
+      
+      <hr style="border: none; border-top: 1px solid #eee; margin: 20px 0;">
+      <p><em>Note: This code and link will expire in 5 minutes.</em></p>
+      <p style="font-size: 12px; color: #888;">If you did not request this, please ignore this email.</p>
+      <p>Cheers,<br>The Team</p>
+    </div>`;
 
   return new MailjetMessage().setSubject('Password Reset Request').setText(text).setHtml(html);
 }

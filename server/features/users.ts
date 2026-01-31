@@ -7,7 +7,13 @@ import { sleep } from '../lib/utils';
 import sessions from '../lib/sessions';
 import { addSeconds, isBefore } from 'date-fns';
 import z from 'zod';
-import { createEmailCode, invalidateEmailCode, signUpVerificationEmail, verifyEmailCode } from '../lib/email';
+import {
+  createEmailCode,
+  forgotPasswordEmail,
+  invalidateEmailCode,
+  signUpVerificationEmail,
+  verifyEmailCode,
+} from '../lib/email';
 
 function generateSalt(length = 16) {
   return randomBytes(length);
@@ -271,6 +277,22 @@ const signUpFinalizeProcedure = publicProcedure
 const signOutProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   await sessions.revoke(ctx);
 });
+
+export const forgetPasswordProcedure = publicProcedure
+  .input(z.object({ email: z.email() }))
+  .mutation(async ({ ctx, input }) => {
+    const { db } = ctx;
+    const existingUser = await db.query.usersTable.findFirst({
+      where: { email: input.email },
+    });
+
+    if (existingUser) {
+      // const { email, name } = existingUser;
+      // const verifyEmail = forgotPasswordEmail(name)
+    }
+
+    return { success: true };
+  });
 
 export const whoamiProcedure = publicProcedure.query(async ({ ctx }) => {
   const { isAuthenticated, user, session, isAllowElevated } = ctx;
