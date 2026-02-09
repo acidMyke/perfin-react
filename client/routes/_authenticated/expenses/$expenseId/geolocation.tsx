@@ -55,7 +55,7 @@ function RouteComponent() {
             lat: form.getFieldValue('geolocation.latitude') ?? SG_CENTER.lat,
             lng: form.getFieldValue('geolocation.longitude') ?? SG_CENTER.lng,
           }}
-          defaultZoom={12}
+          defaultZoom={14}
           onClick={e => {
             const latLng = e.detail.latLng;
             if (!latLng || readOnly) return;
