@@ -1,11 +1,15 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { queryClient, trpc, type RouterInputs } from '../../../trpc';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { format, isBefore, isSameDay, isSameMonth, startOfMonth, subMonths } from 'date-fns';
-import { ChevronRight } from 'lucide-react';
+import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
+import { ChevronRight, SearchX } from 'lucide-react';
 import { abbreviatedMonthValues } from '../../../constants';
 import { PageHeader } from '../../../components/PageHeader';
+import { currencyNumberFormat } from '../../../utils';
+import { useMemo } from 'react';
+import { formOptions } from '@tanstack/react-form';
+import { useAppForm, type Option } from '../../../components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -14,7 +18,6 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     return {
       month: search['month'] as number | undefined,
       year: search['year'] as number | undefined,
-      showDeleted: search['showDeleted'] as boolean | undefined,
     } as Partial<RouterInputs['expense']['list']> | undefined;
   },
   loaderDeps: ({ search }) => {
@@ -22,22 +25,21 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
     const deps: RouterInputs['expense']['list'] = {
       month: now.getMonth(),
       year: now.getFullYear(),
-      showDeleted: false,
     };
     if (search) {
       if (typeof search['month'] === 'number' && typeof search['year'] === 'number') {
         deps.month = search['month'] as number;
         deps.year = search['year'] as number;
       }
-      if (typeof search['showDeleted'] && typeof search['showDeleted'] === 'boolean') {
-        deps.showDeleted = search['showDeleted'];
-      }
     }
 
     return deps;
   },
   loader: async ({ deps }) => {
-    await queryClient.ensureQueryData(trpc.expense.list.queryOptions(deps));
+    await Promise.all([
+      queryClient.ensureQueryData(trpc.expense.loadOptions.queryOptions()),
+      queryClient.ensureQueryData(trpc.expense.list.queryOptions(deps)),
+    ]);
   },
 });
 
@@ -46,7 +48,6 @@ function MonthSelector() {
   const navigate = useNavigate({ from: '/expenses' });
   const loaderDeps = Route.useLoaderDeps();
   const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
-  const showDeleted = loaderDeps.showDeleted || undefined;
 
   return (
     <div className='flex flex-row gap-4'>
@@ -57,16 +58,13 @@ function MonthSelector() {
           <summary className='btn btn-sm'>Other</summary>
         )}
         <form
-          className='dropdown-content bg-base-200 rounded-b-box z-1 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
+          className='dropdown-content bg-base-200 rounded-b-box z-20 flex flex-row flex-nowrap gap-2 p-2 shadow-lg'
           onChange={e => {
             const formValues = new FormData(e.currentTarget);
             const month = formValues.get('month')?.toString();
             const year = formValues.get('year')?.toString();
             if (month && year) {
-              router.preloadRoute({
-                to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year), showDeleted },
-              });
+              router.preloadRoute({ to: '/expenses', search: { month: parseInt(month), year: parseInt(year) } });
             }
           }}
           onSubmit={e => {
@@ -75,10 +73,7 @@ function MonthSelector() {
             const month = formValues.get('month')?.toString();
             const year = formValues.get('year')?.toString();
             if (month && year) {
-              navigate({
-                to: '/expenses',
-                search: { month: parseInt(month), year: parseInt(year), showDeleted },
-              });
+              navigate({ to: '/expenses', search: { month: parseInt(month), year: parseInt(year) } });
               e.currentTarget.parentElement?.removeAttribute('open');
             }
           }}
@@ -109,37 +104,13 @@ function MonthSelector() {
           <Link
             key={i}
             to='/expenses'
-            search={{
-              month: date.getMonth(),
-              year: date.getFullYear(),
-              showDeleted,
-            }}
+            search={{ month: date.getMonth(), year: date.getFullYear() }}
             className={`btn btn-sm ${isSelected ? 'btn-primary' : ''}`}
           >
             {format(date, 'MMM yy')}
           </Link>
         );
       })}
-
-      <Link
-        key='showDelete'
-        to='/expenses'
-        search={{
-          year: loaderDeps.year,
-          month: loaderDeps.month,
-          showDeleted: !showDeleted || undefined,
-        }}
-        className='label ml-auto'
-        preload='intent'
-      >
-        <input
-          type='checkbox'
-          checked={loaderDeps.showDeleted}
-          className='toggle checked:toggle-primary pointer-events-none'
-          readOnly
-        />
-        Deleted
-      </Link>
     </div>
   );
 }
@@ -154,28 +125,174 @@ function RoutePendingComponent() {
   );
 }
 
+const unspecifiedOption = { label: '(Unspecified)', value: '--unspecified--' };
+const expenseListOptions = formOptions({
+  defaultValues: {
+    showDeleted: false,
+    accountIds: [] as Option[],
+    categoryIds: [] as Option[],
+  },
+});
+
+type ExpenseListOptions = (typeof expenseListOptions)['defaultValues'];
+
+function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expenses'], options: ExpenseListOptions) {
+  const { showDeleted, accountIds, categoryIds } = options;
+  const accountIdSet = new Set(accountIds.map(({ value }) => value));
+  const categoryIdSet = new Set(categoryIds.map(({ value }) => value));
+  const dateFormat = new Intl.DateTimeFormat('en-SG', {
+    hour12: false,
+    weekday: 'short',
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    timeZone: 'Asia/Singapore',
+  });
+
+  type GroupedExpense = {
+    key: string;
+    subtotal: number;
+    expenses: typeof expenses;
+  };
+  const expensesGroup = new Map<string, GroupedExpense>();
+  let monthTotal = 0;
+  for (const expense of expenses) {
+    if (!showDeleted && expense.isDeleted) {
+      continue;
+    }
+
+    let isShown = true;
+    if (accountIdSet.size > 0) {
+      isShown &&= accountIdSet.has(expense.account?.id ?? unspecifiedOption.value);
+    }
+    if (categoryIdSet.size > 0) {
+      isShown &&= categoryIdSet.has(expense.category?.id ?? unspecifiedOption.value);
+    }
+
+    const key = dateFormat.format(new Date(expense.billedAt));
+    const value = expensesGroup.get(key) ?? { key, subtotal: 0, expenses: [] };
+
+    if (isShown) {
+      if (!expense.isDeleted) {
+        monthTotal += expense.amount;
+        value.subtotal += expense.amount;
+      }
+      value.expenses.push(expense);
+      expensesGroup.set(key, value);
+    }
+  }
+
+  return {
+    expensesGroup: Array.from(expensesGroup.values()),
+    monthTotal,
+  };
+}
+
+function NoRecordsFound({ dueToFilter }: { dueToFilter?: boolean }) {
+  return (
+    <div className='flex flex-col items-center justify-center py-16 text-center text-gray-500'>
+      <SearchX className='mb-4 h-10 w-10 text-gray-400' />
+      <p className='text-xl font-medium'>No records {dueToFilter || 'found'}</p>
+      {dueToFilter && <p className='text-md mt-1 text-gray-400'>Try adjusting your filters</p>}
+    </div>
+  );
+}
+
 function RouteComponent() {
   const loaderDeps = Route.useLoaderDeps();
   const {
     data: { expenses },
   } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
+  const form = useAppForm({ ...expenseListOptions });
+  const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const accountOptions = useMemo(() => [unspecifiedOption, ...options.accountOptions], [options]);
+  const categoryOptions = useMemo(() => [unspecifiedOption, ...options.categoryOptions], [options]);
+
+  if (expenses.length == 0) {
+    return (
+      <div className='mx-auto max-w-lg px-2'>
+        <PageHeader title='Expenses' />
+        <MonthSelector />
+        <NoRecordsFound />
+      </div>
+    );
+  } else {
+  }
 
   return (
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expenses' />
-      <MonthSelector />
-      <div className='flex w-full flex-col gap-1'>
-        {expenses.map((expense, idx) => {
-          const prev = idx != 0 ? expenses[idx - 1] : undefined;
-          const showDate = !prev || !isSameDay(prev.billedAt, expense.billedAt);
+      <form.AppForm>
+        <div className='flex justify-between'>
+          <MonthSelector />
 
-          return (
-            <Fragment key={expense.id}>
-              {showDate && <div className='divider divider-start'>{format(expense.billedAt, 'dd MMM yyyy')}</div>}
+          <form.AppField name='showDeleted'>
+            {field => (
+              <label className='label ml-auto'>
+                <input
+                  type='checkbox'
+                  checked={field.state.value}
+                  className='toggle checked:toggle-primary'
+                  onChange={e => field.handleChange(e.currentTarget.checked)}
+                />
+                Deleted
+              </label>
+            )}
+          </form.AppField>
+        </div>
+
+        <div className='mt-4 flex flex-wrap gap-4'>
+          <form.AppField name='accountIds'>
+            {({ MultiSelectBox }) => <MultiSelectBox label='Account' options={accountOptions} containerCn='flex-1' />}
+          </form.AppField>
+          <form.AppField name='categoryIds'>
+            {({ MultiSelectBox }) => <MultiSelectBox label='Category' options={categoryOptions} containerCn='flex-1' />}
+          </form.AppField>
+        </div>
+
+        <form.Subscribe selector={state => [state.values]}>
+          {([listOptions]) => <ExpensesList listOptions={listOptions} />}
+        </form.Subscribe>
+      </form.AppForm>
+    </div>
+  );
+}
+
+function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
+  const loaderDeps = Route.useLoaderDeps();
+  const {
+    data: { expenses },
+  } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
+  const { expensesGroup, monthTotal } = useMemo(
+    () => FilterAndGroupExpenses(expenses, listOptions),
+    [expenses, listOptions],
+  );
+
+  if (expensesGroup.length === 0) {
+    return <NoRecordsFound dueToFilter />;
+  }
+
+  return (
+    <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
+      <h3 className='mb-2 flex justify-between text-center text-2xl font-bold'>
+        <p>Month Total</p>
+        <p>{currencyNumberFormat.format(monthTotal)}</p>
+      </h3>
+      {expensesGroup.map(({ key, subtotal, expenses }) => {
+        return (
+          <Fragment key={key}>
+            <div className='flex' key={key + '--'}>
+              <div className='divider divider-start grow'>{key}</div>
+              <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(subtotal)}</span>
+            </div>
+
+            {expenses.map(expense => (
               <Link
+                key={expense.id}
                 to='/expenses/$expenseId/view'
                 params={{ expenseId: expense.id }}
-                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto'
+                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto data-[deleted=true]:line-through'
+                data-deleted={expense.isDeleted}
               >
                 <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
                 <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
@@ -188,15 +305,15 @@ function RouteComponent() {
                 <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
                   Category: {expense.category?.name ?? 'Unspecified'}
                 </p>
-                <ChevronRight className='col-start-3 row-start-1 self-center justify-self-end' />
-                <p className='col-span-1 col-start-3 row-span-2 row-start-2 text-right text-2xl'>
+                <ChevronRight className='col-start-3 row-span-2 row-start-1 self-start justify-self-end' size={40} />
+                <p className='col-span-1 col-start-3 row-span-2 row-start-3 self-end pr-2 pb-2 text-right text-xl'>
                   ${expense.amount.toFixed(2)}
                 </p>
               </Link>
-            </Fragment>
-          );
-        })}
-      </div>
+            ))}
+          </Fragment>
+        );
+      })}
     </div>
   );
 }

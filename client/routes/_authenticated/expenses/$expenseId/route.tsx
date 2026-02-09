@@ -145,6 +145,7 @@ function RouteComponent() {
 
   useEffect(() => {
     if (isCreate) {
+      form.setFieldValue('billedAt', new Date());
       setCurrentLocation(form);
     }
   }, [isCreate]);
