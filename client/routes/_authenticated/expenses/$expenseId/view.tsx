@@ -49,7 +49,7 @@ function RouteComponent() {
       <span>Amount</span>
 
       {items.map(item => {
-        const { grossAmount, amount, minRefundCents } = calculateExpenseItem(item, expense);
+        const { grossAmount, amount, minRefundCents, grossAmountCents } = calculateExpenseItem(item, expense);
         return (
           <div
             key={item.id}
@@ -64,7 +64,7 @@ function RouteComponent() {
                 <span className='text-secondary ml-2 text-sm'>
                   {(item.expenseRefund.actualAmountCents == null
                     ? 'Pending refund '
-                    : minRefundCents < grossAmount
+                    : minRefundCents < grossAmountCents
                       ? 'Partially refunded '
                       : 'Fully refunded ') + `(${item.expenseRefund.source})`}
                 </span>

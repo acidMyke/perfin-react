@@ -11,8 +11,8 @@ import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
 import { nanoid } from 'nanoid';
 
-const DAYS_TOKEN_EXPIRE = 4;
-export function generateTokenParam() {
+export function generateTokenParam(env: Env) {
+  const DAYS_TOKEN_EXPIRE = env.TOKEN_EXPIRE_DAYS;
   return {
     maxAge: DAYS_TOKEN_EXPIRE * 24 * 60 * 60,
     expiresAt: addDays(new Date(), DAYS_TOKEN_EXPIRE),
@@ -45,7 +45,7 @@ async function createAndSaveToken(
   userId: string,
   loginAttemptId: string,
 ) {
-  const tokenParam = generateTokenParam();
+  const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
 
   await db.insert(sessionsTable).values({
@@ -136,7 +136,7 @@ async function check(
   const csrfToken = reqCookie['csrf'];
 
   if (!csrfToken) {
-    const { expiresAt, maxAge, token } = generateTokenParam();
+    const { expiresAt, maxAge, token } = generateTokenParam(env);
     resHeaders.setCookie('csrf', token, {
       secure: !import.meta.env.DEV,
       path: '/',
