@@ -12,10 +12,11 @@ import { parse } from 'date-fns/parse';
 import { FieldError } from '../../../../components/FieldError';
 import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
 import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
+import { useCallback } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -98,12 +99,36 @@ const ItemsDetailsSubForm = withForm({
     const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
+    const onRemoveClick = useCallback(
+      (itemIndex: number, length: number) => {
+        if (length <= 3) {
+          form.setFieldValue('ui.isItemsSubpage', false);
+        }
+
+        form.removeFieldValue('items', itemIndex);
+      },
+      [form],
+    );
+    const onAddClick = useCallback(
+      (length: number) => {
+        form.pushFieldValue('items', defaultExpenseItem());
+        if (length >= 2) {
+          form.setFieldValue('ui.isItemsSubpage', true);
+
+          navigate({
+            to: '/expenses/$expenseId/items/$indexStr',
+            params: { expenseId, indexStr: length.toString() },
+          });
+        }
+      },
+      [form],
+    );
 
     return (
       <form.Field name='items' mode='array'>
         {field =>
           isItemsSubpage ? (
-            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
+            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 items-center gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
               {field.state.value.map((item, itemIndex) => {
                 const { name, quantity, expenseRefund } = item;
                 const { grossAmount } = calculateExpenseItem(item, {
@@ -133,9 +158,26 @@ const ItemsDetailsSubForm = withForm({
                     >
                       Edit
                     </Link>
+
+                    <button
+                      className='btn-link btn btn-sm col-start-5 p-0'
+                      onClick={() => onRemoveClick(itemIndex, field.state.value.length)}
+                    >
+                      <X />
+                    </button>
                   </>
                 );
               })}
+
+              <li key='Create' className='col-start-1 col-end-4'>
+                <button
+                  className='btn-soft btn-primary btn w-full justify-start'
+                  onClick={() => onAddClick(field.state.value.length)}
+                >
+                  <Plus />
+                  Add item
+                </button>
+              </li>
             </ul>
           ) : (
             <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
@@ -146,13 +188,7 @@ const ItemsDetailsSubForm = withForm({
                     form={form}
                     fields={`items[${itemIndex}]`}
                     disableRemoveButton={field.state.value.length < 2}
-                    onRemoveClick={() => {
-                      if (field.state.value.length <= 3) {
-                        form.setFieldValue('ui.isItemsSubpage', false);
-                      }
-
-                      field.removeValue(itemIndex);
-                    }}
+                    onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
                     itemIndex={itemIndex}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
@@ -162,18 +198,7 @@ const ItemsDetailsSubForm = withForm({
               <li key='Create'>
                 <button
                   className='btn-soft btn-primary btn w-2/3 justify-start'
-                  onClick={() => {
-                    if (field.state.value.length >= 2) {
-                      form.setFieldValue('ui.isItemsSubpage', true);
-                    }
-                    field.pushValue(defaultExpenseItem());
-                    if (isItemsSubpage) {
-                      navigate({
-                        to: '/expenses/$expenseId/items/$indexStr',
-                        params: { expenseId, indexStr: (field.state.value.length - 1).toString() },
-                      });
-                    }
-                  }}
+                  onClick={() => onAddClick(field.state.value.length)}
                 >
                   <Plus />
                   Add item
