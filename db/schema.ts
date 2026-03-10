@@ -154,11 +154,11 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
-    /** @deprecated moved to merchants.boxId*/
+    /** @deprecated use merchantsTable.boxId instead*/
     boxId: integer(),
-    /** @deprecated moved to merchants.name*/
+    /** @deprecated use merchantsTable.name instead*/
     shopName: citext(),
-    /** @deprecated moved to merchants.mall*/
+    /** @deprecated use merchantsTable.mall instead*/
     shopMall: citext(),
     additionalServiceChargePercent: integer(),
     isGstExcluded: boolean(),
@@ -210,6 +210,7 @@ export const expenseItemsTable = sqliteTable(
   t => [index('idx_expense_items_expense_id').on(t.expenseId), index('idx_expense_items_name').on(t.name)],
 );
 
+/** @deprecated use expenseAdjustmentsTable instead*/
 export const expenseRefundsTable = sqliteTable(
   'expense_refunds',
   {
@@ -229,6 +230,21 @@ export const expenseRefundsTable = sqliteTable(
     index('idx_expense_refund_expense_item_id').on(t.expenseItemId),
     index('idx_expense_refund_source').on(t.source),
   ],
+);
+
+export const expenseAdjustmentsTable = sqliteTable(
+  'expense_adjustments',
+  {
+    ...baseColumns(),
+    sequence: integer().notNull(),
+    name: citext().notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    rateBps: integer('rate_bps'),
+    expenseId: idColumn(),
+    expenseItemId: nullableIdColumn(),
+    isDeleted: boolean().notNull().default(false),
+  },
+  t => [index('idx_expense_adjustments_expense_id').on(t.expenseId)],
 );
 
 export const searchTable = sqliteTable(
