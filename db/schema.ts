@@ -35,6 +35,11 @@ const baseColumns = () => ({
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
+export const systemFlagTable = sqliteTable('system_flag', {
+  key: text().notNull().primaryKey(),
+  value: integer().notNull().default(-1),
+});
+
 export const emailCodesTable = sqliteTable(
   'email_codes',
   {
@@ -160,7 +165,9 @@ export const expensesTable = sqliteTable(
     shopName: citext(),
     /** @deprecated use merchantsTable.mall instead*/
     shopMall: citext(),
+    /** @deprecated denormalized to expenseAdjustmentsTable*/
     additionalServiceChargePercent: integer(),
+    /** @deprecated denormalized to expenseAdjustmentsTable*/
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
@@ -257,10 +264,12 @@ export const searchTable = sqliteTable(
     usageCount: integer().default(1),
     context: citext().notNull().default(''),
     merchantId: nullableIdColumn(),
+    referenceIds: text({ mode: 'json' }).$type<string[]>().default([]),
   },
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
-    index('idx_search_chunk').on(t.userId, t.type, t.chunk),
-    index('idx_search_context').on(t.userId, t.type, t.context),
+    index('idx_search_chunk').on(t.userId, t.chunk),
+    index('idx_search_text').on(t.userId, t.text),
+    index('idx_search_type_context').on(t.userId, t.type, t.context),
   ],
 );
