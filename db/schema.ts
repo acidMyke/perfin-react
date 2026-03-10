@@ -149,27 +149,47 @@ export const expensesTable = sqliteTable(
     userId: idColumn(),
     accountId: nullableIdColumn(),
     categoryId: nullableIdColumn(),
+    merchantId: nullableIdColumn(),
     updatedBy: idColumn(),
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
+    /** @deprecated moved to merchants.boxId*/
     boxId: integer(),
+    /** @deprecated moved to merchants.name*/
     shopName: citext(),
+    /** @deprecated moved to merchants.mall*/
     shopMall: citext(),
     additionalServiceChargePercent: integer(),
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
+  t => [index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted)],
+);
+
+export const merchantsTable = sqliteTable(
+  'merchants',
+  {
+    ...baseColumns(),
+    userId: idColumn(),
+    name: citext().notNull(),
+    mall: citext(),
+    url: text(),
+    type: text().$type<'online' | 'physical'>(),
+    typicalAccountId: nullableIdColumn(),
+    typicalCategoryId: nullableIdColumn(),
+    latitude: real(),
+    longitude: real(),
+    geoId: integer(),
+    isDeleted: boolean().notNull().default(false),
+  },
   t => [
-    index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
-    index('idx_expenses_user_box_id_active')
-      .on(t.userId, t.boxId)
+    index('idx_merchants_user_box').on(t.userId, t.geoId),
+    index('idx_merchants_user_shopName_active')
+      .on(t.userId, t.name)
       .where(sql`${t.isDeleted} = 0`),
-    index('idx_expenses_user_shopName_active')
-      .on(t.userId, t.billedAt, t.shopName)
-      .where(sql`${t.isDeleted} = 0`),
-    index('idx_expenses_user_shopMall_active')
-      .on(t.userId, t.billedAt, t.shopMall)
+    index('idx_merchants_user_shopMall_active')
+      .on(t.userId, t.mall)
       .where(sql`${t.isDeleted} = 0`),
   ],
 );
@@ -220,6 +240,7 @@ export const searchTable = sqliteTable(
     userId: idColumn(),
     usageCount: integer().default(1),
     context: citext().notNull().default(''),
+    merchantId: nullableIdColumn(),
   },
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
