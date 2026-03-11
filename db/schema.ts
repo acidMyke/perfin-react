@@ -165,9 +165,9 @@ export const expensesTable = sqliteTable(
     shopName: citext(),
     /** @deprecated use merchantsTable.mall instead*/
     shopMall: citext(),
-    /** @deprecated denormalized to expenseAdjustmentsTable*/
+    /** @deprecated normalized to expenseAdjustmentsTable*/
     additionalServiceChargePercent: integer(),
-    /** @deprecated denormalized to expenseAdjustmentsTable*/
+    /** @deprecated normalized to expenseAdjustmentsTable*/
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
@@ -210,7 +210,9 @@ export const expenseItemsTable = sqliteTable(
     quantity: integer().default(1).notNull(),
     priceCents: centsColumn(),
     expenseId: idColumn(),
+    /** @deprecated unused, will be deleted */
     categoryId: nullableIdColumn(),
+    /** @deprecated refund is deprecated */
     expenseRefundId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
   },
@@ -268,8 +270,8 @@ export const searchTable = sqliteTable(
   },
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
-    index('idx_search_chunk').on(t.userId, t.chunk),
-    index('idx_search_text').on(t.userId, t.text),
-    index('idx_search_type_context').on(t.userId, t.type, t.context),
+    index('idx_search_user_chunk').on(t.userId, t.chunk),
+    index('idx_search_user_text').on(t.userId, t.text),
+    index('idx_search_user_type_context').on(t.userId, t.type, t.context),
   ],
 );
