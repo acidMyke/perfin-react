@@ -4,7 +4,6 @@ import {
   categoriesTable,
   expenseAdjustmentsTable,
   expenseItemsTable,
-  expenseRefundsTable,
   expensesTable,
   generateId,
   searchTable,
@@ -13,7 +12,7 @@ import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInAr
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
+import { calculateExpense } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTrigrams } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
@@ -113,6 +112,7 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().nullish(),
       shopMall: z.string().nullish(),
+      type: z.enum(['online', 'physical']),
       additionalServiceChargePercent: z.number().nullable().default(null),
       isGstExcluded: z.boolean().nullable().default(false),
       items: z.array(
@@ -122,45 +122,20 @@ const saveExpenseProcedure = protectedProcedure
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
-          expenseRefundId: z.string().optional(),
-          expenseRefund: z
-            .object({
-              id: z.string(),
-              source: z.string(),
-              expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
-              actualAmountCents: z
-                .int()
-                .min(0, { error: 'Must be non-negative value' })
-                .nullish()
-                .transform(v => v ?? null),
-              confirmedAt: z.iso
-                .datetime({ error: 'Invalid date time' })
-                .nullish()
-                .transform(val => (val ? parseISO(val) : null)),
-            })
-            .nullable(),
         }),
       ),
-      refunds: z
+      adjustments: z
         .array(
           z.object({
             id: z.string(),
-            source: z.string(),
-            expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
-            actualAmountCents: z
-              .int()
-              .min(0, { error: 'Must be non-negative value' })
-              .nullish()
-              .transform(v => v ?? null),
-            confirmedAt: z.iso
-              .datetime({ error: 'Invalid date time' })
-              .nullish()
-              .transform(val => (val ? parseISO(val) : null)),
-            isDeleted: z.boolean().default(false).optional(),
+            name: z.string(),
+            amountCents: z.int().default(0),
+            rateBps: z.int().optional(),
             expenseItemId: z
               .string()
               .nullish()
-              .transform(v => v ?? null),
+              .transform(v => v ?? undefined),
+            isDeleted: z.boolean().default(false).optional(),
           }),
         )
         .default([]),
@@ -200,9 +175,9 @@ const saveExpenseProcedure = protectedProcedure
         .where(eq(expenseItemsTable.expenseId, input.expenseId))
         .union(
           db
-            .select({ text: expenseRefundsTable.source })
-            .from(expenseRefundsTable)
-            .where(eq(expenseRefundsTable.expenseId, input.expenseId)),
+            .select({ text: expenseAdjustmentsTable.name })
+            .from(expenseAdjustmentsTable)
+            .where(eq(expenseAdjustmentsTable.expenseId, input.expenseId)),
         );
 
       for (const { text } of otherExistingSearchables) {
@@ -225,7 +200,6 @@ const saveExpenseProcedure = protectedProcedure
       searchables.push({ type: 'shopMall', text: input.shopMall });
     }
 
-    const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
     const activeIds: string[] = [];
 
     for (const item of input.items) {
@@ -235,33 +209,18 @@ const saveExpenseProcedure = protectedProcedure
       activeIds.push(item.id);
       if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
         searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
-      }
-      if (item.expenseRefund) {
-        if (item.expenseRefund.id === 'create') {
-          item.expenseRefund.id = generateId();
-        }
-        item.expenseRefundId = item.expenseRefund.id;
-
-        const { grossAmountCents } = calculateExpenseItem(item, input);
-
-        refunds.push({
-          ...item.expenseRefund,
-          expectedAmountCents: grossAmountCents,
-          expenseItemId: item.id,
-        });
+        existingSearchableSet.add(item.name);
       }
     }
 
-    for (const refund of refunds) {
-      if (refund.id === 'create') {
-        refund.id = generateId();
+    for (const adj of input.adjustments) {
+      if (adj.id === 'create') {
+        adj.id = generateId();
       }
-      activeIds.push(refund.id!);
-      if (!existingSearchableSet.has(refund.source)) {
-        searchables.push({ type: 'refundSource', text: refund.source });
-      }
-      if (refund.actualAmountCents && !refund.confirmedAt) {
-        refund.confirmedAt = new Date();
+      activeIds.push(adj.id!);
+      if (!existingSearchableSet.has(adj.name)) {
+        searchables.push({ type: 'adjustmentName', text: adj.name, context: input.shopName });
+        existingSearchableSet.add(adj.name);
       }
     }
 
@@ -284,7 +243,7 @@ const saveExpenseProcedure = protectedProcedure
     const accountId = input.account?.value ?? null;
     const categoryId = input.category?.value ?? null;
 
-    const { amountCents } = calculateExpense(input);
+    const { grossAmountCents } = calculateExpense(input);
     const [boxId] =
       input.latitude && input.longitude
         ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
@@ -295,7 +254,7 @@ const saveExpenseProcedure = protectedProcedure
         .insert(expensesTable)
         .values({
           id: input.expenseId,
-          amountCents,
+          amountCents: grossAmountCents,
           billedAt: input.billedAt,
           userId: userId,
           accountId: accountId,
@@ -321,9 +280,11 @@ const saveExpenseProcedure = protectedProcedure
         .insert(expenseItemsTable)
         .values(
           input.items.map((item, idx) => ({
+            userId,
             ...item,
             sequence: idx,
             expenseId: input.expenseId,
+            shopName: input.shopName ?? '',
           })),
         )
         .onConflictDoUpdate({
@@ -339,29 +300,34 @@ const saveExpenseProcedure = protectedProcedure
         .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds))),
     );
 
-    if (refunds.length > 0) {
-      batchItems.push(
-        db
-          .insert(expenseRefundsTable)
-          .values(
-            refunds.map((refund, idx) => ({
-              ...refund,
-              sequence: idx,
-              expenseId: input.expenseId,
-            })),
-          )
-          .onConflictDoUpdate({
-            target: expenseRefundsTable.id,
-            set: excludedAll(expenseRefundsTable),
-          }),
-      );
-    }
+    batchItems.push(
+      db
+        .insert(expenseAdjustmentsTable)
+        .values(
+          input.adjustments.map((adj, idx) => ({
+            userId,
+            ...adj,
+            sequence: idx,
+            expenseId: input.expenseId,
+            shopName: input.shopName ?? '',
+          })),
+        )
+        .onConflictDoUpdate({
+          target: expenseItemsTable.id,
+          set: excludedAll(expenseItemsTable),
+        }),
+    );
 
     batchItems.push(
       db
-        .update(expenseRefundsTable)
+        .update(expenseAdjustmentsTable)
         .set({ isDeleted: true })
-        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds))),
+        .where(
+          and(
+            eq(expenseAdjustmentsTable.expenseId, input.expenseId),
+            notInArray(expenseAdjustmentsTable.id, activeIds),
+          ),
+        ),
     );
 
     if (searchables.length) {
