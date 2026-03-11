@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "b77ec717-0b77-40e6-8c11-5d1d46ae59c2",
+  "id": "e546ff6f-bd10-43ec-9be7-826125be3acd",
   "prevIds": [
     "8639a571-8532-49ac-bb12-6cdb279a9688"
   ],
@@ -35,11 +35,11 @@
       "entityType": "tables"
     },
     {
-      "name": "login_attempts",
+      "name": "geo_search",
       "entityType": "tables"
     },
     {
-      "name": "merchants",
+      "name": "login_attempts",
       "entityType": "tables"
     },
     {
@@ -52,10 +52,6 @@
     },
     {
       "name": "sessions",
-      "entityType": "tables"
-    },
-    {
-      "name": "system_flag",
       "entityType": "tables"
     },
     {
@@ -423,6 +419,26 @@
       "table": "expense_adjustments"
     },
     {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "expense_adjustments"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "shop_name",
+      "entityType": "columns",
+      "table": "expense_adjustments"
+    },
+    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -539,6 +555,26 @@
       "default": null,
       "generated": null,
       "name": "expense_refund_id",
+      "entityType": "columns",
+      "table": "expense_items"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "expense_items"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "shop_name",
       "entityType": "columns",
       "table": "expense_items"
     },
@@ -736,6 +772,16 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "specified_amount_cents",
+      "entityType": "columns",
+      "table": "expenses"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "billed_at",
@@ -883,6 +929,66 @@
       "table": "expenses"
     },
     {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "geo_id",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shop_name",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "shop_mall",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "latitude",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
+      "type": "real",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "longitude",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
       "type": "text(21)",
       "notNull": false,
       "autoincrement": false,
@@ -991,156 +1097,6 @@
       "name": "user_agent",
       "entityType": "columns",
       "table": "login_attempts"
-    },
-    {
-      "type": "text(21)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "id",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "1",
-      "generated": null,
-      "name": "version",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "created_at",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "updated_at",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text(21)",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text COLLATE NOCASE",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "name",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text COLLATE NOCASE",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "mall",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "url",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "type",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text(21)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "typical_account_id",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "text(21)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "typical_category_id",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "real",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "latitude",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "real",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "longitude",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "integer",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "geo_id",
-      "entityType": "columns",
-      "table": "merchants"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "0",
-      "generated": null,
-      "name": "is_deleted",
-      "entityType": "columns",
-      "table": "merchants"
     },
     {
       "type": "integer",
@@ -1303,16 +1259,6 @@
       "table": "search"
     },
     {
-      "type": "text(21)",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "merchant_id",
-      "entityType": "columns",
-      "table": "search"
-    },
-    {
       "type": "text",
       "notNull": false,
       "autoincrement": false,
@@ -1411,26 +1357,6 @@
       "name": "login_attempt_id",
       "entityType": "columns",
       "table": "sessions"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "key",
-      "entityType": "columns",
-      "table": "system_flag"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "-1",
-      "generated": null,
-      "name": "value",
-      "entityType": "columns",
-      "table": "system_flag"
     },
     {
       "type": "text(21)",
@@ -1534,6 +1460,18 @@
     },
     {
       "columns": [
+        "geo_id",
+        "user_id",
+        "shop_mall",
+        "shop_name"
+      ],
+      "nameExplicit": false,
+      "name": "geo_search_pk",
+      "entityType": "pks",
+      "table": "geo_search"
+    },
+    {
+      "columns": [
         "chunk",
         "text",
         "type",
@@ -1622,15 +1560,6 @@
         "id"
       ],
       "nameExplicit": false,
-      "name": "merchants_pk",
-      "table": "merchants",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "id"
-      ],
-      "nameExplicit": false,
       "name": "passkeys_pk",
       "table": "passkeys",
       "entityType": "pks"
@@ -1642,15 +1571,6 @@
       "nameExplicit": false,
       "name": "sessions_pk",
       "table": "sessions",
-      "entityType": "pks"
-    },
-    {
-      "columns": [
-        "key"
-      ],
-      "nameExplicit": false,
-      "name": "system_flag_pk",
-      "table": "system_flag",
       "entityType": "pks"
     },
     {
@@ -1755,6 +1675,24 @@
     {
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "shop_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_expense_adjustments_user_shop",
+      "entityType": "indexes",
+      "table": "expense_adjustments"
+    },
+    {
+      "columns": [
+        {
           "value": "expense_id",
           "isExpression": false
         }
@@ -1769,14 +1707,18 @@
     {
       "columns": [
         {
-          "value": "name",
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "shop_name",
           "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "idx_expense_items_name",
+      "name": "idx_expense_items_user_shop",
       "entityType": "indexes",
       "table": "expense_items"
     },
@@ -1847,6 +1789,60 @@
     {
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "shop_name",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_expenses_user_shopName",
+      "entityType": "indexes",
+      "table": "expenses"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "shop_mall",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_expenses_user_shopMall",
+      "entityType": "indexes",
+      "table": "expenses"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "geo_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_geo_search_user_geoId",
+      "entityType": "indexes",
+      "table": "geo_search"
+    },
+    {
+      "columns": [
+        {
           "value": "ip",
           "isExpression": false
         },
@@ -1879,60 +1875,6 @@
       "name": "idx_login_attempts_user_time",
       "entityType": "indexes",
       "table": "login_attempts"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "geo_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_merchants_user_box",
-      "entityType": "indexes",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "name",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": "\"merchants\".\"is_deleted\" = 0",
-      "origin": "manual",
-      "name": "idx_merchants_user_shopName_active",
-      "entityType": "indexes",
-      "table": "merchants"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "mall",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": "\"merchants\".\"is_deleted\" = 0",
-      "origin": "manual",
-      "name": "idx_merchants_user_shopMall_active",
-      "entityType": "indexes",
-      "table": "merchants"
     },
     {
       "columns": [

@@ -7,7 +7,6 @@ import {
   expenseRefundsTable,
   expensesTable,
   generateId,
-  merchantsTable,
   searchTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
@@ -55,13 +54,12 @@ const loadExpenseDetailProcedure = protectedProcedure
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
           geoAccuracy: expensesTable.geoAccuracy,
-          shopName: merchantsTable.name,
-          shopMall: merchantsTable.mall,
+          shopName: expensesTable.shopName,
+          shopMall: expensesTable.shopMall,
           version: expensesTable.version,
           isDeleted: expensesTable.isDeleted,
         })
         .from(expensesTable)
-        .leftJoin(merchantsTable, eq(merchantsTable.id, expensesTable.merchantId))
         .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
         .limit(1),
       db

@@ -35,11 +35,6 @@ const baseColumns = () => ({
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
-export const systemFlagTable = sqliteTable('system_flag', {
-  key: text().notNull().primaryKey(),
-  value: integer().notNull().default(-1),
-});
-
 export const emailCodesTable = sqliteTable(
   'email_codes',
   {
@@ -150,6 +145,7 @@ export const expensesTable = sqliteTable(
   {
     ...baseColumns(),
     amountCents: centsColumn(),
+    specifiedAmountCents: centsColumn(),
     billedAt: dateColumn(),
     userId: idColumn(),
     accountId: nullableIdColumn(),
@@ -159,11 +155,9 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
-    /** @deprecated use merchantsTable.boxId instead*/
+    /** @deprecated use geoSearchTable.geoId instead*/
     boxId: integer(),
-    /** @deprecated use merchantsTable.name instead*/
     shopName: citext(),
-    /** @deprecated use merchantsTable.mall instead*/
     shopMall: citext(),
     /** @deprecated normalized to expenseAdjustmentsTable*/
     additionalServiceChargePercent: integer(),
@@ -171,33 +165,10 @@ export const expensesTable = sqliteTable(
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted)],
-);
-
-export const merchantsTable = sqliteTable(
-  'merchants',
-  {
-    ...baseColumns(),
-    userId: idColumn(),
-    name: citext().notNull(),
-    mall: citext(),
-    url: text(),
-    type: text().$type<'online' | 'physical'>(),
-    typicalAccountId: nullableIdColumn(),
-    typicalCategoryId: nullableIdColumn(),
-    latitude: real(),
-    longitude: real(),
-    geoId: integer(),
-    isDeleted: boolean().notNull().default(false),
-  },
   t => [
-    index('idx_merchants_user_box').on(t.userId, t.geoId),
-    index('idx_merchants_user_shopName_active')
-      .on(t.userId, t.name)
-      .where(sql`${t.isDeleted} = 0`),
-    index('idx_merchants_user_shopMall_active')
-      .on(t.userId, t.mall)
-      .where(sql`${t.isDeleted} = 0`),
+    index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
+    index('idx_expenses_user_shopName').on(t.userId, t.shopName),
+    index('idx_expenses_user_shopMall').on(t.userId, t.shopMall),
   ],
 );
 
@@ -214,9 +185,14 @@ export const expenseItemsTable = sqliteTable(
     categoryId: nullableIdColumn(),
     /** @deprecated refund is deprecated */
     expenseRefundId: nullableIdColumn(),
+    userId: idColumn().default(''),
+    shopName: citext().notNull().default(''),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [index('idx_expense_items_expense_id').on(t.expenseId), index('idx_expense_items_name').on(t.name)],
+  t => [
+    index('idx_expense_items_expense_id').on(t.expenseId),
+    index('idx_expense_items_user_shop').on(t.userId, t.shopName),
+  ],
 );
 
 /** @deprecated use expenseAdjustmentsTable instead*/
@@ -251,9 +227,14 @@ export const expenseAdjustmentsTable = sqliteTable(
     rateBps: integer('rate_bps'),
     expenseId: idColumn(),
     expenseItemId: nullableIdColumn(),
+    userId: idColumn().default(''),
+    shopName: citext().notNull().default(''),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [index('idx_expense_adjustments_expense_id').on(t.expenseId)],
+  t => [
+    index('idx_expense_adjustments_expense_id').on(t.expenseId),
+    index('idx_expense_adjustments_user_shop').on(t.userId, t.shopName),
+  ],
 );
 
 export const searchTable = sqliteTable(
@@ -265,7 +246,6 @@ export const searchTable = sqliteTable(
     userId: idColumn(),
     usageCount: integer().default(1),
     context: citext().notNull().default(''),
-    merchantId: nullableIdColumn(),
     referenceIds: text({ mode: 'json' }).$type<string[]>().default([]),
   },
   t => [
@@ -273,5 +253,21 @@ export const searchTable = sqliteTable(
     index('idx_search_user_chunk').on(t.userId, t.chunk),
     index('idx_search_user_text').on(t.userId, t.text),
     index('idx_search_user_type_context').on(t.userId, t.type, t.context),
+  ],
+);
+
+export const geoSearchTable = sqliteTable(
+  'geo_search',
+  {
+    geoId: integer().notNull(),
+    shopName: citext().notNull(),
+    shopMall: citext().notNull(),
+    userId: idColumn(),
+    latitude: real(),
+    longitude: real(),
+  },
+  t => [
+    primaryKey({ columns: [t.geoId, t.userId, t.shopMall, t.shopName] }),
+    index('idx_geo_search_user_geoId').on(t.userId, t.geoId),
   ],
 );
