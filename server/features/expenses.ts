@@ -2,10 +2,12 @@ import { protectedProcedure } from '../lib/trpc';
 import {
   accountsTable,
   categoriesTable,
+  expenseAdjustmentsTable,
   expenseItemsTable,
   expenseRefundsTable,
   expensesTable,
   generateId,
+  merchantsTable,
   searchTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
@@ -43,7 +45,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [[expense], rawItems, rawRefunds] = await db.batch([
+    const [[expense], items, adjustments] = await db.batch([
       db
         .select({
           amountCents: expensesTable.amountCents,
@@ -53,14 +55,13 @@ const loadExpenseDetailProcedure = protectedProcedure
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
           geoAccuracy: expensesTable.geoAccuracy,
-          shopMall: expensesTable.shopMall,
-          shopName: expensesTable.shopName,
+          shopName: merchantsTable.name,
+          shopMall: merchantsTable.mall,
           version: expensesTable.version,
-          isGstExcluded: expensesTable.isGstExcluded,
-          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
           isDeleted: expensesTable.isDeleted,
         })
         .from(expensesTable)
+        .leftJoin(merchantsTable, eq(merchantsTable.id, expensesTable.merchantId))
         .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
         .limit(1),
       db
@@ -70,42 +71,29 @@ const loadExpenseDetailProcedure = protectedProcedure
           quantity: expenseItemsTable.quantity,
           priceCents: expenseItemsTable.priceCents,
           isDeleted: expenseItemsTable.isDeleted,
-          itemRefundId: expenseItemsTable.expenseRefundId,
         })
         .from(expenseItemsTable)
         .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
       db
         .select({
-          id: expenseRefundsTable.id,
-          source: expenseRefundsTable.source,
-          expectedAmountCents: expenseRefundsTable.expectedAmountCents,
-          actualAmountCents: expenseRefundsTable.actualAmountCents,
-          isDeleted: expenseRefundsTable.isDeleted,
-          expenseItemId: expenseRefundsTable.expenseItemId,
+          id: expenseAdjustmentsTable.id,
+          name: expenseAdjustmentsTable.name,
+          amountCents: expenseAdjustmentsTable.amountCents,
+          rateBps: expenseAdjustmentsTable.rateBps,
+          expenseItemId: expenseAdjustmentsTable.expenseItemId,
+          isDeleted: expenseAdjustmentsTable.isDeleted,
         })
-        .from(expenseRefundsTable)
-        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), eq(expenseRefundsTable.isDeleted, false))),
+        .from(expenseAdjustmentsTable)
+        .where(
+          and(eq(expenseAdjustmentsTable.expenseId, input.expenseId), eq(expenseAdjustmentsTable.isDeleted, false)),
+        ),
     ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    const items = rawItems.map(({ itemRefundId, ...item }) => ({
-      ...item,
-      expenseRefund: itemRefundId
-        ? rawRefunds.splice(
-            rawRefunds.findIndex(({ id }) => id == itemRefundId),
-            1,
-          )[0]
-        : null,
-    }));
-
-    return {
-      ...expense,
-      items,
-      refunds: rawRefunds,
-    };
+    return { ...expense, items, adjustments };
   });
 
 const saveExpenseProcedure = protectedProcedure
