@@ -238,7 +238,7 @@ export const expenseAdjustmentsTable = sqliteTable(
 );
 
 /** @deprecated replaced by v2_search */
-export const legacySearchTable = sqliteTable(
+export const searchTable = sqliteTable(
   'search',
   {
     chunk: text().notNull(),
@@ -255,49 +255,59 @@ export const legacySearchTable = sqliteTable(
   ],
 );
 
-export const searchTable = sqliteTable(
-  'v2_search',
-  {
-    id: pkIdColumn(),
-    chunk: text().notNull(),
-    text: citext().notNull(),
-    type: text().notNull(),
-    userId: idColumn(),
-    usageCount: integer().default(1),
-  },
-  t => [
-    unique('unique_idx_search').on(t.userId, t.type, t.chunk, t.text, t.type),
-    index('idx_search_user_chunk').on(t.userId, t.chunk),
-    index('idx_search_user_text').on(t.userId, t.text),
-  ],
-);
-
 export const geoSearchTable = sqliteTable(
-  'geo_search',
+  'geo_searches',
   {
     id: pkIdColumn(),
     geoId: integer().notNull(),
-    shopName: citext().notNull(),
-    shopMall: citext().notNull(),
     userId: idColumn(),
-    latitude: real(),
-    longitude: real(),
+  },
+  t => [index('idx_geo_search').on(t.userId, t.geoId, t.id)],
+);
+
+export const chunkSearchTable = sqliteTable(
+  'chunk_searches',
+  {
+    id: pkIdColumn(),
+    chunk: text().notNull(),
+    userId: idColumn(),
+  },
+  t => [index('idx_chunk_searches_chunk_id').on(t.userId, t.chunk, t.id)],
+);
+
+export const textSearchTable = sqliteTable(
+  'texts_searches',
+  {
+    id: pkIdColumn(),
+    text: citext().notNull(),
+    userId: idColumn(),
   },
   t => [
-    unique('unique_idx_geo_search').on(t.geoId, t.userId, t.shopMall, t.shopName),
-    index('idx_geo_search_user_geoId').on(t.userId, t.geoId),
+    unique('uq_texts_searches_user_text').on(t.userId, t.text),
+    index('idx_texts_searches_text_id').on(t.userId, t.text, t.id),
   ],
 );
 
-export const searchContextTable = sqliteTable(
-  'search_context',
+export const textChunkTable = sqliteTable(
+  'texts_chunks',
   {
-    /** can be searchTable.id / geoSearchTable.id   */
-    searchId: idColumn(),
-    /** "parent" of this search, used for filter & sorting */
-    context: citext().notNull(),
-    /** mainly expenseId, else can be expenseItemId / expenseAdjustmentId */
-    referenceId: idColumn(),
+    chunkId: idColumn(),
+    textId: idColumn(),
   },
-  t => [primaryKey({ columns: [t.searchId, t.context, t.referenceId] })],
+  t => [primaryKey({ columns: [t.chunkId, t.textId] })],
+);
+
+export const searchContextTable = sqliteTable(
+  'searches_expenses',
+  {
+    /** can be textSearchTable.id / geoSearchTable.id  */
+    searchId: idColumn(),
+    expenseId: idColumn(),
+    expenseChildId: idColumn().default(''),
+  },
+  t => [
+    primaryKey({ columns: [t.searchId, t.expenseId, t.expenseChildId] }),
+    index('idx_search_expense_id').on(t.searchId, t.expenseId),
+    index('idx_search_expense_child_id').on(t.searchId, t.expenseChildId),
+  ],
 );
