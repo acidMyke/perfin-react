@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "e546ff6f-bd10-43ec-9be7-826125be3acd",
+  "id": "ccf85ba2-c452-48cb-b5ac-8f1a5adf7f51",
   "prevIds": [
     "8639a571-8532-49ac-bb12-6cdb279a9688"
   ],
@@ -39,6 +39,10 @@
       "entityType": "tables"
     },
     {
+      "name": "search",
+      "entityType": "tables"
+    },
+    {
       "name": "login_attempts",
       "entityType": "tables"
     },
@@ -47,7 +51,11 @@
       "entityType": "tables"
     },
     {
-      "name": "search",
+      "name": "search_context",
+      "entityType": "tables"
+    },
+    {
+      "name": "v2_search",
       "entityType": "tables"
     },
     {
@@ -929,6 +937,16 @@
       "table": "expenses"
     },
     {
+      "type": "text(21)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "geo_search"
+    },
+    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -987,6 +1005,66 @@
       "name": "longitude",
       "entityType": "columns",
       "table": "geo_search"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "chunk",
+      "entityType": "columns",
+      "table": "search"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "text",
+      "entityType": "columns",
+      "table": "search"
+    },
+    {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "type",
+      "entityType": "columns",
+      "table": "search"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "search"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": "1",
+      "generated": null,
+      "name": "usage_count",
+      "entityType": "columns",
+      "table": "search"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "''",
+      "generated": null,
+      "name": "context",
+      "entityType": "columns",
+      "table": "search"
     },
     {
       "type": "text(21)",
@@ -1199,6 +1277,46 @@
       "table": "passkeys"
     },
     {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "search_id",
+      "entityType": "columns",
+      "table": "search_context"
+    },
+    {
+      "type": "text COLLATE NOCASE",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "context",
+      "entityType": "columns",
+      "table": "search_context"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "reference_id",
+      "entityType": "columns",
+      "table": "search_context"
+    },
+    {
+      "type": "text(21)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "v2_search"
+    },
+    {
       "type": "text",
       "notNull": true,
       "autoincrement": false,
@@ -1206,7 +1324,7 @@
       "generated": null,
       "name": "chunk",
       "entityType": "columns",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "type": "text COLLATE NOCASE",
@@ -1216,7 +1334,7 @@
       "generated": null,
       "name": "text",
       "entityType": "columns",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "type": "text",
@@ -1226,7 +1344,7 @@
       "generated": null,
       "name": "type",
       "entityType": "columns",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "type": "text(21)",
@@ -1236,7 +1354,7 @@
       "generated": null,
       "name": "user_id",
       "entityType": "columns",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "type": "integer",
@@ -1246,27 +1364,7 @@
       "generated": null,
       "name": "usage_count",
       "entityType": "columns",
-      "table": "search"
-    },
-    {
-      "type": "text COLLATE NOCASE",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "''",
-      "generated": null,
-      "name": "context",
-      "entityType": "columns",
-      "table": "search"
-    },
-    {
-      "type": "text",
-      "notNull": false,
-      "autoincrement": false,
-      "default": "'[]'",
-      "generated": null,
-      "name": "reference_ids",
-      "entityType": "columns",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "type": "text(21)",
@@ -1460,18 +1558,6 @@
     },
     {
       "columns": [
-        "geo_id",
-        "user_id",
-        "shop_mall",
-        "shop_name"
-      ],
-      "nameExplicit": false,
-      "name": "geo_search_pk",
-      "entityType": "pks",
-      "table": "geo_search"
-    },
-    {
-      "columns": [
         "chunk",
         "text",
         "type",
@@ -1482,6 +1568,17 @@
       "name": "search_pk",
       "entityType": "pks",
       "table": "search"
+    },
+    {
+      "columns": [
+        "search_id",
+        "context",
+        "reference_id"
+      ],
+      "nameExplicit": false,
+      "name": "search_context_pk",
+      "entityType": "pks",
+      "table": "search_context"
     },
     {
       "columns": [
@@ -1551,6 +1648,15 @@
         "id"
       ],
       "nameExplicit": false,
+      "name": "geo_search_pk",
+      "table": "geo_search",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
       "name": "login_attempts_pk",
       "table": "login_attempts",
       "entityType": "pks"
@@ -1562,6 +1668,15 @@
       "nameExplicit": false,
       "name": "passkeys_pk",
       "table": "passkeys",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "v2_search_pk",
+      "table": "v2_search",
       "entityType": "pks"
     },
     {
@@ -1843,6 +1958,50 @@
     {
       "columns": [
         {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "type",
+          "isExpression": false
+        },
+        {
+          "value": "chunk",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_search_chunk",
+      "entityType": "indexes",
+      "table": "search"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "type",
+          "isExpression": false
+        },
+        {
+          "value": "context",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_search_context",
+      "entityType": "indexes",
+      "table": "search"
+    },
+    {
+      "columns": [
+        {
           "value": "ip",
           "isExpression": false
         },
@@ -1906,7 +2065,7 @@
       "origin": "manual",
       "name": "idx_search_user_chunk",
       "entityType": "indexes",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "columns": [
@@ -1924,29 +2083,7 @@
       "origin": "manual",
       "name": "idx_search_user_text",
       "entityType": "indexes",
-      "table": "search"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "type",
-          "isExpression": false
-        },
-        {
-          "value": "context",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_search_user_type_context",
-      "entityType": "indexes",
-      "table": "search"
+      "table": "v2_search"
     },
     {
       "columns": [
@@ -1983,6 +2120,31 @@
       "name": "idx_sessions_user_expires",
       "entityType": "indexes",
       "table": "sessions"
+    },
+    {
+      "columns": [
+        "geo_id",
+        "user_id",
+        "shop_mall",
+        "shop_name"
+      ],
+      "nameExplicit": true,
+      "name": "unique_idx_geo_search",
+      "entityType": "uniques",
+      "table": "geo_search"
+    },
+    {
+      "columns": [
+        "user_id",
+        "type",
+        "chunk",
+        "text",
+        "type"
+      ],
+      "nameExplicit": true,
+      "name": "unique_idx_search",
+      "entityType": "uniques",
+      "table": "v2_search"
     },
     {
       "columns": [

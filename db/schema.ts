@@ -1,6 +1,6 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, blob, integer, real, primaryKey, index, customType, unique } from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid();
@@ -237,7 +237,8 @@ export const expenseAdjustmentsTable = sqliteTable(
   ],
 );
 
-export const searchTable = sqliteTable(
+/** @deprecated replaced by v2_search */
+export const legacySearchTable = sqliteTable(
   'search',
   {
     chunk: text().notNull(),
@@ -246,19 +247,35 @@ export const searchTable = sqliteTable(
     userId: idColumn(),
     usageCount: integer().default(1),
     context: citext().notNull().default(''),
-    referenceIds: text({ mode: 'json' }).$type<string[]>().default([]),
   },
   t => [
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
+    index('idx_search_chunk').on(t.userId, t.type, t.chunk),
+    index('idx_search_context').on(t.userId, t.type, t.context),
+  ],
+);
+
+export const searchTable = sqliteTable(
+  'v2_search',
+  {
+    id: pkIdColumn(),
+    chunk: text().notNull(),
+    text: citext().notNull(),
+    type: text().notNull(),
+    userId: idColumn(),
+    usageCount: integer().default(1),
+  },
+  t => [
+    unique('unique_idx_search').on(t.userId, t.type, t.chunk, t.text, t.type),
     index('idx_search_user_chunk').on(t.userId, t.chunk),
     index('idx_search_user_text').on(t.userId, t.text),
-    index('idx_search_user_type_context').on(t.userId, t.type, t.context),
   ],
 );
 
 export const geoSearchTable = sqliteTable(
   'geo_search',
   {
+    id: pkIdColumn(),
     geoId: integer().notNull(),
     shopName: citext().notNull(),
     shopMall: citext().notNull(),
@@ -267,7 +284,20 @@ export const geoSearchTable = sqliteTable(
     longitude: real(),
   },
   t => [
-    primaryKey({ columns: [t.geoId, t.userId, t.shopMall, t.shopName] }),
+    unique('unique_idx_geo_search').on(t.geoId, t.userId, t.shopMall, t.shopName),
     index('idx_geo_search_user_geoId').on(t.userId, t.geoId),
   ],
+);
+
+export const searchContextTable = sqliteTable(
+  'search_context',
+  {
+    /** can be searchTable.id / geoSearchTable.id   */
+    searchId: idColumn(),
+    /** "parent" of this search, used for filter & sorting */
+    context: citext().notNull(),
+    /** mainly expenseId, else can be expenseItemId / expenseAdjustmentId */
+    referenceId: idColumn(),
+  },
+  t => [primaryKey({ columns: [t.searchId, t.context, t.referenceId] })],
 );
