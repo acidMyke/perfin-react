@@ -155,7 +155,6 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
-    /** @deprecated use geoSearchTable.geoId instead*/
     boxId: integer(),
     shopName: citext(),
     shopMall: citext(),
@@ -255,59 +254,46 @@ export const searchTable = sqliteTable(
   ],
 );
 
-export const geoSearchTable = sqliteTable(
-  'geo_searches',
-  {
-    id: pkIdColumn(),
-    geoId: integer().notNull(),
-    userId: idColumn(),
-  },
-  t => [index('idx_geo_search').on(t.userId, t.geoId, t.id)],
-);
-
-export const chunkSearchTable = sqliteTable(
-  'chunk_searches',
-  {
-    id: pkIdColumn(),
-    chunk: text().notNull(),
-    userId: idColumn(),
-  },
-  t => [index('idx_chunk_searches_chunk_id').on(t.userId, t.chunk, t.id)],
-);
-
-export const textSearchTable = sqliteTable(
-  'texts_searches',
-  {
-    id: pkIdColumn(),
-    text: citext().notNull(),
-    userId: idColumn(),
-  },
-  t => [
-    unique('uq_texts_searches_user_text').on(t.userId, t.text),
-    index('idx_texts_searches_text_id').on(t.userId, t.text, t.id),
-  ],
-);
+const textHashColumn = () => integer().notNull();
 
 export const textChunkTable = sqliteTable(
   'texts_chunks',
   {
-    chunkId: idColumn(),
-    textId: idColumn(),
-  },
-  t => [primaryKey({ columns: [t.chunkId, t.textId] })],
-);
-
-export const searchContextTable = sqliteTable(
-  'searches_expenses',
-  {
-    /** can be textSearchTable.id / geoSearchTable.id  */
-    searchId: idColumn(),
-    expenseId: idColumn(),
-    expenseChildId: idColumn().default(''),
+    userId: text().notNull(),
+    /** Use getTrigrams() to create chunks for texts*/
+    chunk: text().notNull(),
+    /** Use getTextHash() to calculate this value */
+    textHash: textHashColumn(),
   },
   t => [
-    primaryKey({ columns: [t.searchId, t.expenseId, t.expenseChildId] }),
-    index('idx_search_expense_id').on(t.searchId, t.expenseId),
-    index('idx_search_expense_child_id').on(t.searchId, t.expenseChildId),
+    // textHash includes userId in hashing
+    primaryKey({ columns: [t.textHash, t.chunk] }),
+    // covering index to quickly lookup textHash with provided userId & chunk
+    index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
   ],
+);
+
+export const expenseTextsTable = sqliteTable(
+  'expenses_texts',
+  {
+    expenseId: idColumn(),
+    /** Use getTextHash() to calculate this value */
+    textHash: textHashColumn(),
+    /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
+    sourceId: idColumn(),
+  },
+  t => [
+    primaryKey({ columns: [t.textHash, t.sourceId] }),
+    index('idx_expenses_texts_sourceId').on(t.sourceId),
+    index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
+  ],
+);
+
+export const textsContextsTable = sqliteTable(
+  'texts_contexts',
+  {
+    textHash: textHashColumn(),
+    ctxTextHash: textHashColumn(),
+  },
+  t => [primaryKey({ columns: [t.textHash, t.ctxTextHash] })],
 );
