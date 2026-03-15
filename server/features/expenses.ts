@@ -54,6 +54,7 @@ const loadExpenseDetailProcedure = protectedProcedure
           billedAt: expensesTable.billedAt,
           accountId: expensesTable.accountId,
           categoryId: expensesTable.categoryId,
+          type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
           geoAccuracy: expensesTable.geoAccuracy,
@@ -133,7 +134,10 @@ const saveExpenseProcedure = protectedProcedure
           id: z.string(),
           name: z.string().trim(),
           amountCents: z.int().default(0),
-          rateBps: z.int().optional(),
+          rateBps: z
+            .int()
+            .nullish()
+            .transform(v => v ?? undefined),
           expenseItemId: z
             .string()
             .nullish()
@@ -302,6 +306,7 @@ const saveExpenseProcedure = protectedProcedure
           userId: userId,
           accountId: accountId,
           categoryId: categoryId,
+          type: input.type,
           updatedBy: userId,
           latitude: input.latitude,
           longitude: input.longitude,

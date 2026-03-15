@@ -75,13 +75,8 @@ function RouteComponent() {
   const attemptShopDetailInference = useCallback(() => {
     if (form.getFieldValue('ui.shouldInferShopDetail')) {
       const formValues = form.state.values;
-      const { additionalServiceChargePercent, isGstExcluded, category, account } = formValues;
-      if (
-        additionalServiceChargePercent === null &&
-        isGstExcluded === null &&
-        category === undefined &&
-        account === undefined
-      ) {
+      const { category, account } = formValues;
+      if (category === undefined && account === undefined) {
         const { geolocation, shopName, items } = formValues;
         const { latitude, longitude } = geolocation ?? {};
         inferShopDetailMutation.mutate({
@@ -179,8 +174,6 @@ function RouteComponent() {
                           form.setFieldValue('shopMall', shopDetail.shopMall);
                           form.setFieldValue('shopName', shopDetail.shopName);
                         }
-                        form.setFieldValue('additionalServiceChargePercent', additionalServiceChargePercent);
-                        form.setFieldValue('isGstExcluded', isGstExcluded);
 
                         if (selCategory) form.setFieldValue('category', selCategory);
                         if (selAccount) form.setFieldValue('account', selAccount);

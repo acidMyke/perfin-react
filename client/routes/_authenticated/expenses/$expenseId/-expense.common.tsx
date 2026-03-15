@@ -92,14 +92,13 @@ export function mapExpenseDetailToForm(
       billedAt: new Date(),
       account: undefined,
       category: undefined,
+      type: 'online' as const,
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
-      additionalServiceChargePercent: null,
-      isGstExcluded: null,
       isDeleted: false,
       items: [defaultExpenseItem()],
-      refunds: [],
+      adjustments: [],
     };
   }
 }
