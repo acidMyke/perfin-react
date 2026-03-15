@@ -15,6 +15,7 @@ export const getTrigrams = (input: string) =>
 // Distance in deg for singapore
 export const GRID_SIZE = 0.002; // 222 meters
 export const BOUNDARY_THRESHOLD = 0.001; // 111 meters
+export const MAX_LON = 100_000;
 
 export function getLocationBoxId({ latitude, longitude }: { latitude: number; longitude: number }, withNearby = false) {
   const latIndex = Math.floor(latitude / GRID_SIZE);
@@ -33,6 +34,9 @@ export function getLocationBoxId({ latitude, longitude }: { latitude: number; lo
     if (longInBox < BOUNDARY_THRESHOLD) lonOffsets.push(-1);
     else if (longInBox > GRID_SIZE - BOUNDARY_THRESHOLD) lonOffsets.push(1);
   }
+
+  return latOffsets.flatMap(oLat => lonOffsets.map(oLon => (latIndex + oLat) * MAX_LON + (lonIndex + oLon)));
+}
 
 const hashTextInternal = async (userId: string, text: string, encoder: TextEncoder) => {
   const data = encoder.encode(userId + text);
