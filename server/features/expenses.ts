@@ -128,21 +128,19 @@ const saveExpenseProcedure = protectedProcedure
           isDeleted: z.boolean().optional().default(false),
         }),
       ),
-      adjustments: z
-        .array(
-          z.object({
-            id: z.string(),
-            name: z.string().trim(),
-            amountCents: z.int().default(0),
-            rateBps: z.int().optional(),
-            expenseItemId: z
-              .string()
-              .nullish()
-              .transform(v => v ?? undefined),
-            isDeleted: z.boolean().default(false).optional(),
-          }),
-        )
-        .default([]),
+      adjustments: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string().trim(),
+          amountCents: z.int().default(0),
+          rateBps: z.int().optional(),
+          expenseItemId: z
+            .string()
+            .nullish()
+            .transform(v => v ?? undefined),
+          isDeleted: z.boolean().optional().default(false),
+        }),
+      ),
     }),
   )
   .mutation(async ({ input, ctx }) => {

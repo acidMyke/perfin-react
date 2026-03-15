@@ -1,50 +1,48 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
-import { queryClient, trpc, type RouterOutputs } from '../../../../trpc';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../../trpc';
 import { useAppForm, useFormContext } from '../../../../components/Form';
-import {
-  calculateExpense,
-  calculateExpenseItem,
-  type ExpenseSurchargeOption,
-} from '../../../../../server/lib/expenseHelper';
+import { calculateExpense } from '../../../../../server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
+import { generateId } from '../../../../utils';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
-export type ExpenseDetail = RouterOutputs['expense']['loadDetail'];
-export type ExpenseItem = ExpenseDetail['items'][number];
-export type ExpenseRefund = ExpenseDetail['refunds'][number];
+export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
+export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
+export type ExpenseItem = SaveExpenseDetailPayload['items'][number];
+export type ExpenseAdjustment = SaveExpenseDetailPayload['adjustments'][number];
 export type InferredShopDetail = RouterOutputs['expense']['inferShopDetail'];
 
 export function defaultExpenseItem(): ExpenseItem {
   return {
-    id: 'create',
+    id: generateId(),
     name: '',
     isDeleted: false,
     priceCents: 0,
     quantity: 1,
-    expenseRefund: null,
   };
 }
 
-type CalculateExpectedOption = ExpenseSurchargeOption & {
-  item: Pick<ExpenseItem, 'priceCents' | 'quantity'>;
-};
-
-export function defaultExpenseRefund(option?: CalculateExpectedOption): ExpenseRefund {
-  let expectedAmountCents = 0;
-  if (option) {
-    expectedAmountCents = calculateExpenseItem(option.item, option).grossAmountCents;
-  }
-  return {
-    id: 'create',
-    source: '',
-    expectedAmountCents,
+export function defaultExpenseAdjustment(item?: ExpenseItem): ExpenseAdjustment {
+  const adjustment: ExpenseAdjustment = {
+    id: generateId(),
+    name: '',
     isDeleted: false,
-    actualAmountCents: 0,
-    expenseItemId: null,
+    amountCents: 0,
   };
+
+  if (item) {
+    adjustment.expenseItemId = item.id;
+    adjustment.rateBps = 100_00;
+  }
+
+  return adjustment;
 }
 
-export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: ExpenseOptions, param?: { isCopy: boolean }) {
+export function mapExpenseDetailToForm(
+  detail?: LoadExpenseDetailResponse,
+  options?: ExpenseOptions,
+  param?: { isCopy: boolean },
+) {
   if (detail && options) {
     const { accountOptions, categoryOptions } = options;
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
@@ -52,17 +50,19 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
     const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
 
     let isItemsSubpage = detail.items.length > 2;
-    if (!isItemsSubpage) {
-      for (const refund of detail.refunds) {
-        if (refund.expenseItemId !== null) {
-          isItemsSubpage = true;
-        }
-      }
-    }
 
     if (param?.isCopy) {
-      rest.items = rest.items.map(item => ({ ...item, id: 'create' }));
-      rest.refunds = rest.refunds.map(refund => ({ ...refund, id: 'create' }));
+      const remappedItemId = new Map<string, string>();
+      rest.items = rest.items.map(item => {
+        const id = generateId();
+        remappedItemId.set(item.id, id);
+        return { ...item, id };
+      });
+      rest.adjustments = rest.adjustments.map(adjustment => ({
+        ...adjustment,
+        id: generateId(),
+        expenseItemId: adjustment.expenseItemId && remappedItemId.get(adjustment.expenseItemId)!,
+      }));
     }
 
     return {
@@ -86,12 +86,7 @@ export function mapExpenseDetailToForm(detail?: ExpenseDetail, options?: Expense
         isItemsSubpage: false,
         isCurrentLocationError: false,
         shouldInferShopDetail: true,
-        calculateResult: calculateExpense({
-          items: [],
-          refunds: [],
-          additionalServiceChargePercent: null,
-          isGstExcluded: null,
-        }),
+        calculateResult: calculateExpense({ items: [], adjustments: [] }),
       },
       description: undefined,
       billedAt: new Date(),
@@ -184,25 +179,20 @@ export function useExpenseForm() {
 
 export function calculateExpenseForm(form: TExpenseForm) {
   const items = form.getFieldValue('items');
-  const refunds = form.getFieldValue('refunds');
-  const additionalServiceChargePercent = form.getFieldValue('additionalServiceChargePercent');
-  const isGstExcluded = form.getFieldValue('isGstExcluded');
+  const adjustments = form.getFieldValue('adjustments');
+  // const additionalServiceChargePercent = form.getFieldValue('additionalServiceChargePercent');
+  // const isGstExcluded = form.getFieldValue('isGstExcluded');
 
-  const result = calculateExpense({
-    items,
-    refunds,
-    additionalServiceChargePercent,
-    isGstExcluded,
-  });
-
+  const result = calculateExpense({ items, adjustments });
   form.setFieldValue('ui.calculateResult', result);
+  // TODO: update logic here to V2 logic
 
-  for (let i = 0; i < items.length; i++) {
-    const item = items[i];
-    if (!item.expenseRefund) continue;
-    const { grossAmountCents } = calculateExpenseItem(item, { additionalServiceChargePercent, isGstExcluded });
-    form.setFieldValue(`items[${i}].expenseRefund.expectedAmountCents`, grossAmountCents);
-  }
+  // for (let i = 0; i < items.length; i++) {
+  //   const item = items[i];
+  //   if (!item.expenseRefund) continue;
+  //   const { grossAmountCents } = calculateExpenseItem(item, { additionalServiceChargePercent, isGstExcluded });
+  //   form.setFieldValue(`items[${i}].expenseRefund.expectedAmountCents`, grossAmountCents);
+  // }
 }
 
 type InvalidateAndRedirectBackToListOptions = {

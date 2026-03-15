@@ -2,8 +2,8 @@ export type ExpenseAdjustmentForCalculation = {
   id: string;
   isDeleted?: boolean | null | undefined;
   amountCents?: number;
-  rateBps?: number;
-  expenseItemId?: string;
+  rateBps?: number | null;
+  expenseItemId?: string | null;
 };
 
 export type ExpenseDetailForCalculation = {

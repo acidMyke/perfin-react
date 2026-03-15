@@ -1,3 +1,5 @@
+import { nanoid } from 'nanoid';
+
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const SG_LOCALE = 'en-SG';
 export const currencyNumberFormat = new Intl.NumberFormat(SG_LOCALE, { style: 'currency', currency: 'SGD' });
@@ -24,3 +26,4 @@ export const coordinateFormat = new Intl.NumberFormat(SG_LOCALE, {
 });
 
 export const SG_CENTER = { lat: 1.3521, lng: 103.8198 };
+export const generateId = () => nanoid();
