@@ -1,6 +1,17 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { sql } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer, real, primaryKey, index, customType, unique } from 'drizzle-orm/sqlite-core';
+import {
+  sqliteTable,
+  text,
+  blob,
+  integer,
+  real,
+  primaryKey,
+  index,
+  customType,
+  unique,
+  type ReferenceConfig,
+} from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid();
@@ -184,14 +195,9 @@ export const expenseItemsTable = sqliteTable(
     categoryId: nullableIdColumn(),
     /** @deprecated refund is deprecated */
     expenseRefundId: nullableIdColumn(),
-    userId: idColumn().default(''),
-    shopName: citext().notNull().default(''),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [
-    index('idx_expense_items_expense_id').on(t.expenseId),
-    index('idx_expense_items_user_shop').on(t.userId, t.shopName),
-  ],
+  t => [index('idx_expense_items_expense_id').on(t.expenseId)],
 );
 
 /** @deprecated use expenseAdjustmentsTable instead*/
@@ -226,14 +232,9 @@ export const expenseAdjustmentsTable = sqliteTable(
     rateBps: integer('rate_bps'),
     expenseId: idColumn(),
     expenseItemId: nullableIdColumn(),
-    userId: idColumn().default(''),
-    shopName: citext().notNull().default(''),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [
-    index('idx_expense_adjustments_expense_id').on(t.expenseId),
-    index('idx_expense_adjustments_user_shop').on(t.userId, t.shopName),
-  ],
+  t => [index('idx_expense_adjustments_expense_id').on(t.expenseId)],
 );
 
 /** @deprecated replaced by v2_search */
@@ -254,12 +255,25 @@ export const searchTable = sqliteTable(
   ],
 );
 
-const textHashColumn = () => integer().notNull();
+export const textsTable = sqliteTable(
+  'texts',
+  {
+    textHash: integer().primaryKey({ onConflict: 'ignore' }),
+    userId: idColumn(),
+    text: text().notNull(),
+  },
+  t => [unique('uq_texts_userId').on(t.userId, t.text)],
+);
 
-export const textChunkTable = sqliteTable(
+const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
+  integer()
+    .notNull()
+    .references(() => textsTable.textHash, { onDelete, onUpdate });
+
+export const textChunksTable = sqliteTable(
   'texts_chunks',
   {
-    userId: text().notNull(),
+    userId: idColumn(),
     /** Use getTrigrams() to create chunks for texts*/
     chunk: text().notNull(),
     /** Use getTextHash() to calculate this value */
@@ -271,6 +285,15 @@ export const textChunkTable = sqliteTable(
     // covering index to quickly lookup textHash with provided userId & chunk
     index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
   ],
+);
+
+export const textsContextsTable = sqliteTable(
+  'texts_contexts',
+  {
+    textHash: textHashColumn(),
+    ctxTextHash: textHashColumn(),
+  },
+  t => [primaryKey({ columns: [t.textHash, t.ctxTextHash] })],
 );
 
 export const expenseTextsTable = sqliteTable(
@@ -287,13 +310,4 @@ export const expenseTextsTable = sqliteTable(
     index('idx_expenses_texts_sourceId').on(t.sourceId),
     index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
   ],
-);
-
-export const textsContextsTable = sqliteTable(
-  'texts_contexts',
-  {
-    textHash: textHashColumn(),
-    ctxTextHash: textHashColumn(),
-  },
-  t => [primaryKey({ columns: [t.textHash, t.ctxTextHash] })],
 );
