@@ -6,7 +6,11 @@ import {
   expenseItemsTable,
   expensesTable,
   generateId,
+  expenseTextsTable,
   searchTable,
+  textChunksTable,
+  textsContextsTable,
+  textsTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -14,7 +18,7 @@ import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getLocationBoxId, getTrigrams } from '../lib/utils';
+import { getLocationBoxId, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
@@ -361,6 +365,65 @@ const saveExpenseProcedure = protectedProcedure
               inArray(expenseAdjustmentsTable.id, Array.from(removedAdjustmentIds)),
             ),
           ),
+      );
+    }
+
+    const searchableHashes = await getTextsHashes(userId, existingSearchableSet.keys());
+    const removedSearchables = existingSearchableSet.difference(inputSearchables);
+    if (removedSearchables.size > 0) {
+      const removedHashes = removedSearchables
+        .values()
+        .map(text => searchableHashes.get(text)!)
+        .toArray();
+
+      batchItems.push(
+        db
+          .delete(expenseTextsTable)
+          .where(
+            and(inArray(expenseTextsTable.textHash, removedHashes), eq(expenseTextsTable.expenseId, input.expenseId)),
+          ),
+      );
+    }
+
+    if (newSearchables.length) {
+      const textHashesValues = newSearchables.map(({ text }) => `(${searchableHashes.get(text)!})`).join(',');
+
+      const missingRecords = await db.all<{ hash: number }>(
+        sql`SELECT q.hash FROM (VALUES ${sql.raw(textHashesValues)}) AS q(hash)
+          LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
+          WHERE ${textsTable.textHash} IS NULL`,
+      );
+      const missingTextHashSet = new Set(missingRecords.map(({ hash }) => hash));
+
+      const texts: (typeof textsTable.$inferInsert)[] = [];
+      const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
+      const expenseTexts: (typeof expenseTextsTable.$inferInsert)[] = [];
+      const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
+
+      for (const { text, sourceId, context } of newSearchables) {
+        const textHash = searchableHashes.get(text)!;
+        if (missingTextHashSet.has(textHash)) {
+          texts.push({ textHash, userId, text });
+          textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
+        }
+        if (context) {
+          const ctxTextHash = searchableHashes.get(context);
+          if (ctxTextHash) {
+            textsContexts.push({ textHash, ctxTextHash });
+          }
+        }
+        expenseTexts.push({ textHash, sourceId, expenseId: input.expenseId });
+      }
+
+      batchItems.push(
+        ...splitArray(texts, 30).map(values => db.insert(textsTable).values(values).onConflictDoNothing()),
+        ...splitArray(textChunks, 30).map(values => db.insert(textChunksTable).values(values).onConflictDoNothing()),
+        ...splitArray(textsContexts, 30).map(values =>
+          db.insert(textsContextsTable).values(values).onConflictDoNothing(),
+        ),
+        ...splitArray(expenseTexts, 30).map(values =>
+          db.insert(expenseTextsTable).values(values).onConflictDoNothing(),
+        ),
       );
     }
 

@@ -34,10 +34,45 @@ export function getLocationBoxId({ latitude, longitude }: { latitude: number; lo
     else if (longInBox > GRID_SIZE - BOUNDARY_THRESHOLD) lonOffsets.push(1);
   }
 
-  return latOffsets.flatMap(oLat =>
-    lonOffsets.map(oLon => {
-      // Bit-Shift: Move Latitude 16 bits left, place Longitude in the lower 16 bits
-      return ((latIndex + oLat) << 16) | (lonIndex + oLon);
+const hashTextInternal = async (userId: string, text: string, encoder: TextEncoder) => {
+  const data = encoder.encode(userId + text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const bytes = new Uint8Array(hashBuffer);
+
+  let n = 0;
+  for (let i = 0; i < 6; i++) n = n * 256 + bytes[i];
+  n = n * 32 + (bytes[6] >> 3);
+  return n;
+};
+
+export const getTextsHashes = async (userId: string, texts: IteratorObject<string> | string[]) => {
+  const encoder = new TextEncoder();
+  const resultMap = new Map<string, number>();
+  await Promise.all(
+    texts.map(async text => {
+      const hash = await hashTextInternal(userId, text, encoder);
+      resultMap.set(text, hash);
     }),
   );
-}
+  return resultMap;
+};
+
+export const splitArray = <T>(items: T[], maxSize: number): T[][] => {
+  if (maxSize <= 0) throw new Error('maxSize must be greater than 0');
+
+  const result: T[][] = [];
+  const len = items.length;
+
+  let i = 0;
+  while (i < len) {
+    const end = Math.min(i + maxSize, len);
+    const chunk: T[] = new Array(end - i);
+    for (let j = 0; j < end - i; j++) {
+      chunk[j] = items[i + j];
+    }
+    result.push(chunk);
+    i = end;
+  }
+
+  return result;
+};
