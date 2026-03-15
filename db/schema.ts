@@ -161,7 +161,7 @@ export const expensesTable = sqliteTable(
     userId: idColumn(),
     accountId: nullableIdColumn(),
     categoryId: nullableIdColumn(),
-    merchantId: nullableIdColumn(),
+    type: text({ enum: ['online', 'physical'] }).notNull(),
     updatedBy: idColumn(),
     latitude: real(),
     longitude: real(),
@@ -176,9 +176,7 @@ export const expensesTable = sqliteTable(
     isDeleted: boolean().notNull().default(false),
   },
   t => [
-    index('idx_expenses_user_box_id')
-      .on(t.userId, t.boxId)
-      .where(and(eq(t.isDeleted, false), isNotNull(t.boxId))!),
+    index('idx_expenses_user_box_id').on(t.userId, t.boxId),
     index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
   ],
 );
