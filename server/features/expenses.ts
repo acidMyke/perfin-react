@@ -8,7 +8,7 @@ import {
   generateId,
   searchTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -100,25 +100,25 @@ const saveExpenseProcedure = protectedProcedure
       version: z.int().optional().default(0),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
-        .object({ value: z.string(), label: z.string() })
+        .object({ value: z.string(), label: z.string().trim() })
         .nullish()
         .transform(v => v ?? null),
       category: z
-        .object({ value: z.string(), label: z.string() })
+        .object({ value: z.string(), label: z.string().trim() })
         .nullish()
         .transform(v => v ?? null),
       latitude: z.number().nullish(),
       longitude: z.number().nullish(),
       geoAccuracy: z.number().nullish(),
-      shopName: z.string().nullish(),
-      shopMall: z.string().nullish(),
+      shopName: z.string().trim().nullish(),
+      shopMall: z.string().trim().nullish(),
       type: z.enum(['online', 'physical']),
-      additionalServiceChargePercent: z.number().nullable().default(null),
-      isGstExcluded: z.boolean().nullable().default(false),
+      additionalServiceChargePercent: z.number().nullable().default(null).meta({ deprecated: true }),
+      isGstExcluded: z.boolean().nullable().default(false).meta({ deprecated: true }),
       items: z.array(
         z.object({
           id: z.string(),
-          name: z.string(),
+          name: z.string().trim(),
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
@@ -128,7 +128,7 @@ const saveExpenseProcedure = protectedProcedure
         .array(
           z.object({
             id: z.string(),
-            name: z.string(),
+            name: z.string().trim(),
             amountCents: z.int().default(0),
             rateBps: z.int().optional(),
             expenseItemId: z
@@ -145,13 +145,13 @@ const saveExpenseProcedure = protectedProcedure
     const { db, userId } = ctx;
 
     const existingSearchableSet = new Set<string>();
+    const existingItemIds = new Set<string>();
+    const existingAdjustmentIds = new Set<string>();
     if (input.expenseId !== 'create') {
-      const [existing] = await db.batch([
-        db.query.expensesTable.findFirst({
-          where: { id: input.expenseId, userId },
-          columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
-        }),
-      ]);
+      const existing = await db.query.expensesTable.findFirst({
+        where: { id: input.expenseId, userId },
+        columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
+      });
 
       if (!existing) {
         throw new TRPCError({ code: 'FORBIDDEN' });
@@ -169,57 +169,86 @@ const saveExpenseProcedure = protectedProcedure
         existingSearchableSet.add(existing.shopName);
       }
 
-      const otherExistingSearchables = await db
-        .select({ text: expenseItemsTable.name })
-        .from(expenseItemsTable)
-        .where(eq(expenseItemsTable.expenseId, input.expenseId))
-        .union(
-          db
-            .select({ text: expenseAdjustmentsTable.name })
-            .from(expenseAdjustmentsTable)
-            .where(eq(expenseAdjustmentsTable.expenseId, input.expenseId)),
-        );
+      const [items, adjustments] = await db.batch([
+        db
+          .select({
+            text: expenseItemsTable.name,
+            sourceId: expenseItemsTable.id,
+          })
+          .from(expenseItemsTable)
+          .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
+        db
+          .select({
+            text: expenseAdjustmentsTable.name,
+            sourceId: expenseAdjustmentsTable.id,
+          })
+          .from(expenseAdjustmentsTable)
+          .where(
+            and(eq(expenseAdjustmentsTable.expenseId, input.expenseId), eq(expenseAdjustmentsTable.isDeleted, false)),
+          ),
+      ]);
 
-      for (const { text } of otherExistingSearchables) {
+      for (const { text, sourceId } of items) {
         existingSearchableSet.add(text);
+        existingItemIds.add(sourceId);
+      }
+
+      for (const { text, sourceId } of adjustments) {
+        existingSearchableSet.add(text);
+        existingAdjustmentIds.add(sourceId);
       }
     } else {
       input.expenseId = generateId();
     }
 
-    const searchables: { type: string; text: string; context?: string | null }[] = [];
-    if (
-      input.shopName &&
-      existingSearchableSet.has(input.shopName) &&
-      (!input.shopMall || existingSearchableSet.has(input.shopMall))
-    ) {
-      searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
+    const inputSearchables = new Set<string>();
+    const newSearchables: { text: string; context?: string | null; sourceId: string }[] = [];
+    let shopNameSearchable: (typeof newSearchables)[number] | undefined = undefined;
+
+    if (input.shopName) {
+      inputSearchables.add(input.shopName);
+      shopNameSearchable = {
+        text: input.shopName,
+        context: input.shopMall,
+        sourceId: input.expenseId,
+      };
+      if (!existingSearchableSet.has(input.shopName)) {
+        newSearchables.push(shopNameSearchable);
+        existingSearchableSet.add(input.shopName);
+      }
     }
 
-    if (input.shopMall && existingSearchableSet.has(input.shopMall)) {
-      searchables.push({ type: 'shopMall', text: input.shopMall });
+    if (input.shopMall) {
+      inputSearchables.add(input.shopMall);
+      if (!existingSearchableSet.has(input.shopMall)) {
+        shopNameSearchable && newSearchables.push(shopNameSearchable);
+        newSearchables.push({ text: input.shopMall, sourceId: input.expenseId });
+        existingSearchableSet.add(input.shopMall);
+      }
     }
 
-    const activeIds: string[] = [];
-
+    const removedItemIds = new Set(existingItemIds);
     for (const item of input.items) {
       if (item.id === 'create') {
         item.id = generateId();
       }
-      activeIds.push(item.id);
+      removedItemIds.delete(item.id);
+      inputSearchables.add(item.name);
       if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
-        searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
+        newSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
         existingSearchableSet.add(item.name);
       }
     }
 
+    const removedAdjustmentIds = new Set(existingAdjustmentIds);
     for (const adj of input.adjustments) {
       if (adj.id === 'create') {
         adj.id = generateId();
       }
-      activeIds.push(adj.id!);
+      removedAdjustmentIds.delete(adj.id);
+      inputSearchables.add(adj.name);
       if (!existingSearchableSet.has(adj.name)) {
-        searchables.push({ type: 'adjustmentName', text: adj.name, context: input.shopName });
+        newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
         existingSearchableSet.add(adj.name);
       }
     }
@@ -280,11 +309,9 @@ const saveExpenseProcedure = protectedProcedure
         .insert(expenseItemsTable)
         .values(
           input.items.map((item, idx) => ({
-            userId,
             ...item,
             sequence: idx,
             expenseId: input.expenseId,
-            shopName: input.shopName ?? '',
           })),
         )
         .onConflictDoUpdate({
@@ -293,23 +320,28 @@ const saveExpenseProcedure = protectedProcedure
         }),
     );
 
-    batchItems.push(
-      db
-        .update(expenseItemsTable)
-        .set({ isDeleted: true })
-        .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds))),
-    );
+    if (removedItemIds.size > 0) {
+      batchItems.push(
+        db
+          .update(expenseItemsTable)
+          .set({ isDeleted: true })
+          .where(
+            and(
+              eq(expenseItemsTable.expenseId, input.expenseId),
+              inArray(expenseItemsTable.id, Array.from(removedItemIds)),
+            ),
+          ),
+      );
+    }
 
     batchItems.push(
       db
         .insert(expenseAdjustmentsTable)
         .values(
           input.adjustments.map((adj, idx) => ({
-            userId,
             ...adj,
             sequence: idx,
             expenseId: input.expenseId,
-            shopName: input.shopName ?? '',
           })),
         )
         .onConflictDoUpdate({
@@ -318,39 +350,18 @@ const saveExpenseProcedure = protectedProcedure
         }),
     );
 
-    batchItems.push(
-      db
-        .update(expenseAdjustmentsTable)
-        .set({ isDeleted: true })
-        .where(
-          and(
-            eq(expenseAdjustmentsTable.expenseId, input.expenseId),
-            notInArray(expenseAdjustmentsTable.id, activeIds),
+    if (removedAdjustmentIds.size > 0) {
+      batchItems.push(
+        db
+          .update(expenseAdjustmentsTable)
+          .set({ isDeleted: true })
+          .where(
+            and(
+              eq(expenseAdjustmentsTable.expenseId, input.expenseId),
+              inArray(expenseAdjustmentsTable.id, Array.from(removedAdjustmentIds)),
+            ),
           ),
-        ),
-    );
-
-    if (searchables.length) {
-      const records = searchables.flatMap(({ text, type, context }) =>
-        getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })),
       );
-
-      // each record have 6 params, cloudflare D1 max params is 100.
-      // 100 / 6 = 16.666, keep it safe, insert records in batches of 15 to stay under D1's 100-parameter limit
-      const groupSize = 15;
-      const groupsCount = Math.ceil(records.length / groupSize);
-      for (let i = 0; i < groupsCount; i++) {
-        const values = records.slice(i * groupSize, (i + 1) * groupSize);
-        batchItems.push(
-          db
-            .insert(searchTable)
-            .values(values)
-            .onConflictDoUpdate({
-              target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
-              set: { usageCount: sql`${searchTable.usageCount} + 1` },
-            }),
-        );
-      }
     }
 
     // @ts-ignore
