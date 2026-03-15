@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "54736da0-d800-4aa5-9cf2-c2128a5eaad7",
+  "id": "726574f0-ee11-46a6-b7d3-cfd26b4f299f",
   "prevIds": [
     "8639a571-8532-49ac-bb12-6cdb279a9688"
   ],
@@ -1866,6 +1866,24 @@
           "isExpression": false
         },
         {
+          "value": "box_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": "(\"expenses\".\"is_deleted\" = ? and (\"expenses\".\"box_id\" is not null))",
+      "origin": "manual",
+      "name": "idx_expenses_user_box_id_active",
+      "entityType": "indexes",
+      "table": "expenses"
+    },
+    {
+      "columns": [
+        {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
           "value": "billed_at",
           "isExpression": false
         },
@@ -1878,42 +1896,6 @@
       "where": null,
       "origin": "manual",
       "name": "idx_expenses_user_billed",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "shop_name",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_user_shopName",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
-          "value": "shop_mall",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_user_shopMall",
       "entityType": "indexes",
       "table": "expenses"
     },

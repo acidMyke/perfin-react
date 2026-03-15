@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { sql } from 'drizzle-orm';
+import { and, eq, isNotNull, sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
@@ -176,9 +176,10 @@ export const expensesTable = sqliteTable(
     isDeleted: boolean().notNull().default(false),
   },
   t => [
+    index('idx_expenses_user_box_id')
+      .on(t.userId, t.boxId)
+      .where(and(eq(t.isDeleted, false), isNotNull(t.boxId))!),
     index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
-    index('idx_expenses_user_shopName').on(t.userId, t.shopName),
-    index('idx_expenses_user_shopMall').on(t.userId, t.shopMall),
   ],
 );
 
