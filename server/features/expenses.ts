@@ -231,30 +231,42 @@ const saveExpenseProcedure = protectedProcedure
       }
     }
 
+    const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
     const removedItemIds = new Set(existingItemIds);
     for (const item of input.items) {
-      if (item.id === 'create') {
-        item.id = generateId();
-      }
+      if (item.isDeleted) continue;
+      if (item.id === 'create') item.id = generateId();
       removedItemIds.delete(item.id);
       inputSearchables.add(item.name);
       if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
         newSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
         existingSearchableSet.add(item.name);
       }
+
+      itemsRecords.push({
+        ...item,
+        expenseId: input.expenseId,
+        sequence: itemsRecords.length,
+      });
     }
 
+    const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
     const removedAdjustmentIds = new Set(existingAdjustmentIds);
     for (const adj of input.adjustments) {
-      if (adj.id === 'create') {
-        adj.id = generateId();
-      }
+      if (adj.isDeleted) continue;
+      if (adj.id === 'create') adj.id = generateId();
       removedAdjustmentIds.delete(adj.id);
       inputSearchables.add(adj.name);
       if (!existingSearchableSet.has(adj.name)) {
         newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
         existingSearchableSet.add(adj.name);
       }
+
+      adjustmentsRecords.push({
+        ...adj,
+        expenseId: input.expenseId,
+        sequence: adjustmentsRecords.length,
+      });
     }
 
     const batchItems: BatchItem<'sqlite'>[] = [];
@@ -311,13 +323,7 @@ const saveExpenseProcedure = protectedProcedure
     batchItems.push(
       db
         .insert(expenseItemsTable)
-        .values(
-          input.items.map((item, idx) => ({
-            ...item,
-            sequence: idx,
-            expenseId: input.expenseId,
-          })),
-        )
+        .values(itemsRecords)
         .onConflictDoUpdate({
           target: expenseItemsTable.id,
           set: excludedAll(expenseItemsTable),
@@ -341,13 +347,7 @@ const saveExpenseProcedure = protectedProcedure
     batchItems.push(
       db
         .insert(expenseAdjustmentsTable)
-        .values(
-          input.adjustments.map((adj, idx) => ({
-            ...adj,
-            sequence: idx,
-            expenseId: input.expenseId,
-          })),
-        )
+        .values(adjustmentsRecords)
         .onConflictDoUpdate({
           target: expenseItemsTable.id,
           set: excludedAll(expenseItemsTable),
