@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { and, eq, isNotNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
