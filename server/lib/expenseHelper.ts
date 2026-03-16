@@ -1,3 +1,10 @@
+export type ExpenseItemForCalculation = {
+  id: string;
+  isDeleted?: boolean | null | undefined;
+  quantity: number;
+  priceCents: number;
+};
+
 export type ExpenseAdjustmentForCalculation = {
   id: string;
   isDeleted?: boolean | null | undefined;
@@ -7,126 +14,85 @@ export type ExpenseAdjustmentForCalculation = {
 };
 
 export type ExpenseDetailForCalculation = {
-  items: {
-    id: string;
-    isDeleted?: boolean | null | undefined;
-    quantity: number;
-    priceCents: number;
-  }[];
+  items: ExpenseItemForCalculation[];
   adjustments: ExpenseAdjustmentForCalculation[];
 };
 
-type LineResult = {
-  /** Price * Quantity */
-  lineTotalAmountCents: number;
-  /** Price * Quantity */
-  lineTotalAmount: number;
-  /** Adjustment */
-  lineAdjustmentAmountCents: number;
-  /** Adjustment */
-  lineAdjustmentAmount: number;
-  /** Price * Quantity + Adjustments */
-  lineGrossAmountCents: number;
-  /** Price * Quantity + Adjustments */
-  lineGrossAmount: number;
+export type ItemCalculationResult = {
+  /** Before Adjustments */
+  grossTotalCents: number;
+  /** Amount for each adjustments: [adjustmentId, amountInCent] */
+  adjustmentCents: [string, number][];
+  /** After Adjustments */
+  netTotalCents: number;
 };
 
-type AdjustmentResult = {
-  adjustmentCents: number;
-  adjustment: number;
+export type ExpenseCalculationResult = ItemCalculationResult & {
+  /** Individual item result */
+  itemResults: Map<string, ItemCalculationResult>;
 };
 
-type CalculateExpenseResult = {
-  /** Price * Quantity */
-  subtotalAmountCents: number;
-  /** Price * Quantity */
-  subtotalAmount: number;
-  /** Price * Quantity + Adjustments */
-  grossAmountCents: number;
-  /** Price * Quantity + Adjustments */
-  grossAmount: number;
-
-  lineResults: Map<string, LineResult>;
-  adjustmentResults: Map<string, AdjustmentResult>;
-};
-
-function mapToDollars<T extends Record<`${string}Cents`, number>>(cents: T) {
-  return Object.assign(
-    cents,
-    Object.fromEntries(Object.entries(cents).map(([key, value]) => [key, value / 100])) as {
-      [K in keyof T as K extends `${infer Name}Cents` ? Name : never]: number;
-    },
-  );
-}
-
-export function calculateExpense(detail: ExpenseDetailForCalculation): CalculateExpenseResult {
+export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCalculationResult {
   const { items, adjustments } = detail;
-
-  // Calculating line total and subtotal
-  const lineResults = new Map<string, LineResult>();
-  let subtotalAmountCents = 0;
+  let expenseGrossTotal = 0;
+  const itemResultsMap = new Map<string, ItemCalculationResult>();
 
   for (const item of items) {
-    const { id, isDeleted, quantity, priceCents } = item;
-    const lineTotalAmountCents = !isDeleted ? quantity * priceCents : 0;
-    subtotalAmountCents += lineTotalAmountCents;
-    lineResults.set(
-      id,
-      mapToDollars({
-        lineTotalAmountCents,
-        lineAdjustmentAmountCents: 0,
-        lineGrossAmountCents: lineTotalAmountCents,
-      }),
-    );
+    if (item.isDeleted) continue;
+    const { id, quantity, priceCents } = item;
+    const gross = quantity * priceCents;
+    expenseGrossTotal += gross;
+
+    itemResultsMap.set(id, {
+      grossTotalCents: gross,
+      netTotalCents: gross,
+      adjustmentCents: [],
+    });
   }
 
-  // Calculating adjustments
-  const adjustmentResults = new Map<string, AdjustmentResult>();
-  let grossAmountCents = subtotalAmountCents;
+  let expenseNetTotal = expenseGrossTotal;
+  const expenseAdjustments: [string, number][] = [];
 
-  for (const adj of adjustments) {
-    const { id, isDeleted, rateBps, expenseItemId } = adj;
-    if (isDeleted) {
+  for (const adjustment of adjustments) {
+    if (adjustment.isDeleted) continue;
+    const { id, rateBps, amountCents, expenseItemId } = adjustment;
+
+    if (rateBps == null) {
+      // Flat adjustment
+      const amount = amountCents ?? 0;
+      expenseNetTotal += amount;
+      expenseAdjustments.push([id, amount]);
       continue;
     }
 
-    let adjustmentCents = 0;
+    // Rate adjustment: Basis Points (10000 bps = 100%)
+    let totalAdjAmountForThisRate = 0;
 
-    if (rateBps != null) {
-      if (expenseItemId) {
-        // Apply rate to only the specified item
-        const lineResult = lineResults.get(expenseItemId);
-        if (lineResult != null) {
-          const lineAdj = Math.round((lineResult.lineGrossAmountCents * rateBps) / 10000);
-          lineResult.lineGrossAmountCents += lineAdj;
-          lineResult.lineAdjustmentAmountCents += lineAdj;
-          lineResults.set(expenseItemId, mapToDollars({ ...lineResult }));
-          adjustmentCents += lineAdj;
-        }
-      } else {
-        // Apply rate to all items proportionally
-        for (const [itemId, lineResult] of lineResults.entries()) {
-          const lineAdj = Math.round((lineResult.lineGrossAmountCents * rateBps) / 10000);
-          lineResult.lineGrossAmountCents += lineAdj;
-          lineResult.lineAdjustmentAmountCents += lineAdj;
-          lineResults.set(itemId, mapToDollars({ ...lineResult }));
-          adjustmentCents += lineAdj;
-        }
+    if (expenseItemId) {
+      const itemResult = itemResultsMap.get(expenseItemId);
+      if (itemResult) {
+        const adjAmount = Math.round((itemResult.netTotalCents * rateBps) / 100_00);
+        itemResult.adjustmentCents.push([id, adjAmount]);
+        itemResult.netTotalCents += adjAmount;
+        totalAdjAmountForThisRate += adjAmount;
       }
-    } else if (adj.amountCents != null) {
-      adjustmentCents = adj.amountCents;
+    } else {
+      for (const itemResult of itemResultsMap.values()) {
+        const adjAmount = Math.round((itemResult.netTotalCents * rateBps) / 100_00);
+        itemResult.adjustmentCents.push([id, adjAmount]);
+        itemResult.netTotalCents += adjAmount;
+        totalAdjAmountForThisRate += adjAmount;
+      }
     }
 
-    grossAmountCents += adjustmentCents;
-    adjustmentResults.set(id, mapToDollars({ adjustmentCents }));
+    expenseNetTotal += totalAdjAmountForThisRate;
+    expenseAdjustments.push([id, totalAdjAmountForThisRate]);
   }
 
   return {
-    ...mapToDollars({
-      subtotalAmountCents,
-      grossAmountCents,
-    }),
-    lineResults,
-    adjustmentResults,
+    itemResults: itemResultsMap,
+    grossTotalCents: expenseGrossTotal,
+    netTotalCents: expenseNetTotal,
+    adjustmentCents: expenseAdjustments,
   };
 }

@@ -290,7 +290,7 @@ const saveExpenseProcedure = protectedProcedure
     const accountId = input.account?.value ?? null;
     const categoryId = input.category?.value ?? null;
 
-    const { grossAmountCents } = calculateExpense(input);
+    const { netTotalCents } = calculateExpense(input);
     const [boxId] =
       input.latitude && input.longitude
         ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
@@ -301,7 +301,7 @@ const saveExpenseProcedure = protectedProcedure
         .insert(expensesTable)
         .values({
           id: input.expenseId,
-          amountCents: grossAmountCents,
+          amountCents: netTotalCents,
           billedAt: input.billedAt,
           userId: userId,
           accountId: accountId,
