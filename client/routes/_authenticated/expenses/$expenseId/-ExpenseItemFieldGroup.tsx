@@ -1,7 +1,7 @@
 import { useMutation } from '@tanstack/react-query';
 import { withFieldGroup } from '../../../../components/Form';
 import { queryClient, trpc } from '../../../../trpc';
-import { defaultExpenseItem, defaultExpenseRefund, type ExpenseFormData } from './-expense.common';
+import { defaultExpenseItem, type ExpenseFormData } from './-expense.common';
 import { X } from 'lucide-react';
 import type { DeepKeys, DeepValue } from '@tanstack/react-form';
 import { currencyNumberFormat } from '../../../../utils';
@@ -19,7 +19,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
   },
   render({ group, itemIndex, disableRemoveButton, onRemoveClick, getFormField, onPricingChange }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const refundSourceSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
     return (
@@ -80,92 +79,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
             <NumericInput label='Quantity' containerCn='mt-2 col-span-2 w-full' step={1} min={1} />
           )}
         </group.AppField>
-
-        <group.Field name={`expenseRefund`}>
-          {field => (
-            <>
-              <label className='label col-span-3 mb-4 w-full pl-4'>
-                Refund:
-                <input
-                  type='checkbox'
-                  className='toggle'
-                  checked={!!field.state.value}
-                  onChange={e => {
-                    if (e.target.checked && !field.state.value) {
-                      group.setFieldValue(
-                        `expenseRefund`,
-                        defaultExpenseRefund({
-                          item: {
-                            priceCents: group.getFieldValue('priceCents'),
-                            quantity: group.getFieldValue('quantity'),
-                          },
-                          additionalServiceChargePercent: getFormField('additionalServiceChargePercent'),
-                          isGstExcluded: getFormField('isGstExcluded'),
-                        }),
-                      );
-                    } else if (!e.target.checked && field.state.value) {
-                      group.setFieldValue(`expenseRefund`, null);
-                      onPricingChange();
-                    }
-                  }}
-                />
-              </label>
-              {field.state.value && (
-                <>
-                  <group.AppField
-                    name={`expenseRefund.source`}
-                    validators={{
-                      onChangeAsyncDebounceMs: 500,
-                      onChangeAsync: ({ value, signal, fieldApi }) => {
-                        if (fieldApi.form.state.isSubmitting) return;
-
-                        signal.onabort = () =>
-                          queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                        if (value && value.length > 1) {
-                          refundSourceSuggestionMutation.mutateAsync({
-                            type: 'refundSource',
-                            search: value,
-                          });
-                        }
-                      },
-                    }}
-                  >
-                    {field => (
-                      <field.ComboBox
-                        suggestionMode
-                        label='Refund source'
-                        containerCn='row-start-3 col-start-1 col-span-4 w-full'
-                        options={refundSourceSuggestionMutation.data?.suggestions ?? []}
-                      />
-                    )}
-                  </group.AppField>
-                  <group.Subscribe selector={state => [state.values.expenseRefund?.expectedAmountCents]}>
-                    {([expectedAmountCents]) => (
-                      <group.AppField
-                        name={`expenseRefund.actualAmountCents`}
-                        listeners={{ onChange: () => onPricingChange() }}
-                      >
-                        {({ NumericInput }) => (
-                          <NumericInput
-                            label='Refunded amount'
-                            transforms={['amountInCents']}
-                            numberFormat={currencyNumberFormat}
-                            containerCn='mt-0 col-span-4'
-                            additionalSuffix={
-                              expectedAmountCents !== undefined
-                                ? `/${currencyNumberFormat.format(expectedAmountCents / 100)}`
-                                : undefined
-                            }
-                          />
-                        )}
-                      </group.AppField>
-                    )}
-                  </group.Subscribe>
-                </>
-              )}
-            </>
-          )}
-        </group.Field>
       </li>
     );
   },
