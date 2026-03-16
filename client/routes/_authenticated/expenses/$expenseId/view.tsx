@@ -2,7 +2,6 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { invalidateAndRedirectBackToList, useExpenseForm } from './-expense.common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat } from '../../../../utils';
-import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { trpc } from '../../../../trpc';
@@ -20,8 +19,8 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, geolocation, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
-  const { baseAmount, grossAmount, expectedRefundSum, amount, gst, serviceCharge } = ui.calculateResult;
+  const { ui, geolocation, items, account, category, isDeleted } = expense;
+  const { grossAmount, subtotalAmount } = ui.calculateResult;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
@@ -49,7 +48,6 @@ function RouteComponent() {
       <span>Amount</span>
 
       {items.map(item => {
-        const { grossAmount, amount, minRefundCents, grossAmountCents } = calculateExpenseItem(item, expense);
         return (
           <div
             key={item.id}
@@ -58,56 +56,22 @@ function RouteComponent() {
             <span className='font-medium'>
               {item.name} ({formatCents(item.priceCents)}) × {item.quantity}
             </span>
-            <span className={amount === 0 ? 'line-through' : ''}>{currencyNumberFormat.format(grossAmount)}</span>
-            {item.expenseRefund && (
-              <>
-                <span className='text-secondary ml-2 text-sm'>
-                  {(item.expenseRefund.actualAmountCents == null
-                    ? 'Pending refund '
-                    : minRefundCents < grossAmountCents
-                      ? 'Partially refunded '
-                      : 'Fully refunded ') + `(${item.expenseRefund.source})`}
-                </span>
-                {item.expenseRefund.actualAmountCents && (
-                  <span className='text-secondary text-sm'>-{formatCents(item.expenseRefund.actualAmountCents)}</span>
-                )}
-              </>
-            )}
+            {/* <span className={amount === 0 ? 'line-through' : ''}>{currencyNumberFormat.format(grossAmount)}</span> */}
           </div>
         );
       })}
 
       <div className='border-t-base-content/20 col-span-2 grid grid-cols-subgrid border-t pt-4 *:even:text-right'>
-        {baseAmount < grossAmount && (
+        {subtotalAmount < grossAmount && (
           <>
             <span>Subtotal:</span>
-            <span>{currencyNumberFormat.format(baseAmount)}</span>
-          </>
-        )}
-        {serviceCharge > 0 && (
-          <>
-            <span>Service charge ({additionalServiceChargePercent}%):</span>
-            <span>{currencyNumberFormat.format(serviceCharge)}</span>
-          </>
-        )}
-        {gst > 0 && (
-          <>
-            <span>Excl GST (9%):</span>
-            <span>{currencyNumberFormat.format(gst)}</span>
+            <span>{currencyNumberFormat.format(subtotalAmount)}</span>
           </>
         )}
       </div>
       <div className='col-span-2 grid grid-cols-subgrid text-xl *:odd:font-bold *:even:text-right'>
         <span>Gross amount:</span>
         <span>{currencyNumberFormat.format(grossAmount)}</span>
-        {expectedRefundSum > 0 && (
-          <>
-            <span>Expected total:</span>
-            <span>{currencyNumberFormat.format(grossAmount - expectedRefundSum)}</span>
-          </>
-        )}
-        <span>Total paid:</span>
-        <span>{currencyNumberFormat.format(amount)}</span>
       </div>
 
       <ActionSection isDeleted={isDeleted} />

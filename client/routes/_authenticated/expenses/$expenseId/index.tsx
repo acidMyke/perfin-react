@@ -14,8 +14,7 @@ import { withForm } from '../../../../components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
-import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
-import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
+import { currencyNumberFormat } from '../../../../utils';
 import { useCallback } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
@@ -65,19 +64,11 @@ function RouteComponent() {
       </form.AppField>
       <form.AppField name='ui.calculateResult'>
         {field => {
-          const { grossAmount, expectedRefundSum, amount } = field.state.value;
+          const { grossAmount } = field.state.value;
           return (
             <div className='border-t-base-content/20 col-span-full mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
               <p>Gross amount:</p>
               <p>{currencyNumberFormat.format(grossAmount)}</p>
-              {expectedRefundSum > 0 && (
-                <>
-                  <p>Expected total:</p>
-                  <p>{currencyNumberFormat.format(grossAmount - expectedRefundSum)}</p>
-                </>
-              )}
-              <p>Total paid:</p>
-              <p>{currencyNumberFormat.format(amount)}</p>
             </div>
           );
         }}
@@ -130,11 +121,7 @@ const ItemsDetailsSubForm = withForm({
           isItemsSubpage ? (
             <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 items-center gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
               {field.state.value.map((item, itemIndex) => {
-                const { name, quantity, expenseRefund } = item;
-                const { grossAmount } = calculateExpenseItem(item, {
-                  additionalServiceChargePercent: form.getFieldValue('additionalServiceChargePercent'),
-                  isGstExcluded: form.getFieldValue('isGstExcluded'),
-                });
+                const { name, quantity } = item;
 
                 return (
                   <>
@@ -142,15 +129,9 @@ const ItemsDetailsSubForm = withForm({
                       {name} {quantity > 1 && <span>x{quantity}</span>}
                     </span>
 
-                    {expenseRefund && (
-                      <div className='badge badge-sm badge-neutral col-start-2'>
-                        {expenseRefund.actualAmountCents !== 0 ? 'Refunded' : 'Pend refund'}
-                      </div>
-                    )}
-
-                    <span className='col-start-3 self-center justify-self-end'>
+                    {/* <span className='col-start-3 self-center justify-self-end'>
                       {currencyNumberFormat.format(grossAmount)}
-                    </span>
+                    </span> */}
                     <Link
                       className='btn btn-sm btn-primary col-start-4'
                       to='/expenses/$expenseId/items/$indexStr'
@@ -293,44 +274,6 @@ const ShopDetailSubForm = withForm({
               label='Mall'
               containerCn='col-span-4 mt-2'
               options={shopMallSuggestionMutation.data?.suggestions ?? []}
-            />
-          )}
-        </form.AppField>
-        <form.AppField
-          name='additionalServiceChargePercent'
-          listeners={{
-            onChange: () => {
-              form.setFieldValue('isGstExcluded', true);
-              calculateExpenseForm(form);
-            },
-          }}
-        >
-          {field => (
-            <div className='col-span-full my-2 flex flex-row justify-between gap-4'>
-              <field.BooleanInput
-                labelCn='justify-between mr-8 w-78'
-                label='Service charge'
-                nullIfFalse
-                transformValue={v => (v === true ? 10 : v)}
-              />
-              <field.NumericInput
-                label={null}
-                containerCn='inline-block w-20'
-                inputCn='input-md'
-                disabled={field.state.value === null}
-                numberFormat={percentageNumberFormat}
-                transforms={['percentage']}
-                transformFor='formatOnly'
-              />
-            </div>
-          )}
-        </form.AppField>
-
-        <form.AppField name='isGstExcluded' listeners={{ onChange: () => calculateExpenseForm(form) }}>
-          {field => (
-            <field.BooleanInput
-              labelCn='justify-between col-span-full my-2 w-78'
-              label={`GST (${field.state.value ? 'Exclusive' : 'Inclusive'})`}
             />
           )}
         </form.AppField>
