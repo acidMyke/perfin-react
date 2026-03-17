@@ -10,7 +10,7 @@ import {
   mapExpenseDetailToForm,
   setCurrentLocation,
   type ExpenseFormData,
-} from './-expense.common';
+} from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
 import { percentageNumberFormat } from '../../../../utils';
 

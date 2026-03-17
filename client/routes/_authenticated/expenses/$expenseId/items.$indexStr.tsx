@@ -1,6 +1,6 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { calculateExpenseForm, defaultExpenseItem, useExpenseForm } from './-expense.common';
-import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
+import { calculateExpenseForm, defaultExpenseItem, useExpenseForm } from './-common';
+import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/items/$indexStr')({

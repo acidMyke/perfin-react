@@ -1,9 +1,9 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
-import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../../trpc';
-import { useAppForm, useFormContext } from '../../../../components/Form';
-import { calculateExpense } from '../../../../../server/lib/expenseHelper';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../../../trpc';
+import { useAppForm, useFormContext } from '../../../../../components/Form';
+import { calculateExpense } from '../../../../../../server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
-import { generateId } from '../../../../utils';
+import { generateId } from '../../../../../utils';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
@@ -179,8 +179,6 @@ export function useExpenseForm() {
 export function calculateExpenseForm(form: TExpenseForm) {
   const items = form.getFieldValue('items');
   const adjustments = form.getFieldValue('adjustments');
-  // const additionalServiceChargePercent = form.getFieldValue('additionalServiceChargePercent');
-  // const isGstExcluded = form.getFieldValue('isGstExcluded');
 
   const result = calculateExpense({ items, adjustments });
   form.setFieldValue('ui.calculateResult', result);

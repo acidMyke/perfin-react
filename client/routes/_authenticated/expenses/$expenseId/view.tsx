@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { invalidateAndRedirectBackToList, useExpenseForm } from './-expense.common';
+import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat } from '../../../../utils';
 import { useMutation } from '@tanstack/react-query';
