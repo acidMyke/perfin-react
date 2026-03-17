@@ -1,8 +1,8 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
-import { PageHeader } from '../../../../components/PageHeader';
-import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '../../../../trpc';
+import { PageHeader } from '#components/PageHeader';
+import { useAppForm } from '#components/Form';
+import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '#client/trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
-import { useAppForm } from '../../../../components/Form';
 import { useCallback, useEffect, useRef, type ReactElement } from 'react';
 import {
   createEditExpenseFormOptions,
@@ -12,7 +12,7 @@ import {
   type ExpenseFormData,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
-import { percentageNumberFormat } from '../../../../utils';
+import { percentageNumberFormat } from '#client/utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,

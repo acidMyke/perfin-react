@@ -1,9 +1,9 @@
 import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
-import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../../../trpc';
-import { useAppForm, useFormContext } from '../../../../../components/Form';
-import { calculateExpense } from '../../../../../../server/lib/expenseHelper';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
+import { useAppForm, useFormContext } from '#components/Form';
+import { calculateExpense } from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
-import { generateId } from '../../../../../utils';
+import { generateId } from '#client/utils';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];

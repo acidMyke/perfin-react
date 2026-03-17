@@ -1,15 +1,15 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../trpc';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { ChevronRight, SearchX } from 'lucide-react';
-import { abbreviatedMonthValues } from '../../../constants';
-import { PageHeader } from '../../../components/PageHeader';
-import { currencyNumberFormat } from '../../../utils';
+import { abbreviatedMonthValues } from '#client/constants';
+import { PageHeader } from '#components/PageHeader';
+import { currencyNumberFormat } from '#client/utils';
 import { useMemo } from 'react';
 import { formOptions } from '@tanstack/react-form';
-import { useAppForm, type Option } from '../../../components/Form';
+import { useAppForm, type Option } from '#components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,

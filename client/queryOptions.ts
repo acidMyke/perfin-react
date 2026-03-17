@@ -1,5 +1,5 @@
 import { minutesToMilliseconds } from 'date-fns/minutesToMilliseconds';
-import { trpc } from './trpc';
+import { trpc } from '#client/trpc';
 
 export const whoamiQueryOptions = trpc.whoami.queryOptions(undefined, {
   gcTime: minutesToMilliseconds(20),

@@ -22,7 +22,15 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["vite/client", "node"]
+    "types": ["vite/client", "node"],
+
+    /* Path Alias */
+    "baseUrl": "./",
+    "paths": {
+      "#server/*": ["server/*"],
+      "#client/*": ["client/*"],
+      "#components/*": ["client/components/*"]
+    }
   },
   "include": ["client", "db/schema.ts", "server/cloudflare.d.ts"]
 }

@@ -1,15 +1,14 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../../../trpc';
+import { queryClient, trpc } from '#client/trpc';
 import { calculateExpenseForm, createEditExpenseFormOptions, defaultExpenseItem, useExpenseForm } from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
-import { FieldError } from '../../../../components/FieldError';
-import { withForm } from '../../../../components/Form';
+import { FieldError } from '#components/FieldError';
+import { withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
-import { currencyNumberFormat } from '../../../../utils';
 import { useCallback } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({

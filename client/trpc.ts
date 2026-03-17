@@ -1,12 +1,12 @@
 import { QueryClient } from '@tanstack/react-query';
 import { createTRPCClient, httpBatchLink, isTRPCClientError, loggerLink, type TRPCLink } from '@trpc/client';
 import { createTRPCOptionsProxy } from '@trpc/tanstack-react-query';
-import type { AppRouter } from '../server/router';
+import type { AppRouter } from '#server/router';
 import { observable, type Unsubscribable } from '@trpc/server/observable';
-import type { AppErrorShapeData } from '../server/lib/trpc';
+import type { AppErrorShapeData } from '#server/lib/trpc';
 import type { inferRouterInputs, inferRouterOutputs } from '@trpc/server';
 import { notFound } from '@tanstack/react-router';
-import ErrorCodes, { type ErrorCodesValues } from '../server/lib/ErrorCodes';
+import ErrorCodes, { type ErrorCodesValues } from '#server/lib/ErrorCodes';
 
 export type RouterInputs = inferRouterInputs<AppRouter>;
 export type RouterOutputs = inferRouterOutputs<AppRouter>;

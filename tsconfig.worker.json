@@ -20,7 +20,14 @@
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
     "noUncheckedIndexedAccess": true,
-    "types": ["vite/client", "@types/node"]
+    "types": ["vite/client", "@types/node"],
+
+    /* Path Alias */
+    "baseUrl": "./",
+    "paths": {
+      "#server": ["server/*"],
+      "#client": ["client/*"]
+    }
   },
   "include": ["server", "db/schema.ts"]
 }

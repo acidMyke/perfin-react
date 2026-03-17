@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { queryClient, trpc, type RouterInputs } from '../../trpc';
-import { PageHeader } from '../../components/PageHeader';
-import { cn } from '../../components/Form';
+import { queryClient, trpc, type RouterInputs } from '#client/trpc';
+import { PageHeader } from '#components/PageHeader';
+import { cn } from '#components/Form';
 import { ChevronDown, MoveRight, TrendingDown, TrendingUp, type LucideProps } from 'lucide-react';
 import { Suspense, useState } from 'react';
 import { CartesianGrid, Legend, Line, LineChart, XAxis, YAxis } from 'recharts';
-import { currencyNumberFormat } from '../../utils';
+import { currencyNumberFormat } from '#client/utils';
 
 export const Route = createFileRoute('/_authenticated/dashboard')({
   component: RouteComponent,

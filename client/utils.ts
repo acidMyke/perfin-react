@@ -3,6 +3,7 @@ import { nanoid } from 'nanoid';
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 export const SG_LOCALE = 'en-SG';
 export const currencyNumberFormat = new Intl.NumberFormat(SG_LOCALE, { style: 'currency', currency: 'SGD' });
+export const formatCents = (cents: number) => currencyNumberFormat.format(Math.round(cents) / 100);
 export const percentageNumberFormat = new Intl.NumberFormat(SG_LOCALE, { style: 'percent', maximumFractionDigits: 2 });
 export const dateFormat = new Intl.DateTimeFormat(SG_LOCALE, {
   hour12: false,

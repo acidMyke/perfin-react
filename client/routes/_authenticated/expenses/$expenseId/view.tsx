@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useStore } from '@tanstack/react-form';
-import { currencyNumberFormat, dateFormat } from '../../../../utils';
+import { currencyNumberFormat, dateFormat } from '#client/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { trpc } from '../../../../trpc';
+import { trpc } from '#client/trpc';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
