@@ -118,7 +118,7 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().trim().nullish(),
       shopMall: z.string().trim().nullish(),
-      type: z.enum(['online', 'physical']),
+      type: z.enum(['online', 'physical']).default('physical'),
       specifiedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       items: z.array(
         z.object({

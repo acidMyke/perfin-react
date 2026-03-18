@@ -109,7 +109,7 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ui, ...otherValues } = value;
+        const { billedAt, geolocation, ui, type, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
@@ -141,7 +141,6 @@ function RouteComponent() {
   useEffect(() => {
     if (isCreate) {
       form.setFieldValue('billedAt', new Date());
-      setCurrentLocation(form);
     }
   }, [isCreate]);
 

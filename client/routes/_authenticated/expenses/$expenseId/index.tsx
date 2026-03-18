@@ -1,7 +1,13 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { queryClient, trpc } from '#client/trpc';
-import { calculateExpenseForm, createEditExpenseFormOptions, defaultExpenseItem, useExpenseForm } from './-common';
+import {
+  calculateExpenseForm,
+  createEditExpenseFormOptions,
+  defaultExpenseItem,
+  setCurrentLocation,
+  useExpenseForm,
+} from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
@@ -20,6 +26,33 @@ function RouteComponent() {
   const form = useExpenseForm();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
+
+  const expenseType = useStore(form.store, state => state.values.type);
+
+  if (!expenseType) {
+    return (
+      <div className='mb-20 grid grid-cols-2 gap-2'>
+        <p className='col-span-2 text-center text-xl'>Select the type of expense</p>
+        <button
+          className='btn btn-primary btn-lg btn-block'
+          onClick={() => {
+            setCurrentLocation(form);
+            form.setFieldValue('type', 'physical');
+          }}
+        >
+          Physical
+        </button>
+        <button
+          className='btn btn-secondary btn-lg btn-block'
+          onClick={() => {
+            form.setFieldValue('type', 'online');
+          }}
+        >
+          Online
+        </button>
+      </div>
+    );
+  }
 
   return (
     <div className='mb-20 grid grid-cols-8 gap-x-2'>

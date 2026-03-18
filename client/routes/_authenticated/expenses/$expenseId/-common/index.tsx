@@ -92,7 +92,7 @@ export function mapExpenseDetailToForm(
       billedAt: new Date(),
       account: undefined,
       category: undefined,
-      type: 'online' as const,
+      type: undefined as 'online' | 'physical' | undefined,
       geolocation: undefined,
       shopName: undefined,
       shopMall: undefined,
