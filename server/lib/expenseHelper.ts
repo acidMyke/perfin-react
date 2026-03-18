@@ -14,6 +14,7 @@ export type ExpenseAdjustmentForCalculation = {
 };
 
 export type ExpenseDetailForCalculation = {
+  specifiedAmountCents: number;
   items: ExpenseItemForCalculation[];
   adjustments: ExpenseAdjustmentForCalculation[];
 };
@@ -33,21 +34,29 @@ export type ExpenseCalculationResult = ItemCalculationResult & {
 };
 
 export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCalculationResult {
-  const { items, adjustments } = detail;
+  const { specifiedAmountCents, items, adjustments } = detail;
+
+  const isItemizedExpense = items.length > 0;
   let expenseGrossTotal = 0;
   const itemResultsMap = new Map<string, ItemCalculationResult>();
 
-  for (const item of items) {
-    if (item.isDeleted) continue;
-    const { id, quantity, priceCents } = item;
-    const gross = quantity * priceCents;
-    expenseGrossTotal += gross;
+  if (isItemizedExpense) {
+    // Itemized bill. Ignore specifiedAmountCents
+    for (const item of items) {
+      if (item.isDeleted) continue;
+      const { id, quantity, priceCents } = item;
+      const gross = quantity * priceCents;
+      expenseGrossTotal += gross;
 
-    itemResultsMap.set(id, {
-      grossTotalCents: gross,
-      netTotalCents: gross,
-      adjustmentCents: [],
-    });
+      itemResultsMap.set(id, {
+        grossTotalCents: gross,
+        netTotalCents: gross,
+        adjustmentCents: [],
+      });
+    }
+  } else {
+    // Non-itemized bill. Just grossTotalCents then adjustments
+    expenseGrossTotal = specifiedAmountCents;
   }
 
   let expenseNetTotal = expenseGrossTotal;
@@ -66,6 +75,14 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     }
 
     // Rate adjustment: Basis Points (10000 bps = 100%)
+    if (!isItemizedExpense) {
+      // Base amount from net total
+      const adjAmount = Math.round((expenseNetTotal * rateBps) / 100_00);
+      expenseNetTotal += adjAmount;
+      expenseAdjustments.push([id, adjAmount]);
+      continue;
+    }
+
     let totalAdjAmountForThisRate = 0;
 
     if (expenseItemId) {

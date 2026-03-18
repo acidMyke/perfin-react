@@ -62,6 +62,7 @@ const loadExpenseDetailProcedure = protectedProcedure
           shopMall: expensesTable.shopMall,
           version: expensesTable.version,
           isDeleted: expensesTable.isDeleted,
+          specifiedAmountCents: expensesTable.specifiedAmountCents,
         })
         .from(expensesTable)
         .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
@@ -118,8 +119,7 @@ const saveExpenseProcedure = protectedProcedure
       shopName: z.string().trim().nullish(),
       shopMall: z.string().trim().nullish(),
       type: z.enum(['online', 'physical']),
-      additionalServiceChargePercent: z.number().nullable().default(null).meta({ deprecated: true }),
-      isGstExcluded: z.boolean().nullable().default(false).meta({ deprecated: true }),
+      specifiedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       items: z.array(
         z.object({
           id: z.string(),
@@ -314,8 +314,7 @@ const saveExpenseProcedure = protectedProcedure
           boxId,
           shopName: input.shopName,
           shopMall: input.shopMall,
-          additionalServiceChargePercent: input.additionalServiceChargePercent,
-          isGstExcluded: input.isGstExcluded,
+          specifiedAmountCents: input.specifiedAmountCents,
         })
         .onConflictDoUpdate({
           target: expensesTable.id,

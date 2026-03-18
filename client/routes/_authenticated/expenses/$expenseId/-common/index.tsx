@@ -86,7 +86,7 @@ export function mapExpenseDetailToForm(
         isItemsSubpage: false,
         isCurrentLocationError: false,
         shouldInferShopDetail: true,
-        calculateResult: calculateExpense({ items: [], adjustments: [] }),
+        calculateResult: calculateExpense({ specifiedAmountCents: 0, items: [], adjustments: [] }),
       },
       description: undefined,
       billedAt: new Date(),
@@ -97,8 +97,9 @@ export function mapExpenseDetailToForm(
       shopName: undefined,
       shopMall: undefined,
       isDeleted: false,
-      items: [defaultExpenseItem()],
-      adjustments: [],
+      specifiedAmountCents: 0,
+      items: [] as ExpenseItem[],
+      adjustments: [] as ExpenseAdjustment[],
     };
   }
 }
@@ -177,10 +178,11 @@ export function useExpenseForm() {
 }
 
 export function calculateExpenseForm(form: TExpenseForm) {
+  const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
   const items = form.getFieldValue('items');
   const adjustments = form.getFieldValue('adjustments');
 
-  const result = calculateExpense({ items, adjustments });
+  const result = calculateExpense({ specifiedAmountCents, items, adjustments });
   form.setFieldValue('ui.calculateResult', result);
   // TODO: update logic here to V2 logic
 
