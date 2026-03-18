@@ -5,6 +5,7 @@ import { currencyNumberFormat, dateFormat } from '#client/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
 import { trpc } from '#client/trpc';
+import { BillTotal } from './-common/BillTotal';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -19,8 +20,7 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, geolocation, items, account, category, isDeleted } = expense;
-  const { grossAmount, subtotalAmount } = ui.calculateResult;
+  const { geolocation, items, account, category, isDeleted } = expense;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
@@ -61,18 +61,7 @@ function RouteComponent() {
         );
       })}
 
-      <div className='border-t-base-content/20 col-span-2 grid grid-cols-subgrid border-t pt-4 *:even:text-right'>
-        {subtotalAmount < grossAmount && (
-          <>
-            <span>Subtotal:</span>
-            <span>{currencyNumberFormat.format(subtotalAmount)}</span>
-          </>
-        )}
-      </div>
-      <div className='col-span-2 grid grid-cols-subgrid text-xl *:odd:font-bold *:even:text-right'>
-        <span>Gross amount:</span>
-        <span>{currencyNumberFormat.format(grossAmount)}</span>
-      </div>
+      <BillTotal />
 
       <ActionSection isDeleted={isDeleted} />
     </div>

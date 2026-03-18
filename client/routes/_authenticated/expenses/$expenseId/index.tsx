@@ -10,6 +10,7 @@ import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { useCallback } from 'react';
+import { BillTotal } from './-common/BillTotal';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -56,17 +57,7 @@ function RouteComponent() {
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
       </form.AppField>
-      <form.AppField name='ui.calculateResult'>
-        {field => {
-          const { grossAmount } = field.state.value;
-          return (
-            <div className='border-t-base-content/20 col-span-full mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
-              <p>Gross amount:</p>
-              <p>{currencyNumberFormat.format(grossAmount)}</p>
-            </div>
-          );
-        }}
-      </form.AppField>
+      <BillTotal className='col-span-8' />
       <form.StatusMessage />
       <form.SubmitButton
         buttonCn='col-span-full mb-4'
