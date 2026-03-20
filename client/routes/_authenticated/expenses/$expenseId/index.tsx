@@ -11,7 +11,7 @@ import {
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
-import { withForm } from '#components/Form';
+import { cn, withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
@@ -57,6 +57,7 @@ function RouteComponent() {
   return (
     <div className='mb-20 grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
+      <LocationSubForm form={form} />
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
@@ -211,91 +212,117 @@ const ItemsDetailsSubForm = withForm({
   },
 });
 
-const ShopDetailSubForm = withForm({
+const LocationSubForm = withForm({
   ...createEditExpenseFormOptions,
-  render({ form }) {
+  render() {
+    const form = useExpenseForm();
     const { expenseId } = Route.useParams();
-    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const isCurrentLocationError = useStore(form.store, state => state.values.ui.isCurrentLocationError);
 
     return (
-      <>
-        <form.AppField name='geolocation'>
-          {field => {
-            const geolocation = field.state.value;
-            return (
-              <>
-                <p className='col-span-6 mt-2 mb-4'>
-                  Coordinate:{' '}
-                  {geolocation
-                    ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
-                    : isCurrentLocationError
-                      ? 'Unable to retrieve location'
-                      : 'Unspecified'}
-                </p>
-                <Link
-                  className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
-                  to='/expenses/$expenseId/geolocation'
-                  params={{ expenseId }}
-                >
-                  View / Edit
-                </Link>
-              </>
-            );
-          }}
-        </form.AppField>
-        <form.AppField
-          name='shopName'
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 2) {
-                shopNameSuggestionMutation.mutateAsync({
-                  type: 'shopName',
-                  search: value,
-                });
-              }
-            },
-          }}
-        >
-          {field => (
-            <field.ComboBox
-              suggestionMode
-              label='Shop name'
-              containerCn='col-span-4 mt-2'
-              options={shopNameSuggestionMutation.data?.suggestions ?? []}
-            />
-          )}
-        </form.AppField>
-        <form.AppField
-          name='shopMall'
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 2) {
-                shopMallSuggestionMutation.mutateAsync({
-                  type: 'shopMall',
-                  search: value,
-                });
-              }
-            },
-          }}
-        >
-          {field => (
-            <field.ComboBox
-              suggestionMode
-              label='Mall'
-              containerCn='col-span-4 mt-2'
-              options={shopMallSuggestionMutation.data?.suggestions ?? []}
-            />
-          )}
-        </form.AppField>
-      </>
+      <form.Subscribe selector={state => [state.values.ui.isCurrentLocationError, state.values.type]}>
+        {([isCurrentLocationError, expenseType]) =>
+          expenseType === 'physical' ? (
+            <form.AppField name='geolocation'>
+              {field => {
+                const geolocation = field.state.value;
+                return (
+                  <>
+                    <p className='col-span-6 mt-2 mb-4'>
+                      Coordinate:{' '}
+                      {geolocation
+                        ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
+                        : isCurrentLocationError
+                          ? 'Unable to retrieve location'
+                          : 'Unspecified'}
+                    </p>
+                    <Link
+                      className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
+                      to='/expenses/$expenseId/geolocation'
+                      params={{ expenseId }}
+                    >
+                      View / Edit
+                    </Link>
+                  </>
+                );
+              }}
+            </form.AppField>
+          ) : (
+            <></>
+          )
+        }
+      </form.Subscribe>
+    );
+  },
+});
+
+const ShopDetailSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render() {
+    const form = useExpenseForm();
+    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+
+    return (
+      <form.Subscribe selector={state => [state.values.type]}>
+        {([expenseType]) => (
+          <>
+            <form.AppField
+              name='shopName'
+              validators={{
+                onChangeAsyncDebounceMs: 500,
+                onChangeAsync: ({ value, signal, fieldApi }) => {
+                  if (fieldApi.form.state.isSubmitting) return;
+                  signal.onabort = () =>
+                    queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+                  if (value && value.length > 2) {
+                    shopNameSuggestionMutation.mutateAsync({
+                      type: 'shopName',
+                      search: value,
+                    });
+                  }
+                },
+              }}
+            >
+              {field => (
+                <field.ComboBox
+                  suggestionMode
+                  label='Shop name'
+                  containerCn={cn('col-span-4 mt-2', { 'col-span-8': expenseType !== 'physical' })}
+                  options={shopNameSuggestionMutation.data?.suggestions ?? []}
+                />
+              )}
+            </form.AppField>
+            {expenseType === 'physical' && (
+              <form.AppField
+                name='shopMall'
+                validators={{
+                  onChangeAsyncDebounceMs: 500,
+                  onChangeAsync: ({ value, signal, fieldApi }) => {
+                    if (fieldApi.form.state.isSubmitting) return;
+                    signal.onabort = () =>
+                      queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
+                    if (value && value.length > 2) {
+                      shopMallSuggestionMutation.mutateAsync({
+                        type: 'shopMall',
+                        search: value,
+                      });
+                    }
+                  },
+                }}
+              >
+                {field => (
+                  <field.ComboBox
+                    suggestionMode
+                    label='Mall'
+                    containerCn='col-span-4 mt-2'
+                    options={shopMallSuggestionMutation.data?.suggestions ?? []}
+                  />
+                )}
+              </form.AppField>
+            )}
+          </>
+        )}
+      </form.Subscribe>
     );
   },
 });
