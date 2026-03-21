@@ -61,7 +61,7 @@ function RouteComponent() {
         );
       })}
 
-      <BillTotal />
+      <BillTotal className='col-span-2' />
 
       <ActionSection isDeleted={isDeleted} />
     </div>
