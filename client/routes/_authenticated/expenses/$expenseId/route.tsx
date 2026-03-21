@@ -8,7 +8,6 @@ import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
-  setCurrentLocation,
   type ExpenseFormData,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';

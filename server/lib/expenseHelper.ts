@@ -1,3 +1,6 @@
+export const GST_NAME = '_gst' as const;
+export const SERVICE_CHARGE_NAME = '_service' as const;
+
 export type ExpenseItemForCalculation = {
   id: string;
   isDeleted?: boolean | null | undefined;

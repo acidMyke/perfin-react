@@ -1,7 +1,13 @@
-import { formOptions, type AppFieldExtendedReactFormApi, type FormOptions } from '@tanstack/react-form';
+import {
+  formOptions,
+  type AppFieldExtendedReactFormApi,
+  type DeepKeys,
+  type DeepValue,
+  type FormOptions,
+} from '@tanstack/react-form';
 import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { useAppForm, useFormContext } from '#components/Form';
-import { calculateExpense } from '#server/lib/expenseHelper';
+import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 
@@ -22,7 +28,9 @@ export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   };
 }
 
-export function defaultExpenseAdjustment(item?: ExpenseItem): ExpenseAdjustment {
+export function defaultExpenseAdjustment(
+  options: Partial<Pick<ExpenseAdjustment, 'expenseItemId' | 'name'>>,
+): ExpenseAdjustment {
   const adjustment: ExpenseAdjustment = {
     id: generateId(),
     name: '',
@@ -30,9 +38,15 @@ export function defaultExpenseAdjustment(item?: ExpenseItem): ExpenseAdjustment 
     amountCents: 0,
   };
 
-  if (item) {
-    adjustment.expenseItemId = item.id;
+  if (options.expenseItemId) {
     adjustment.rateBps = 100_00;
+    adjustment.expenseItemId = options.expenseItemId;
+  }
+  if (options.name === GST_NAME) {
+    adjustment.rateBps = 9_00;
+  }
+  if (options.name === SERVICE_CHARGE_NAME) {
+    adjustment.rateBps = 10_00;
   }
 
   return adjustment;
@@ -168,6 +182,10 @@ type TExpenseForm =
         >
       : never
     : never;
+
+export type TGetExpenseFormField = <TField extends DeepKeys<ExpenseFormData>>(
+  field: TField,
+) => DeepValue<ExpenseFormData, TField>;
 
 export function useExpenseForm() {
   const form = useFormContext();

@@ -16,7 +16,7 @@ import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, sql, SQ
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { calculateExpense } from '../lib/expenseHelper';
+import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
@@ -258,10 +258,13 @@ const saveExpenseProcedure = protectedProcedure
       if (adj.isDeleted) continue;
       if (adj.id === 'create') adj.id = generateId();
       removedAdjustmentIds.delete(adj.id);
-      inputSearchables.add(adj.name);
-      if (!existingSearchableSet.has(adj.name)) {
-        newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
-        existingSearchableSet.add(adj.name);
+      if (adj.name !== GST_NAME && adj.name !== SERVICE_CHARGE_NAME) {
+        // Exclude GST & Service Charge from searchables
+        inputSearchables.add(adj.name);
+        if (!existingSearchableSet.has(adj.name)) {
+          newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
+          existingSearchableSet.add(adj.name);
+        }
       }
 
       adjustmentsRecords.push({
