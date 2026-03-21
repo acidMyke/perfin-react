@@ -12,12 +12,11 @@ export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
   props: {
     itemIndex: 0,
-    disableRemoveButton: true,
     onRemoveClick: () => {},
     getFormField: (() => {}) as unknown as TGetFormField,
     onPricingChange: () => {},
   },
-  render({ group, itemIndex, disableRemoveButton, onRemoveClick, getFormField, onPricingChange }) {
+  render({ group, itemIndex, onRemoveClick, getFormField, onPricingChange }) {
     const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
@@ -60,7 +59,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
             />
           )}
         </group.AppField>
-        <button className='btn-ghost btn btn-sm mb-1' disabled={disableRemoveButton} onClick={onRemoveClick}>
+        <button className='btn-ghost btn btn-sm mb-1' onClick={onRemoveClick}>
           <X />
         </button>
 

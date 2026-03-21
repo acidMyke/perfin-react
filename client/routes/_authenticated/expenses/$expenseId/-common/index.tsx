@@ -12,12 +12,12 @@ export type ExpenseItem = SaveExpenseDetailPayload['items'][number];
 export type ExpenseAdjustment = SaveExpenseDetailPayload['adjustments'][number];
 export type InferredShopDetail = RouterOutputs['expense']['inferShopDetail'];
 
-export function defaultExpenseItem(): ExpenseItem {
+export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
     id: generateId(),
     name: '',
     isDeleted: false,
-    priceCents: 0,
+    priceCents: priceCents ?? 0,
     quantity: 1,
   };
 }
@@ -38,6 +38,7 @@ export function defaultExpenseAdjustment(item?: ExpenseItem): ExpenseAdjustment 
   return adjustment;
 }
 
+export const MAX_ITEMS_IN_MAIN = 2;
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
   options?: ExpenseOptions,
@@ -48,8 +49,6 @@ export function mapExpenseDetailToForm(
     const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
     const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
     const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
-
-    let isItemsSubpage = detail.items.length > 2;
 
     if (param?.isCopy) {
       const remappedItemId = new Map<string, string>();
@@ -68,7 +67,6 @@ export function mapExpenseDetailToForm(
     return {
       ui: {
         isCreate: false,
-        isItemsSubpage,
         isCurrentLocationError: false,
         shouldInferShopDetail: false,
         calculateResult: calculateExpense(detail),
@@ -83,7 +81,6 @@ export function mapExpenseDetailToForm(
     return {
       ui: {
         isCreate: true,
-        isItemsSubpage: false,
         isCurrentLocationError: false,
         shouldInferShopDetail: true,
         calculateResult: calculateExpense({ specifiedAmountCents: 0, items: [], adjustments: [] }),
@@ -230,4 +227,37 @@ export async function setCurrentLocation(form: TExpenseForm) {
       },
     );
   }
+}
+
+export function createItemCallbacks(form: TExpenseForm, expenseId: string, navigate: UseNavigateResult<string>) {
+  return {
+    onAddClick: (length: number) => {
+      const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
+      const calculatedTotal = form.getFieldValue('ui.calculateResult.grossTotalCents');
+      const nextItemPrice = Math.max(0, length === 0 ? specifiedAmountCents : specifiedAmountCents - calculatedTotal);
+      form.pushFieldValue('items', defaultExpenseItem(nextItemPrice));
+      if (length >= MAX_ITEMS_IN_MAIN) {
+        navigate({
+          to: '/expenses/$expenseId/items/$indexStr',
+          params: { expenseId, indexStr: length.toString() },
+        });
+      }
+      calculateExpenseForm(form);
+    },
+    onRemoveClick: (itemIndex: number, length: number) => {
+      if (length <= MAX_ITEMS_IN_MAIN + 1) {
+        navigate({
+          to: '/expenses/$expenseId',
+          params: { expenseId },
+        });
+      } else {
+        navigate({
+          to: '/expenses/$expenseId/items/$indexStr',
+          params: { expenseId, indexStr: (itemIndex - 1).toString() },
+        });
+      }
+      form.removeFieldValue('items', itemIndex);
+      calculateExpenseForm(form);
+    },
+  };
 }

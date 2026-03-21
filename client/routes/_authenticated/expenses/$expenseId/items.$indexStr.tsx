@@ -1,7 +1,8 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { calculateExpenseForm, defaultExpenseItem, useExpenseForm } from './-common';
+import { calculateExpenseForm, createItemCallbacks, useExpenseForm } from './-common';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { useMemo } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/items/$indexStr')({
   component: RouteComponent,
@@ -11,6 +12,10 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId, indexStr } = Route.useParams();
   const form = useExpenseForm();
+  const { onAddClick, onRemoveClick } = useMemo(
+    () => createItemCallbacks(form, expenseId, navigate),
+    [form, expenseId, navigate],
+  );
 
   const itemIndex = parseInt(indexStr);
 
@@ -26,14 +31,7 @@ function RouteComponent() {
             <ItemDetailFieldGroup
               form={form}
               fields={`items[${itemIndex}]`}
-              disableRemoveButton={field.state.value.length < 2}
-              onRemoveClick={() => {
-                if (field.state.value.length <= 3) {
-                  form.setFieldValue('ui.isItemsSubpage', false);
-                }
-
-                field.removeValue(itemIndex);
-              }}
+              onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
               itemIndex={itemIndex}
               getFormField={form.getFieldValue.bind(form)}
               onPricingChange={() => calculateExpenseForm(form)}
@@ -68,16 +66,7 @@ function RouteComponent() {
                   <ChevronRight />
                 </Link>
               ) : (
-                <button
-                  className='btn-soft btn-primary btn'
-                  onClick={() => {
-                    field.pushValue(defaultExpenseItem());
-                    navigate({
-                      to: '/expenses/$expenseId/items/$indexStr',
-                      params: { expenseId, indexStr: field.state.value.length.toString() },
-                    });
-                  }}
-                >
+                <button className='btn-soft btn-primary btn' onClick={() => onAddClick(field.state.value.length)}>
                   <Plus />
                   Add item
                 </button>

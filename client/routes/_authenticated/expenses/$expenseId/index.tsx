@@ -4,7 +4,8 @@ import { queryClient, trpc } from '#client/trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
-  defaultExpenseItem,
+  createItemCallbacks,
+  MAX_ITEMS_IN_MAIN,
   setCurrentLocation,
   useExpenseForm,
 } from './-common';
@@ -15,8 +16,9 @@ import { cn, withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
-import { useCallback } from 'react';
+import { useMemo } from 'react';
 import { BillTotal } from './-common/BillTotal';
+import { currencyNumberFormat } from '#client/utils';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -106,38 +108,38 @@ function RouteComponent() {
 const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
-    const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
-    const onRemoveClick = useCallback(
-      (itemIndex: number, length: number) => {
-        if (length <= 3) {
-          form.setFieldValue('ui.isItemsSubpage', false);
-        }
-
-        form.removeFieldValue('items', itemIndex);
-      },
-      [form],
-    );
-    const onAddClick = useCallback(
-      (length: number) => {
-        form.pushFieldValue('items', defaultExpenseItem());
-        if (length >= 2) {
-          form.setFieldValue('ui.isItemsSubpage', true);
-
-          navigate({
-            to: '/expenses/$expenseId/items/$indexStr',
-            params: { expenseId, indexStr: length.toString() },
-          });
-        }
-      },
-      [form],
+    const { onAddClick, onRemoveClick } = useMemo(
+      () => createItemCallbacks(form, expenseId, navigate),
+      [form, expenseId, navigate],
     );
 
     return (
       <form.Field name='items' mode='array'>
         {field =>
-          isItemsSubpage ? (
+          field.state.value.length == 0 ? (
+            <form.AppField name='specifiedAmountCents' listeners={{ onChange: () => calculateExpenseForm(form) }}>
+              {({ NumericInput }) => (
+                <>
+                  <NumericInput
+                    label='Total amount'
+                    transforms={['amountInCents']}
+                    numberFormat={currencyNumberFormat}
+                    containerCn='mt-2 col-span-4'
+                    inputCn='input-lg'
+                  />
+                  <button
+                    className='btn-soft btn-lg btn-primary btn col-span-4 mt-2 w-full justify-start'
+                    onClick={() => onAddClick(field.state.value.length)}
+                  >
+                    <Plus />
+                    Specify items
+                  </button>
+                </>
+              )}
+            </form.AppField>
+          ) : field.state.value.length > MAX_ITEMS_IN_MAIN ? (
             <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 items-center gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
               {field.state.value.map((item, itemIndex) => {
                 const { name, quantity } = item;
@@ -187,7 +189,6 @@ const ItemsDetailsSubForm = withForm({
                     key={itemIndex}
                     form={form}
                     fields={`items[${itemIndex}]`}
-                    disableRemoveButton={field.state.value.length < 2}
                     onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
                     itemIndex={itemIndex}
                     getFormField={form.getFieldValue.bind(form)}
