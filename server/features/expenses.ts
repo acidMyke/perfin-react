@@ -322,15 +322,17 @@ const saveExpenseProcedure = protectedProcedure
         }),
     );
 
-    batchItems.push(
-      db
-        .insert(expenseItemsTable)
-        .values(itemsRecords)
-        .onConflictDoUpdate({
-          target: expenseItemsTable.id,
-          set: excludedAll(expenseItemsTable),
-        }),
-    );
+    if (itemsRecords.length > 0) {
+      batchItems.push(
+        db
+          .insert(expenseItemsTable)
+          .values(itemsRecords)
+          .onConflictDoUpdate({
+            target: expenseItemsTable.id,
+            set: excludedAll(expenseItemsTable),
+          }),
+      );
+    }
 
     if (removedItemIds.size > 0) {
       batchItems.push(
@@ -346,15 +348,17 @@ const saveExpenseProcedure = protectedProcedure
       );
     }
 
-    batchItems.push(
-      db
-        .insert(expenseAdjustmentsTable)
-        .values(adjustmentsRecords)
-        .onConflictDoUpdate({
-          target: expenseItemsTable.id,
-          set: excludedAll(expenseItemsTable),
-        }),
-    );
+    if (adjustmentsRecords.length > 0) {
+      batchItems.push(
+        db
+          .insert(expenseAdjustmentsTable)
+          .values(adjustmentsRecords)
+          .onConflictDoUpdate({
+            target: expenseItemsTable.id,
+            set: excludedAll(expenseItemsTable),
+          }),
+      );
+    }
 
     if (removedAdjustmentIds.size > 0) {
       batchItems.push(
