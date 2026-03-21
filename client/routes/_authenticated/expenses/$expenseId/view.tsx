@@ -24,7 +24,7 @@ function RouteComponent() {
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
-      <div className='border-base-300 col-span-2 grid grid-cols-2 space-y-1 border-b pb-2'>
+      <div className='col-span-2 grid grid-cols-2 space-y-1 pb-2'>
         <h1 className='col-span-2 text-lg font-bold'>
           {geolocation ? (
             <Link
@@ -44,9 +44,13 @@ function RouteComponent() {
         <p className='text-sm opacity-60'>Category: {category?.label ?? 'Unspecified'}</p>
         <p className='text-sm opacity-60'>Account: {account?.label ?? 'Unspecified'}</p>
       </div>
-      <span>Items</span>
-      <span>Amount</span>
-
+      {items.length > 0 && (
+        <>
+          <div className='border-base-300 col-span-2 border-b' />
+          <span>Items</span>
+          <span>Amount</span>
+        </>
+      )}
       {items.map(item => {
         return (
           <div
