@@ -392,10 +392,17 @@ const saveExpenseProcedure = protectedProcedure
     }
 
     if (newSearchables.length) {
-      const textHashesValues = newSearchables.map(({ text }) => `(${searchableHashes.get(text)!})`).join(',');
+      const textHashesValues = sql.join(
+        newSearchables.map(({ text }, i) =>
+          i === 0
+            ? sql`SELECT ${searchableHashes.get(text)!} AS hash`
+            : sql`UNION ALL SELECT ${searchableHashes.get(text)!}`,
+        ),
+        sql` `,
+      );
 
       const missingRecords = await db.all<{ hash: number }>(
-        sql`SELECT q.hash FROM (VALUES ${sql.raw(textHashesValues)}) AS q(hash)
+        sql`SELECT q.hash FROM (${textHashesValues}) AS q
           LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
           WHERE ${textsTable.textHash} IS NULL`,
       );
