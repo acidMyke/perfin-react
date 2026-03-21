@@ -240,7 +240,7 @@ const saveExpenseProcedure = protectedProcedure
       if (item.id === 'create') item.id = generateId();
       removedItemIds.delete(item.id);
       inputSearchables.add(item.name);
-      if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
+      if (!existingSearchableSet.has(item.name)) {
         newSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
         existingSearchableSet.add(item.name);
       }
