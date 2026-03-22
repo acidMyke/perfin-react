@@ -7,6 +7,7 @@ import {
   createItemCallbacks,
   MAX_ITEMS_IN_MAIN,
   setCurrentLocation,
+  useAdjustmentCallbacks,
   useExpenseForm,
 } from './-common';
 import { format } from 'date-fns/format';
@@ -19,6 +20,8 @@ import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { useMemo } from 'react';
 import { BillTotal } from './-common/BillTotal';
 import { currencyNumberFormat } from '#client/utils';
+import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -93,6 +96,7 @@ function RouteComponent() {
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
       </form.AppField>
+      <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
       <form.StatusMessage />
       <form.SubmitButton
@@ -122,13 +126,6 @@ const ItemsDetailsSubForm = withForm({
             <form.AppField name='specifiedAmountCents' listeners={{ onChange: () => calculateExpenseForm(form) }}>
               {({ NumericInput }) => (
                 <>
-                  <NumericInput
-                    label='Total amount'
-                    transforms={['amountInCents']}
-                    numberFormat={currencyNumberFormat}
-                    containerCn='mt-2 col-span-4'
-                    inputCn='input-lg'
-                  />
                   <button
                     className='btn-soft btn-lg btn-primary btn col-span-4 mt-2 w-full justify-start'
                     onClick={() => onAddClick(field.state.value.length)}
@@ -136,6 +133,13 @@ const ItemsDetailsSubForm = withForm({
                     <Plus />
                     Specify items
                   </button>
+                  <NumericInput
+                    label='Total amount'
+                    transforms={['amountInCents']}
+                    numberFormat={currencyNumberFormat}
+                    containerCn='mt-2 col-span-4'
+                    inputCn='input-lg'
+                  />
                 </>
               )}
             </form.AppField>
@@ -324,6 +328,63 @@ const ShopDetailSubForm = withForm({
           </>
         )}
       </form.Subscribe>
+    );
+  },
+});
+
+const AdjustmentsDetailsSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const { removeAdjustment, createAdjustment } = useAdjustmentCallbacks(form);
+    return (
+      <form.Field name='adjustments' mode='array'>
+        {field => {
+          let hasGst = false;
+          let hasServiceCharge = false;
+          return (
+            <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pr-2 pl-4'>
+              {field.state.value.map(({ name }, adjIndex) => {
+                hasGst ||= name === GST_NAME;
+                hasServiceCharge ||= name === SERVICE_CHARGE_NAME;
+                return (
+                  <AdjustmentDetailFieldGroup
+                    key={adjIndex}
+                    form={form}
+                    fields={`adjustments[${adjIndex}]`}
+                    onRemoveClick={() => removeAdjustment(adjIndex)}
+                    getFormField={form.getFieldValue.bind(form)}
+                    onPricingChange={() => calculateExpenseForm(form)}
+                  />
+                );
+              })}
+              <li key='add' className='flex w-full flex-row items-start gap-2'>
+                {!hasServiceCharge && (
+                  <button
+                    className='btn-soft btn-primary btn'
+                    onClick={() => createAdjustment({ special: SERVICE_CHARGE_NAME })}
+                  >
+                    <Plus />
+                    Service charge
+                  </button>
+                )}
+                {!hasGst && (
+                  <button
+                    className='btn-soft btn-secondary btn'
+                    onClick={() => createAdjustment({ special: GST_NAME })}
+                  >
+                    <Plus />
+                    GST
+                  </button>
+                )}
+                <button className='btn-soft btn-primary btn' onClick={() => createAdjustment()}>
+                  <Plus />
+                  Adjustment
+                </button>
+              </li>
+            </ul>
+          );
+        }}
+      </form.Field>
     );
   },
 });

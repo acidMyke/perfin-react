@@ -10,6 +10,7 @@ import { useAppForm, useFormContext } from '#components/Form';
 import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
+import { useMemo } from 'react';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
@@ -28,28 +29,13 @@ export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   };
 }
 
-export function defaultExpenseAdjustment(
-  options: Partial<Pick<ExpenseAdjustment, 'expenseItemId' | 'name'>>,
-): ExpenseAdjustment {
-  const adjustment: ExpenseAdjustment = {
+export function defaultExpenseAdjustment(): ExpenseAdjustment {
+  return {
     id: generateId(),
     name: '',
     isDeleted: false,
     amountCents: 0,
   };
-
-  if (options.expenseItemId) {
-    adjustment.rateBps = 100_00;
-    adjustment.expenseItemId = options.expenseItemId;
-  }
-  if (options.name === GST_NAME) {
-    adjustment.rateBps = 9_00;
-  }
-  if (options.name === SERVICE_CHARGE_NAME) {
-    adjustment.rateBps = 10_00;
-  }
-
-  return adjustment;
 }
 
 export const MAX_ITEMS_IN_MAIN = 2;
@@ -279,3 +265,33 @@ export function createItemCallbacks(form: TExpenseForm, expenseId: string, navig
     },
   };
 }
+
+export type CreateAdjustmentOption =
+  | { special: typeof GST_NAME | typeof SERVICE_CHARGE_NAME }
+  | { expenseItemId: string };
+
+export const useAdjustmentCallbacks = (form: TExpenseForm) =>
+  useMemo(
+    () => ({
+      createAdjustment: (option?: CreateAdjustmentOption) => {
+        const adjustment = defaultExpenseAdjustment();
+        if (option) {
+          if ('special' in option) {
+            adjustment.name = option.special;
+            adjustment.rateBps = option.special === GST_NAME ? 9_00 : 10_00;
+          }
+          if ('expenseItemId' in option) {
+            adjustment.expenseItemId = option.expenseItemId;
+            adjustment.rateBps = 100_00;
+          }
+        }
+        form.pushFieldValue('adjustments', adjustment);
+        calculateExpenseForm(form);
+      },
+      removeAdjustment: (adjustmentIndex: number) => {
+        form.removeFieldValue('adjustments', adjustmentIndex);
+        calculateExpenseForm(form);
+      },
+    }),
+    [form],
+  );
