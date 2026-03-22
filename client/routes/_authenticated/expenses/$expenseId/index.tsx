@@ -342,7 +342,7 @@ const AdjustmentsDetailsSubForm = withForm({
           let hasGst = false;
           let hasServiceCharge = false;
           return (
-            <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pr-2 pl-4'>
+            <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pl-2'>
               {field.state.value.map(({ name }, adjIndex) => {
                 hasGst ||= name === GST_NAME;
                 hasServiceCharge ||= name === SERVICE_CHARGE_NAME;

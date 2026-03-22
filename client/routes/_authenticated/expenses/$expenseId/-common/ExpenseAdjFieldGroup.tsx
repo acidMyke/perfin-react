@@ -54,7 +54,6 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
 
           return (
             <li className='flex flex-row items-center gap-2'>
-              <p className=''>{adjIndex + 1}.</p>
               {isGst ? (
                 <p className='w-48 grow'>GST</p>
               ) : isServiceCharge ? (
@@ -85,7 +84,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                           />
                         )}
                       </group.AppField>
-                      <button className='btn btn-ghost w-16 text-right' onClick={toggleAdjustmentType}>
+                      <button className='btn btn-ghost w-16 justify-end pr-3' onClick={toggleAdjustmentType}>
                         <AdjustmnetResult adjIndex={adjIndex} type='rateBps' />
                       </button>
                     </>
