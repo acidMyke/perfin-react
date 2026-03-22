@@ -30,7 +30,7 @@ export function BillTotal({ className }: BillTotalProps) {
             </>
           )}
           <span className='row-start-2 text-2xl'>Total:</span>
-          <span className='row-start-2 text-2xl'>{formatCents(grossTotalCents)}</span>
+          <span className='row-start-2 text-2xl'>{formatCents(netTotalCents)}</span>
         </div>
       )}
     </form.Subscribe>
