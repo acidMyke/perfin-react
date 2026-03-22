@@ -335,7 +335,7 @@ const ShopDetailSubForm = withForm({
 const AdjustmentsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
-    const { removeAdjustment, createAdjustment } = useAdjustmentCallbacks(form);
+    const { removeAdjustment, createAdjustment, toggleAdjustmentType } = useAdjustmentCallbacks(form);
     return (
       <form.Field name='adjustments' mode='array'>
         {field => {
@@ -355,6 +355,7 @@ const AdjustmentsDetailsSubForm = withForm({
                     onRemoveClick={() => removeAdjustment(adjIndex)}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
+                    toggleAdjustmentType={() => toggleAdjustmentType(adjIndex)}
                   />
                 );
               })}

@@ -292,6 +292,18 @@ export const useAdjustmentCallbacks = (form: TExpenseForm) =>
         form.removeFieldValue('adjustments', adjustmentIndex);
         calculateExpenseForm(form);
       },
+      toggleAdjustmentType: (adjustmentIndex: number) => {
+        const [, amountCents, rateBps] = form.getFieldValue(`ui.calculateResult.adjustmentCents[${adjustmentIndex}]`);
+        const fieldPrefix = `adjustments[${adjustmentIndex}]` as const;
+        const adjustment = form.getFieldValue(fieldPrefix);
+        if (adjustment.rateBps != null) {
+          form.setFieldValue(`${fieldPrefix}.rateBps`, null);
+          form.setFieldValue(`${fieldPrefix}.amountCents`, amountCents);
+        } else {
+          form.setFieldValue(`${fieldPrefix}.rateBps`, isNaN(rateBps) ? 0 : rateBps);
+        }
+        calculateExpenseForm(form);
+      },
     }),
     [form],
   );

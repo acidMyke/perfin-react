@@ -1,10 +1,23 @@
 import { withFieldGroup } from '#components/Form';
 import { useMutation } from '@tanstack/react-query';
-import { defaultExpenseAdjustment, type TGetExpenseFormField } from '.';
+import { defaultExpenseAdjustment, useExpenseForm, type TGetExpenseFormField } from '.';
 import { queryClient, trpc } from '#client/trpc';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { X } from 'lucide-react';
-import { currencyNumberFormat, percentageNumberFormat } from '#client/utils';
+import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
+
+const AdjustmnetResult = ({ adjIndex, type }: { adjIndex: number; type: 'amountCents' | 'rateBps' }) => {
+  const form = useExpenseForm();
+  return (
+    <form.Subscribe
+      selector={state => [state.values.ui.calculateResult.adjustmentCents[adjIndex][type === 'amountCents' ? 1 : 2]]}
+    >
+      {([value]) => {
+        return type === 'amountCents' ? formatCents(value) : formatBps(isNaN(value) ? 0 : value);
+      }}
+    </form.Subscribe>
+  );
+};
 
 export const AdjustmentDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseAdjustment(),
@@ -13,8 +26,9 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
     onRemoveClick: () => {},
     getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
+    toggleAdjustmentType: () => {},
   },
-  render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange }) {
+  render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType }) {
     const adjustmentNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -42,13 +56,13 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
             <li className='flex flex-row items-center gap-2'>
               <p className=''>{adjIndex + 1}.</p>
               {isGst ? (
-                <p className='w-48'>GST</p>
+                <p className='w-48 grow'>GST</p>
               ) : isServiceCharge ? (
-                <p className='w-48'>Service charge</p>
+                <p className='w-48 grow'>Service charge</p>
               ) : (
                 <nameField.ComboBox
                   suggestionMode
-                  containerCn='w-48'
+                  containerCn='w-48 grow'
                   options={adjustmentNameSuggestionMutation.data?.suggestions ?? []}
                   triggerChangeOnFocus
                   inputCn='input-sm text-sm'
@@ -59,35 +73,51 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
               <group.AppField name='rateBps' listeners={{ onChange: () => onPricingChange() }}>
                 {rateBpsField =>
                   rateBpsField.state.value == null ? (
-                    <group.AppField name='amountCents' listeners={{ onChange: () => onPricingChange() }}>
-                      {({ NumericInput }) => (
-                        <NumericInput
-                          transforms={['amountInCents']}
-                          numberFormat={currencyNumberFormat}
-                          containerCn='mt-0 w-24'
+                    <>
+                      <group.AppField name='amountCents' listeners={{ onChange: () => onPricingChange() }}>
+                        {({ NumericInput }) => (
+                          <NumericInput
+                            transforms={['amountInCents']}
+                            numberFormat={currencyNumberFormat}
+                            containerCn='mt-0 w-28'
+                            inputCn='input-sm text-sm'
+                            hideError
+                          />
+                        )}
+                      </group.AppField>
+                      <button className='btn btn-ghost w-16 text-right' onClick={toggleAdjustmentType}>
+                        <AdjustmnetResult adjIndex={adjIndex} type='rateBps' />
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      {isGst || isServiceCharge ? (
+                        <p className='w-16 text-center'>
+                          <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
+                        </p>
+                      ) : (
+                        <button className='btn btn-ghost w-16' onClick={toggleAdjustmentType}>
+                          <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
+                        </button>
+                      )}
+                      {isGst ? (
+                        <p className='w-28 pr-3 text-right text-sm'>{formatBps(rateBpsField.state.value!)}</p>
+                      ) : (
+                        <rateBpsField.NumericInput
+                          transforms={['percentage']}
+                          numberFormat={percentageNumberFormat}
+                          containerCn='mt-0 w-28'
                           inputCn='input-sm text-sm'
+                          innerInputCn='text-right appearance-none'
                           hideError
                         />
                       )}
-                    </group.AppField>
-                  ) : !isGst ? (
-                    <rateBpsField.NumericInput
-                      transforms={['percentage']}
-                      numberFormat={percentageNumberFormat}
-                      containerCn='mt-0 w-24'
-                      inputCn='input-sm text-sm'
-                      readOnly={isGst}
-                      hideError
-                    />
-                  ) : (
-                    <p className='mb-1 w-24 text-right'>
-                      {percentageNumberFormat.format(rateBpsField.state.value / 10000)}
-                    </p>
+                    </>
                   )
                 }
               </group.AppField>
 
-              <button className='btn-ghost btn btn-sm mb-1' onClick={onRemoveClick}>
+              <button className='btn-ghost btn btn-sm px-0' onClick={onRemoveClick}>
                 <X />
               </button>
             </li>
