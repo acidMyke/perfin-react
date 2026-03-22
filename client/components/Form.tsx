@@ -17,7 +17,7 @@ const NumericTransformers = {
   },
   percentage: {
     transform: v => Math.round(v * 100),
-    revert: v => Math.round(v) / 100,
+    revert: v => Math.round(v) / 100_00,
   },
 } satisfies Record<string, { transform: (v: number) => number; revert: (v: number) => number }>;
 
@@ -32,6 +32,7 @@ type NumericInputProps = {
   transformFor?: 'default' | 'formatOnly';
   numberFormat?: Intl.NumberFormat;
   additionalSuffix?: string;
+  hideError?: boolean;
 
   min?: number;
   max?: number;
@@ -52,6 +53,7 @@ function NumericInput(props: NumericInputProps) {
     transformFor = 'default',
     numberFormat,
     additionalSuffix,
+    hideError,
     ...inputProps
   } = props;
   const formatOptions = useMemo(() => numberFormat?.resolvedOptions(), [numberFormat]);
@@ -154,7 +156,7 @@ function NumericInput(props: NumericInputProps) {
     <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
       <span className={labelCn}>{label}</span>
       {inputEl}
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }
@@ -175,10 +177,11 @@ type TextInputProps = {
   transforms?: (keyof typeof TextTransformers)[];
   nullIfEmpty?: boolean;
   autoComplete?: string;
+  hideError?: boolean;
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete } = props;
+  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete, hideError } = props;
   const field = useFieldContext<string | null>();
 
   let transforms = props.transform
@@ -206,7 +209,7 @@ function TextInput(props: TextInputProps) {
           }
         }}
       />
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }
@@ -320,7 +323,7 @@ export type Option = {
 };
 
 type ComboBoxProps = {
-  label: string;
+  label?: string;
   options: (Option | string)[];
   maxMenuHeight?: number;
   containerCn?: string;
@@ -329,6 +332,7 @@ type ComboBoxProps = {
   suggestionMode?: boolean;
   readOnly?: boolean;
   triggerChangeOnFocus?: boolean;
+  hideError?: boolean;
 };
 
 function ComboBox({
@@ -341,6 +345,7 @@ function ComboBox({
   suggestionMode = false,
   readOnly = false,
   triggerChangeOnFocus = false,
+  hideError,
 }: ComboBoxProps) {
   const [query, setQuery] = useState('');
   const field = useFieldContext<Option | string | undefined>();
@@ -369,7 +374,7 @@ function ComboBox({
 
   return (
     <label className={cn('floating-label mt-0', containerCn)}>
-      <span className={labelCn}>{label}</span>
+      {label && <span className={labelCn}>{label}</span>}
 
       <Combobox
         value={comboboxValue}
@@ -437,7 +442,7 @@ function ComboBox({
         </div>
       </Combobox>
 
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }

@@ -350,6 +350,7 @@ const AdjustmentsDetailsSubForm = withForm({
                   <AdjustmentDetailFieldGroup
                     key={adjIndex}
                     form={form}
+                    adjIndex={adjIndex}
                     fields={`adjustments[${adjIndex}]`}
                     onRemoveClick={() => removeAdjustment(adjIndex)}
                     getFormField={form.getFieldValue.bind(form)}

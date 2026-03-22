@@ -505,7 +505,7 @@ const listExpenseProcedure = protectedProcedure
 const getSuggestionsProcedure = protectedProcedure
   .input(
     z.object({
-      type: z.enum(['shopName', 'shopMall', 'itemName', 'refundSource']),
+      type: z.enum(['shopName', 'shopMall', 'itemName', 'refundSource', 'adjName']),
       search: z.string(),
       context: z.string().optional(),
     }),
