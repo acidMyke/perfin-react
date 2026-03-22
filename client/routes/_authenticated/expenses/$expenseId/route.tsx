@@ -146,7 +146,7 @@ function RouteComponent() {
   return (
     <div className='mx-auto max-w-md'>
       <div className='col-span-full'>
-        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} showBackButton />
+        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} />
       </div>
       <div className='h-4'></div>
       <form.AppForm>
