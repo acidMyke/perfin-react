@@ -118,6 +118,7 @@ const ItemsDetailsSubForm = withForm({
       () => createItemCallbacks(form, expenseId, navigate),
       [form, expenseId, navigate],
     );
+    const { createAdjustment } = useAdjustmentCallbacks(form);
 
     return (
       <form.Field name='items' mode='array'>
@@ -197,6 +198,7 @@ const ItemsDetailsSubForm = withForm({
                     itemIndex={itemIndex}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
+                    createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
                   />
                 );
               })}

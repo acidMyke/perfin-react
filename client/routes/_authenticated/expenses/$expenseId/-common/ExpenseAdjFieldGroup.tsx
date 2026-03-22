@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { defaultExpenseAdjustment, useExpenseForm, type TGetExpenseFormField } from '.';
 import { queryClient, trpc } from '#client/trpc';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { X } from 'lucide-react';
+import { Unlink, X } from 'lucide-react';
 import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
 
@@ -31,10 +31,11 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
   },
   render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType }) {
     const adjustmentNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const [isGst, isServiceCharge, isRateAdjustment] = useStore(group.store, state => [
+    const [isGst, isServiceCharge, isRateAdjustment, isItemBounded] = useStore(group.store, state => [
       state.values.name === GST_NAME,
       state.values.name === SERVICE_CHARGE_NAME,
       state.values.rateBps == null,
+      !!state.values.expenseItemId,
     ]);
     console.log('render');
 
@@ -42,7 +43,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
       <li className='flex flex-row items-center gap-2'>
         {/* Name field */}
         {isGst || isServiceCharge ? (
-          <p className='w-48 grow'> {isGst ? 'GST' : 'Service charge'}</p>
+          <p className='w-48 grow pl-3'> {isGst ? 'GST' : 'Service charge'}</p>
         ) : (
           <group.AppField
             name={`name`}
@@ -120,9 +121,21 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
           </>
         )}
 
-        <button className='btn-ghost btn btn-sm px-0' onClick={onRemoveClick}>
-          <X />
-        </button>
+        {isItemBounded ? (
+          <button
+            className='btn-ghost btn btn-sm px-0'
+            onClick={() => {
+              group.setFieldValue('expenseItemId', undefined);
+              onPricingChange();
+            }}
+          >
+            <Unlink />
+          </button>
+        ) : (
+          <button className='btn-ghost btn btn-sm px-0' onClick={onRemoveClick}>
+            <X />
+          </button>
+        )}
       </li>
     );
   },

@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { calculateExpenseForm, createItemCallbacks, useExpenseForm } from './-common';
+import { calculateExpenseForm, createItemCallbacks, useAdjustmentCallbacks, useExpenseForm } from './-common';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { useMemo } from 'react';
@@ -16,6 +16,7 @@ function RouteComponent() {
     () => createItemCallbacks(form, expenseId, navigate),
     [form, expenseId, navigate],
   );
+  const { createAdjustment } = useAdjustmentCallbacks(form);
 
   const itemIndex = parseInt(indexStr);
 
@@ -35,6 +36,7 @@ function RouteComponent() {
               itemIndex={itemIndex}
               getFormField={form.getFieldValue.bind(form)}
               onPricingChange={() => calculateExpenseForm(form)}
+              createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
             />
 
             <div className='mt-4 flex w-full'>

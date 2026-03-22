@@ -282,7 +282,7 @@ export const useAdjustmentCallbacks = (form: TExpenseForm) =>
           }
           if ('expenseItemId' in option) {
             adjustment.expenseItemId = option.expenseItemId;
-            adjustment.rateBps = 100_00;
+            adjustment.rateBps = -100_00;
           }
         }
         form.pushFieldValue('adjustments', adjustment);

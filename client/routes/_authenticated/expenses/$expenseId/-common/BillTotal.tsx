@@ -23,7 +23,7 @@ export function BillTotal({ className }: BillTotalProps) {
             className,
           )}
         >
-          {grossTotalCents < netTotalCents && (
+          {grossTotalCents !== netTotalCents && (
             <>
               <span className='row-start-1'>Subtotal:</span>
               <span className='row-start-1'>{formatCents(grossTotalCents)}</span>
