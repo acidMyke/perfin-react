@@ -20,7 +20,7 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
-  const { geolocation, items, account, category, isDeleted } = expense;
+  const { geolocation, items, account, category, isDeleted, billedAt } = expense;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
@@ -67,13 +67,13 @@ function RouteComponent() {
 
       <BillTotal className='col-span-2' />
 
-      <ActionSection isDeleted={isDeleted} />
+      <ActionSection isDeleted={isDeleted} billedAt={billedAt} />
     </div>
   );
 }
 
-function ActionSection(props: { isDeleted: boolean }) {
-  const { isDeleted } = props;
+function ActionSection(props: { isDeleted: boolean; billedAt: Date }) {
+  const { isDeleted, billedAt } = props;
   const confirmModalRef = useRef<HTMLDialogElement>(null);
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -86,7 +86,7 @@ function ActionSection(props: { isDeleted: boolean }) {
           expenseId,
           navigate,
           optionsCreated: false,
-          billedAt: form.getFieldValue('billedAt'),
+          billedAt,
         });
       },
     }),
@@ -121,6 +121,14 @@ function ActionSection(props: { isDeleted: boolean }) {
           Duplicate
         </button>
       </div>
+
+      <Link
+        to='/expenses'
+        className='btn col-span-2 mt-2 w-full'
+        search={{ month: billedAt.getMonth(), year: billedAt.getFullYear() }}
+      >
+        Back
+      </Link>
       <dialog className='modal' ref={confirmModalRef}>
         <div className='modal-box'>
           <h3 className='text-lg font-bold'>Confirm {deleteOrRestore}?</h3>

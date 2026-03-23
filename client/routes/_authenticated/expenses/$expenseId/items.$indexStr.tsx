@@ -45,6 +45,7 @@ function RouteComponent() {
                   className='btn max-w-1/2 overflow-clip'
                   to='/expenses/$expenseId/items/$indexStr'
                   params={{ expenseId, indexStr: (itemIndex - 1).toString() }}
+                  replace
                 >
                   <ChevronLeft />
                   {field.state.value[itemIndex - 1]?.name
@@ -61,6 +62,7 @@ function RouteComponent() {
                   disabled={itemIndex === field.state.value.length - 1}
                   to='/expenses/$expenseId/items/$indexStr'
                   params={{ expenseId, indexStr: (itemIndex + 1).toString() }}
+                  replace
                 >
                   {field.state.value[itemIndex + 1]?.name
                     ? field.state.value[itemIndex + 1]?.name
@@ -77,7 +79,7 @@ function RouteComponent() {
           </>
         )}
       </form.Field>
-      <Link to='/expenses/$expenseId' params={{ expenseId }} className='btn mt-4 w-full'>
+      <Link className='btn mt-4 w-full' to='/expenses/$expenseId' params={{ expenseId }} replace>
         Back to main
       </Link>
     </>

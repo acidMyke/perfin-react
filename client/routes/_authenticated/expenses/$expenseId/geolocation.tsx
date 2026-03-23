@@ -1,4 +1,4 @@
-import { createFileRoute } from '@tanstack/react-router';
+import { createFileRoute, Link } from '@tanstack/react-router';
 import { setCurrentLocation, useExpenseForm } from './-common';
 import { coordinateFormat, SG_CENTER } from '#client/utils';
 import { APIProvider, ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
@@ -17,6 +17,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/geoloc
 
 function RouteComponent() {
   const { readOnly = false } = Route.useSearch();
+  const { expenseId } = Route.useParams();
   const form = useExpenseForm();
 
   return (
@@ -44,7 +45,7 @@ function RouteComponent() {
 
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Map
-          className='col-span-2 mt-4 h-100'
+          className='col-span-2 my-4 h-100'
           gestureHandling='greedy'
           disableDefaultUI={false}
           zoomControl
@@ -90,6 +91,16 @@ function RouteComponent() {
           </form.AppField>
         </Map>
       </APIProvider>
+
+      {readOnly ? (
+        <Link className='btn col-span-full w-full' to='/expenses/$expenseId/view' params={{ expenseId }} replace>
+          Back
+        </Link>
+      ) : (
+        <Link className='btn col-span-full w-full' to='/expenses/$expenseId' params={{ expenseId }} replace>
+          Back
+        </Link>
+      )}
     </div>
   );
 }

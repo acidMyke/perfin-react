@@ -29,6 +29,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
 
 function RouteComponent() {
   const form = useExpenseForm();
+  const { expenseId } = Route.useParams();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
 
@@ -105,6 +106,15 @@ function RouteComponent() {
         doneLabel='Submitted'
         inProgressLabel='Submitting...'
       />
+      {expenseId === 'create' ? (
+        <Link className='btn col-span-full w-full' to='/expenses'>
+          Cancel
+        </Link>
+      ) : (
+        <Link className='btn col-span-full w-full' to='/expenses/$expenseId/view' params={{ expenseId }}>
+          Cancel
+        </Link>
+      )}
     </div>
   );
 }
@@ -162,6 +172,7 @@ const ItemsDetailsSubForm = withForm({
                       className='btn btn-sm btn-primary col-start-4'
                       to='/expenses/$expenseId/items/$indexStr'
                       params={{ expenseId, indexStr: itemIndex.toString() }}
+                      replace
                     >
                       Edit
                     </Link>
@@ -246,6 +257,7 @@ const LocationSubForm = withForm({
                       className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
                       to='/expenses/$expenseId/geolocation'
                       params={{ expenseId }}
+                      replace
                     >
                       View / Edit
                     </Link>
