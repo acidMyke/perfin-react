@@ -99,6 +99,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     return { ...expense, items, adjustments };
   });
 
+const blacklistSearchableText = new Set(['', GST_NAME, SERVICE_CHARGE_NAME]);
 const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
@@ -258,13 +259,10 @@ const saveExpenseProcedure = protectedProcedure
       if (adj.isDeleted) continue;
       if (adj.id === 'create') adj.id = generateId();
       removedAdjustmentIds.delete(adj.id);
-      if (adj.name !== GST_NAME && adj.name !== SERVICE_CHARGE_NAME) {
-        // Exclude GST & Service Charge from searchables
-        inputSearchables.add(adj.name);
-        if (!existingSearchableSet.has(adj.name)) {
-          newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
-          existingSearchableSet.add(adj.name);
-        }
+      inputSearchables.add(adj.name);
+      if (!existingSearchableSet.has(adj.name)) {
+        newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
+        existingSearchableSet.add(adj.name);
       }
 
       adjustmentsRecords.push({
@@ -394,7 +392,7 @@ const saveExpenseProcedure = protectedProcedure
       );
     }
 
-    if (newSearchables.length) {
+    if (newSearchables.some(({ text }) => !blacklistSearchableText.has(text))) {
       const textHashesValues = sql.join(
         newSearchables.map(({ text }, i) =>
           i === 0
@@ -417,6 +415,7 @@ const saveExpenseProcedure = protectedProcedure
       const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
 
       for (const { text, sourceId, context } of newSearchables) {
+        if (!blacklistSearchableText.has(text)) continue;
         const textHash = searchableHashes.get(text)!;
         if (missingTextHashSet.has(textHash)) {
           texts.push({ textHash, userId, text });

@@ -62,7 +62,7 @@ export const getTextsHashes = async (userId: string, texts: IteratorObject<strin
 };
 
 export const splitArray = <T>(items: T[], maxSize: number): T[][] => {
-  if (maxSize <= 0) throw new Error('maxSize must be greater than 0');
+  if (maxSize <= 0) return [];
 
   const result: T[][] = [];
   const len = items.length;
