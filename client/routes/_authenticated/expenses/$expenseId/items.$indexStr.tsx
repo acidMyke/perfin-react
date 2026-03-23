@@ -1,8 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { calculateExpenseForm, createItemCallbacks, useAdjustmentCallbacks, useExpenseForm } from './-common';
+import { calculateExpenseForm, useItemCallbacks, useAdjustmentCallbacks, useExpenseForm } from './-common';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
-import { useMemo } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/items/$indexStr')({
   component: RouteComponent,
@@ -12,10 +11,7 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId, indexStr } = Route.useParams();
   const form = useExpenseForm();
-  const { onAddClick, onRemoveClick } = useMemo(
-    () => createItemCallbacks(form, expenseId, navigate),
-    [form, expenseId, navigate],
-  );
+  const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
   const { createAdjustment } = useAdjustmentCallbacks(form);
 
   const itemIndex = parseInt(indexStr);
@@ -32,7 +28,7 @@ function RouteComponent() {
             <ItemDetailFieldGroup
               form={form}
               fields={`items[${itemIndex}]`}
-              onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
+              onRemoveClick={() => removeItem(itemIndex, field.state.value.length, true)}
               itemIndex={itemIndex}
               getFormField={form.getFieldValue.bind(form)}
               onPricingChange={() => calculateExpenseForm(form)}
@@ -70,7 +66,7 @@ function RouteComponent() {
                   <ChevronRight />
                 </Link>
               ) : (
-                <button className='btn-soft btn-primary btn' onClick={() => onAddClick(field.state.value.length, true)}>
+                <button className='btn-soft btn-primary btn' onClick={() => createItem(field.state.value.length, true)}>
                   <Plus />
                   Add item
                 </button>

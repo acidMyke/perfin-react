@@ -233,41 +233,45 @@ export async function setCurrentLocation(form: TExpenseForm) {
   }
 }
 
-export function createItemCallbacks(form: TExpenseForm, expenseId: string, navigate: UseNavigateResult<string>) {
-  return {
-    onAddClick: (length: number, isSubpage?: true) => {
-      const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
-      const calculatedTotal = form.getFieldValue('ui.calculateResult.grossTotalCents');
-      const nextItemPrice = Math.max(0, length === 0 ? specifiedAmountCents : specifiedAmountCents - calculatedTotal);
-      form.pushFieldValue('items', defaultExpenseItem(nextItemPrice));
-      if (length >= MAX_ITEMS_IN_MAIN) {
-        navigate({
-          to: '/expenses/$expenseId/items/$indexStr',
-          params: { expenseId, indexStr: length.toString() },
-          replace: isSubpage,
-        });
-      }
-      calculateExpenseForm(form);
-    },
-    onRemoveClick: (itemIndex: number, length: number) => {
-      if (length <= MAX_ITEMS_IN_MAIN + 1) {
-        navigate({
-          to: '/expenses/$expenseId',
-          params: { expenseId },
-          replace: true,
-        });
-      } else {
-        navigate({
-          to: '/expenses/$expenseId/items/$indexStr',
-          params: { expenseId, indexStr: (itemIndex - 1).toString() },
-          replace: true,
-        });
-      }
-      form.removeFieldValue('items', itemIndex);
-      calculateExpenseForm(form);
-    },
-  };
-}
+export const useItemCallbacks = (form: TExpenseForm, expenseId: string, navigate: UseNavigateResult<string>) =>
+  useMemo(
+    () => ({
+      createItem: (length: number, isSubpage?: true) => {
+        const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
+        const calculatedTotal = form.getFieldValue('ui.calculateResult.grossTotalCents');
+        const nextItemPrice = Math.max(0, length === 0 ? specifiedAmountCents : specifiedAmountCents - calculatedTotal);
+        form.pushFieldValue('items', defaultExpenseItem(nextItemPrice));
+        if (length >= MAX_ITEMS_IN_MAIN) {
+          navigate({
+            to: '/expenses/$expenseId/items/$indexStr',
+            params: { expenseId, indexStr: length.toString() },
+            replace: isSubpage,
+          });
+        }
+        calculateExpenseForm(form);
+      },
+      removeItem: (itemIndex: number, length: number, isSubpage?: true) => {
+        if (isSubpage) {
+          if (length <= MAX_ITEMS_IN_MAIN + 1) {
+            navigate({
+              to: '/expenses/$expenseId',
+              params: { expenseId },
+              replace: true,
+            });
+          } else {
+            navigate({
+              to: '/expenses/$expenseId/items/$indexStr',
+              params: { expenseId, indexStr: (itemIndex - 1).toString() },
+              replace: true,
+            });
+          }
+        }
+        form.removeFieldValue('items', itemIndex);
+        calculateExpenseForm(form);
+      },
+    }),
+    [form, expenseId, navigate],
+  );
 
 export type CreateAdjustmentOption =
   | { special: typeof GST_NAME | typeof SERVICE_CHARGE_NAME }

@@ -4,7 +4,7 @@ import { queryClient, trpc } from '#client/trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
-  createItemCallbacks,
+  useItemCallbacks,
   MAX_ITEMS_IN_MAIN,
   setCurrentLocation,
   useAdjustmentCallbacks,
@@ -124,10 +124,7 @@ const ItemsDetailsSubForm = withForm({
   render({ form }) {
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
-    const { onAddClick, onRemoveClick } = useMemo(
-      () => createItemCallbacks(form, expenseId, navigate),
-      [form, expenseId, navigate],
-    );
+    const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
     const { createAdjustment } = useAdjustmentCallbacks(form);
 
     return (
@@ -139,7 +136,7 @@ const ItemsDetailsSubForm = withForm({
                 <>
                   <button
                     className='btn-soft btn-lg btn-primary btn col-span-4 mt-2 w-full justify-start'
-                    onClick={() => onAddClick(field.state.value.length)}
+                    onClick={() => createItem(field.state.value.length)}
                   >
                     <Plus />
                     Specify items
@@ -178,7 +175,7 @@ const ItemsDetailsSubForm = withForm({
 
                     <button
                       className='btn-link btn btn-sm col-start-5 p-0'
-                      onClick={() => onRemoveClick(itemIndex, field.state.value.length)}
+                      onClick={() => removeItem(itemIndex, field.state.value.length)}
                     >
                       <X />
                     </button>
@@ -189,7 +186,7 @@ const ItemsDetailsSubForm = withForm({
               <li key='Create' className='col-start-1 col-end-4'>
                 <button
                   className='btn-soft btn-primary btn w-full justify-start'
-                  onClick={() => onAddClick(field.state.value.length)}
+                  onClick={() => createItem(field.state.value.length)}
                 >
                   <Plus />
                   Add item
@@ -204,7 +201,7 @@ const ItemsDetailsSubForm = withForm({
                     key={id}
                     form={form}
                     fields={`items[${itemIndex}]`}
-                    onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
+                    onRemoveClick={() => removeItem(itemIndex, field.state.value.length)}
                     itemIndex={itemIndex}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
@@ -215,7 +212,7 @@ const ItemsDetailsSubForm = withForm({
               <li key='Create'>
                 <button
                   className='btn-soft btn-primary btn w-2/3 justify-start'
-                  onClick={() => onAddClick(field.state.value.length)}
+                  onClick={() => createItem(field.state.value.length)}
                 >
                   <Plus />
                   Add item
