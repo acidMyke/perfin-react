@@ -172,7 +172,6 @@ const ItemsDetailsSubForm = withForm({
                       className='btn btn-sm btn-primary col-start-4'
                       to='/expenses/$expenseId/items/$indexStr'
                       params={{ expenseId, indexStr: itemIndex.toString() }}
-                      replace
                     >
                       Edit
                     </Link>
@@ -257,7 +256,6 @@ const LocationSubForm = withForm({
                       className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
                       to='/expenses/$expenseId/geolocation'
                       params={{ expenseId }}
-                      replace
                     >
                       View / Edit
                     </Link>

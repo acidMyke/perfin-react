@@ -235,7 +235,7 @@ export async function setCurrentLocation(form: TExpenseForm) {
 
 export function createItemCallbacks(form: TExpenseForm, expenseId: string, navigate: UseNavigateResult<string>) {
   return {
-    onAddClick: (length: number) => {
+    onAddClick: (length: number, isSubpage?: true) => {
       const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
       const calculatedTotal = form.getFieldValue('ui.calculateResult.grossTotalCents');
       const nextItemPrice = Math.max(0, length === 0 ? specifiedAmountCents : specifiedAmountCents - calculatedTotal);
@@ -244,6 +244,7 @@ export function createItemCallbacks(form: TExpenseForm, expenseId: string, navig
         navigate({
           to: '/expenses/$expenseId/items/$indexStr',
           params: { expenseId, indexStr: length.toString() },
+          replace: isSubpage,
         });
       }
       calculateExpenseForm(form);
@@ -253,11 +254,13 @@ export function createItemCallbacks(form: TExpenseForm, expenseId: string, navig
         navigate({
           to: '/expenses/$expenseId',
           params: { expenseId },
+          replace: true,
         });
       } else {
         navigate({
           to: '/expenses/$expenseId/items/$indexStr',
           params: { expenseId, indexStr: (itemIndex - 1).toString() },
+          replace: true,
         });
       }
       form.removeFieldValue('items', itemIndex);

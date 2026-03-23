@@ -70,7 +70,7 @@ function RouteComponent() {
                   <ChevronRight />
                 </Link>
               ) : (
-                <button className='btn-soft btn-primary btn' onClick={() => onAddClick(field.state.value.length)}>
+                <button className='btn-soft btn-primary btn' onClick={() => onAddClick(field.state.value.length, true)}>
                   <Plus />
                   Add item
                 </button>
