@@ -188,10 +188,10 @@ const ItemsDetailsSubForm = withForm({
             </ul>
           ) : (
             <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
-              {field.state.value.map((_, itemIndex) => {
+              {field.state.value.map(({ id }, itemIndex) => {
                 return (
                   <ItemDetailFieldGroup
-                    key={itemIndex}
+                    key={id}
                     form={form}
                     fields={`items[${itemIndex}]`}
                     onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
@@ -345,19 +345,24 @@ const AdjustmentsDetailsSubForm = withForm({
           let hasServiceCharge = false;
           return (
             <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pl-2'>
-              {field.state.value.map(({ name }, adjIndex) => {
+              {field.state.value.map(({ id, name }, adjIndex) => {
                 hasGst ||= name === GST_NAME;
                 hasServiceCharge ||= name === SERVICE_CHARGE_NAME;
                 return (
                   <AdjustmentDetailFieldGroup
-                    key={adjIndex}
+                    key={id}
                     form={form}
                     adjIndex={adjIndex}
                     fields={`adjustments[${adjIndex}]`}
-                    onRemoveClick={() => removeAdjustment(adjIndex)}
+                    onRemoveClick={adjIndex => removeAdjustment(adjIndex)}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
-                    toggleAdjustmentType={() => toggleAdjustmentType(adjIndex)}
+                    toggleAdjustmentType={adjIndex => toggleAdjustmentType(adjIndex)}
+                    onSwapClick={adjIndex =>
+                      adjIndex == 0
+                        ? field.swapValues(adjIndex, adjIndex + 1)
+                        : field.swapValues(adjIndex, adjIndex - 1)
+                    }
                   />
                 );
               })}

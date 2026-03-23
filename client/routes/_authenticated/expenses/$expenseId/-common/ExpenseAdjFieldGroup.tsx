@@ -3,7 +3,7 @@ import { useMutation } from '@tanstack/react-query';
 import { defaultExpenseAdjustment, useExpenseForm, type TGetExpenseFormField } from '.';
 import { queryClient, trpc } from '#client/trpc';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { Unlink, X } from 'lucide-react';
+import { ChevronDown, ChevronUp, Unlink, X } from 'lucide-react';
 import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
 
@@ -24,26 +24,26 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseAdjustment(),
   props: {
     adjIndex: 0,
-    onRemoveClick: () => {},
+    onRemoveClick: (_: number) => {},
     getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
-    toggleAdjustmentType: () => {},
+    toggleAdjustmentType: (_: number) => {},
+    onSwapClick: (_: number) => {},
   },
-  render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType }) {
+  render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType, onSwapClick }) {
     const adjustmentNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const [isGst, isServiceCharge, isRateAdjustment, isItemBounded] = useStore(group.store, state => [
-      state.values.name === GST_NAME,
-      state.values.name === SERVICE_CHARGE_NAME,
-      state.values.rateBps == null,
-      !!state.values.expenseItemId,
+      state.values?.name === GST_NAME,
+      state.values?.name === SERVICE_CHARGE_NAME,
+      state.values?.rateBps == null,
+      !!state.values?.expenseItemId,
     ]);
-    console.log('render');
 
     return (
       <li className='flex flex-row items-center gap-2'>
         {/* Name field */}
         {isGst || isServiceCharge ? (
-          <p className='w-48 grow pl-3'> {isGst ? 'GST' : 'Service charge'}</p>
+          <p className='w-40 grow pl-3'> {isGst ? 'GST' : 'Service charge'}</p>
         ) : (
           <group.AppField
             name={`name`}
@@ -64,7 +64,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
             {({ ComboBox }) => (
               <ComboBox
                 suggestionMode
-                containerCn='w-48 grow'
+                containerCn='w-40 grow'
                 options={adjustmentNameSuggestionMutation.data?.suggestions ?? []}
                 triggerChangeOnFocus
                 inputCn='input-sm text-sm'
@@ -87,7 +87,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                 />
               )}
             </group.AppField>
-            <button className='btn btn-ghost w-16 justify-end pr-3' onClick={toggleAdjustmentType}>
+            <button className='btn btn-ghost w-16 justify-end pr-3' onClick={() => toggleAdjustmentType(adjIndex)}>
               <AdjustmnetResult adjIndex={adjIndex} type='rateBps' />
             </button>
           </>
@@ -98,7 +98,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                 <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
               </p>
             ) : (
-              <button className='btn btn-ghost w-16' onClick={toggleAdjustmentType}>
+              <button className='btn btn-ghost w-16' onClick={() => toggleAdjustmentType(adjIndex)}>
                 <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
               </button>
             )}
@@ -132,10 +132,14 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
             <Unlink />
           </button>
         ) : (
-          <button className='btn-ghost btn btn-sm px-0' onClick={onRemoveClick}>
+          <button className='btn-ghost btn btn-sm px-0' onClick={() => onRemoveClick(adjIndex)}>
             <X />
           </button>
         )}
+
+        <button className='btn-ghost btn btn-sm px-0' onClick={() => onSwapClick(adjIndex)}>
+          {adjIndex === 0 ? <ChevronDown /> : <ChevronUp />}
+        </button>
       </li>
     );
   },
