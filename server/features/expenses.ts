@@ -468,6 +468,7 @@ const listExpenseProcedure = protectedProcedure
     const expenses = await db
       .select({
         id: expensesTable.id,
+        itemCount,
         description: caseWhen(eq(itemCount, sql.raw('1')), itemOne)
           .whenThen(eq(itemCount, sql.raw('2')), concat(itemOne, sql.raw("' and '"), itemTwo))
           .else(concat(itemOne, sql.raw("' and '"), sql`(${itemCount} - 1)`, sql.raw("' items'"))),
@@ -504,7 +505,7 @@ const listExpenseProcedure = protectedProcedure
 const getSuggestionsProcedure = protectedProcedure
   .input(
     z.object({
-      type: z.enum(['shopName', 'shopMall', 'itemName', 'refundSource', 'adjName']),
+      type: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
       search: z.string(),
       context: z.string().optional(),
     }),
