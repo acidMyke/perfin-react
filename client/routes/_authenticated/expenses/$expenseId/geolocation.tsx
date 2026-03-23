@@ -52,11 +52,13 @@ function RouteComponent() {
           mapTypeControl={false}
           fullscreenControl={false}
           streetViewControl={false}
+          colorScheme='DARK'
+          reuseMaps
           defaultCenter={{
             lat: form.getFieldValue('geolocation.latitude') ?? SG_CENTER.lat,
             lng: form.getFieldValue('geolocation.longitude') ?? SG_CENTER.lng,
           }}
-          defaultZoom={14}
+          defaultZoom={16}
           onClick={e => {
             const latLng = e.detail.latLng;
             if (!latLng || readOnly) return;
