@@ -28,7 +28,7 @@ export const ExpenseSuggestableField = withFieldGroup({
             const context = getContext?.()?.trim();
             if (value || context) {
               mutate({
-                scope: 'itemName',
+                scope,
                 search: value ?? '',
                 context: context && context.length > 0 ? context : undefined,
               });
