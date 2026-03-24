@@ -61,6 +61,11 @@ export const getTextsHashes = async (userId: string, texts: IteratorObject<strin
   return resultMap;
 };
 
+export const getTextHash = (userId: string, text: string) => {
+  const encoder = new TextEncoder();
+  return hashTextInternal(userId, text, encoder);
+};
+
 export const splitArray = <T>(items: T[], maxSize: number): T[][] => {
   if (maxSize <= 0) return [];
 

@@ -12,14 +12,31 @@ import {
   textsContextsTable,
   textsTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, sql, SQL } from 'drizzle-orm';
+import {
+  and,
+  asc,
+  count,
+  countDistinct,
+  desc,
+  eq,
+  gte,
+  inArray,
+  isNull,
+  like,
+  lt,
+  max,
+  sql,
+  SQL,
+  type SQLWrapper,
+} from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getLocationBoxId, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
+import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { SQLiteSelectQueryBuilderBase } from 'drizzle-orm/sqlite-core';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -520,44 +537,78 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
-    const trigrams = search && getTrigrams(search);
+    const { textColumn, sourceTable } = {
+      shopName: { textColumn: expensesTable.shopName, sourceTable: expensesTable },
+      shopMall: { textColumn: expensesTable.shopMall, sourceTable: expensesTable },
+      itemName: { textColumn: expenseItemsTable.name, sourceTable: expenseItemsTable },
+      adjName: { textColumn: expenseAdjustmentsTable.name, sourceTable: expenseAdjustmentsTable },
+    }[input.type];
 
-    const condition = and(
-      eq(searchTable.userId, userId),
-      eq(searchTable.type, input.type),
-      trigrams ? inArray(searchTable.chunk, trigrams) : undefined,
-      context ? eq(searchTable.context, context) : undefined,
-    );
+    const where: SQL[] = [];
+    const having: SQL[] = [];
+    const orderBy: SQL[] = [];
 
-    const descLikelyness = desc(max(caseWhen(like(searchTable.text, search + '%'), sql.raw('1')).else(sql.raw('0'))));
-    const descMatchCount = desc(max(searchTable.usageCount));
-    const descPopularity = desc(count(searchTable.chunk));
+    let fromTable: typeof textChunksTable | typeof textsContextsTable | undefined;
 
-    let query = db.select({ value: searchTable.text }).from(searchTable).where(condition).groupBy(searchTable.text);
+    if (search) {
+      // search by chunks
+      fromTable = textChunksTable;
+      const trigrams = getTrigrams(search);
+      const matchingChunkCount = countDistinct(textChunksTable.chunk);
+      where.push(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams));
+      orderBy.push(desc(matchingChunkCount));
 
-    if (trigrams.length > 5) {
-      // @ts-expect-error query with having cant be assigned back to query
-      query = query.having(gte(searchTable.usageCount, trigrams.length - 5));
+      if (trigrams.length > 5) {
+        // If there is more than 5 chunks for searching, remove those with less matches
+        having.push(gte(count(textChunksTable.chunk), trigrams.length - 5));
+      }
     }
+
+    if (context) {
+      const contextHash = await getTextHash(userId, context);
+      if (search) {
+        // contextual sort, since it will be filtered by chunks
+        const hasMatchingContext = max(
+          caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql.raw('0'))
+            .whenThen(isNull(textsContextsTable.ctxTextHash), sql.raw('1'))
+            .else(sql.raw('2')),
+        );
+        orderBy.push(hasMatchingContext);
+      } else {
+        // contextual search, not filtered by chunks
+        fromTable = textsContextsTable;
+        where.push(eq(textsContextsTable.ctxTextHash, contextHash));
+      }
+    }
+
+    if (!fromTable) {
+      // impossiable scenario but typescript is complaining
+      return { suggestions: [] as string[] };
+    }
+
+    const dbSelect = db.select({ text: textColumn });
+    const dbSelectFrom = dbSelect.from(fromTable);
+    let dbSelectFromJoin = dbSelectFrom
+      .innerJoin(expenseTextsTable, eq(fromTable.textHash, expenseTextsTable.textHash))
+      .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id));
 
     if (context && search) {
-      const hasMatchingContext = max(
-        caseWhen(eq(searchTable.context, context), sql.raw('0'))
-          .whenThen(isNull(searchTable.context), sql.raw('1'))
-          .else(sql.raw('2')),
+      // If both param exist, need to join additional textsContextsTable
+      dbSelectFromJoin = dbSelectFromJoin.leftJoin(
+        textsContextsTable,
+        eq(textChunksTable.textHash, textsContextsTable.textHash),
       );
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
-    } else if (search) {
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(descLikelyness, descMatchCount, descPopularity);
-    } else {
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(descMatchCount, descPopularity);
     }
 
-    const suggestions = await query;
-    return { suggestions: suggestions.map(({ value }) => value) };
+    const baseQuery = dbSelectFromJoin
+      .where(and(...where))
+      .groupBy(textColumn)
+      .orderBy(...orderBy);
+
+    const resultQuery = having.length > 0 ? baseQuery.having(and(...having)) : baseQuery;
+    const result = await resultQuery;
+
+    return { suggestions: result.map(({ text }) => text) };
   });
 
 const inferShopDetailsProcedure = protectedProcedure
