@@ -7,7 +7,6 @@ import {
   expensesTable,
   generateId,
   expenseTextsTable,
-  searchTable,
   textChunksTable,
   textsContextsTable,
   textsTable,
@@ -21,13 +20,12 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
-  like,
   lt,
   max,
   sql,
   SQL,
-  type SQLWrapper,
 } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
@@ -36,7 +34,6 @@ import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseH
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
-import type { SQLiteSelectQueryBuilderBase } from 'drizzle-orm/sqlite-core';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -522,7 +519,7 @@ const listExpenseProcedure = protectedProcedure
 const getSuggestionsProcedure = protectedProcedure
   .input(
     z.object({
-      type: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
+      scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
       search: z.string(),
       context: z.string().optional(),
     }),
@@ -542,7 +539,7 @@ const getSuggestionsProcedure = protectedProcedure
       shopMall: { textColumn: expensesTable.shopMall, sourceTable: expensesTable },
       itemName: { textColumn: expenseItemsTable.name, sourceTable: expenseItemsTable },
       adjName: { textColumn: expenseAdjustmentsTable.name, sourceTable: expenseAdjustmentsTable },
-    }[input.type];
+    }[input.scope];
 
     const where: SQL[] = [];
     const having: SQL[] = [];
@@ -601,14 +598,14 @@ const getSuggestionsProcedure = protectedProcedure
     }
 
     const baseQuery = dbSelectFromJoin
-      .where(and(...where))
+      .where(and(...where, isNotNull(textColumn)))
       .groupBy(textColumn)
       .orderBy(...orderBy);
 
     const resultQuery = having.length > 0 ? baseQuery.having(and(...having)) : baseQuery;
     const result = await resultQuery;
 
-    return { suggestions: result.map(({ text }) => text) };
+    return { suggestions: result.map(({ text }) => text!) };
   });
 
 const inferShopDetailsProcedure = protectedProcedure

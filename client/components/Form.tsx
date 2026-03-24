@@ -322,7 +322,7 @@ export type Option = {
   value: string;
 };
 
-type ComboBoxProps = {
+export type ComboBoxProps = {
   label?: string;
   options: (Option | string)[];
   maxMenuHeight?: number;
