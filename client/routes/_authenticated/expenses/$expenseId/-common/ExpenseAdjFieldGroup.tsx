@@ -1,11 +1,10 @@
 import { withFieldGroup } from '#components/Form';
-import { useMutation } from '@tanstack/react-query';
 import { defaultExpenseAdjustment, useExpenseForm, type TGetExpenseFormField } from '.';
-import { queryClient, trpc } from '#client/trpc';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ChevronDown, ChevronUp, Unlink, X } from 'lucide-react';
 import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
+import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 
 const AdjustmnetResult = ({ adjIndex, type }: { adjIndex: number; type: 'amountCents' | 'rateBps' }) => {
   const form = useExpenseForm();
@@ -31,7 +30,6 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
     onSwapClick: (_: number) => {},
   },
   render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType, onSwapClick }) {
-    const adjustmentNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
     const [isGst, isServiceCharge, isRateAdjustment, isItemBounded] = useStore(group.store, state => [
       state.values?.name === GST_NAME,
       state.values?.name === SERVICE_CHARGE_NAME,
@@ -45,33 +43,16 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
         {isGst || isServiceCharge ? (
           <p className='w-40 grow pl-3'> {isGst ? 'GST' : 'Service charge'}</p>
         ) : (
-          <group.AppField
-            name={`name`}
-            validators={{
-              onChangeAsyncDebounceMs: 500,
-              onChangeAsync: ({ value, signal, fieldApi }) => {
-                if (fieldApi.form.state.isSubmitting) return;
-                signal.onabort = () =>
-                  queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                adjustmentNameSuggestionMutation.mutate({
-                  type: 'adjName',
-                  search: value ?? '',
-                  context: getFormField('shopName') ?? undefined,
-                });
-              },
-            }}
-          >
-            {({ ComboBox }) => (
-              <ComboBox
-                suggestionMode
-                containerCn='w-40 grow'
-                options={adjustmentNameSuggestionMutation.data?.suggestions ?? []}
-                triggerChangeOnFocus
-                inputCn='input-sm text-sm'
-                hideError
-              />
-            )}
-          </group.AppField>
+          <ExpenseSuggestableField
+            form={group}
+            fields={{ text: 'name' }}
+            scope='adjName'
+            getContext={() => getFormField('shopName')}
+            containerCn='w-40 grow'
+            inputCn='input-sm text-sm'
+            triggerChangeOnFocus
+            hideError
+          />
         )}
         {/* Amount & Rate fields */}
         {isRateAdjustment ? (

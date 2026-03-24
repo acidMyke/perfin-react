@@ -9,10 +9,10 @@ type SuggestionFieldProps = {
   scope: SuggestionScope;
   getContext?: () => string | null;
   fetchDebouncing?: number;
-} & Omit<ComboBoxProps, 'label' | 'options' | 'suggestionMode' | 'readOnly'>;
+} & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
 
 export const ExpenseSuggestableField = withFieldGroup({
-  defaultValues: { text: '' },
+  defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
   render({ group, scope, getContext, fetchDebouncing = 500, ...rest }) {
     const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
@@ -26,7 +26,7 @@ export const ExpenseSuggestableField = withFieldGroup({
             if (fieldApi.form.state.isSubmitting) return;
             signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
             const context = getContext?.()?.trim();
-            if (value && context) {
+            if (value || context) {
               mutate({
                 scope: 'itemName',
                 search: value ?? '',

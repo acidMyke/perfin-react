@@ -1,6 +1,6 @@
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { queryClient, trpc } from '#client/trpc';
+import { trpc } from '#client/trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
@@ -17,11 +17,11 @@ import { cn, withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
-import { useMemo } from 'react';
 import { BillTotal } from './-common/BillTotal';
 import { currencyNumberFormat } from '#client/utils';
 import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -271,72 +271,34 @@ const LocationSubForm = withForm({
 
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
-  render() {
-    const form = useExpenseForm();
-    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
+  render({ form }) {
+    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
 
     return (
-      <form.Subscribe selector={state => [state.values.type]}>
-        {([expenseType]) => (
-          <>
-            <form.AppField
-              name='shopName'
-              validators={{
-                onChangeAsyncDebounceMs: 500,
-                onChangeAsync: ({ value, signal, fieldApi }) => {
-                  if (fieldApi.form.state.isSubmitting) return;
-                  signal.onabort = () =>
-                    queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                  if (value && value.length > 2) {
-                    shopNameSuggestionMutation.mutateAsync({
-                      type: 'shopName',
-                      search: value,
-                    });
-                  }
-                },
-              }}
-            >
-              {field => (
-                <field.ComboBox
-                  suggestionMode
-                  label='Shop name'
-                  containerCn={cn('col-span-4 mt-2', { 'col-span-8': expenseType !== 'physical' })}
-                  options={shopNameSuggestionMutation.data?.suggestions ?? []}
-                />
-              )}
-            </form.AppField>
-            {expenseType === 'physical' && (
-              <form.AppField
-                name='shopMall'
-                validators={{
-                  onChangeAsyncDebounceMs: 500,
-                  onChangeAsync: ({ value, signal, fieldApi }) => {
-                    if (fieldApi.form.state.isSubmitting) return;
-                    signal.onabort = () =>
-                      queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-                    if (value && value.length > 2) {
-                      shopMallSuggestionMutation.mutateAsync({
-                        type: 'shopMall',
-                        search: value,
-                      });
-                    }
-                  },
-                }}
-              >
-                {field => (
-                  <field.ComboBox
-                    suggestionMode
-                    label='Mall'
-                    containerCn='col-span-4 mt-2'
-                    options={shopMallSuggestionMutation.data?.suggestions ?? []}
-                  />
-                )}
-              </form.AppField>
-            )}
-          </>
+      <>
+        <ExpenseSuggestableField
+          form={form}
+          fields={{ text: 'shopName' }}
+          scope='shopName'
+          getContext={() => form.getFieldValue('shopMall')}
+          label='Shop name'
+          containerCn={cn('col-span-4 mt-2', { 'col-span-8': !isPhysical })}
+          triggerChangeOnFocus
+          hideError
+        />
+
+        {isPhysical && (
+          <ExpenseSuggestableField
+            form={form}
+            fields={{ text: 'shopMall' }}
+            scope='shopMall'
+            label='Mall'
+            containerCn='col-span-4 mt-2'
+            triggerChangeOnFocus
+            hideError
+          />
         )}
-      </form.Subscribe>
+      </>
     );
   },
 });

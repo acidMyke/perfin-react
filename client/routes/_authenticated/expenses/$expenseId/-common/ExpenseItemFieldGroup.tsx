@@ -1,10 +1,9 @@
-import { useMutation } from '@tanstack/react-query';
 import { withFieldGroup } from '#components/Form';
-import { queryClient, trpc } from '#client/trpc';
 import { defaultExpenseItem, useExpenseForm, type TGetExpenseFormField } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
+import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 
 const ItemResult = ({ itemId }: { itemId: string }) => {
   const form = useExpenseForm();
@@ -26,49 +25,20 @@ export const ItemDetailFieldGroup = withFieldGroup({
   },
   render({ group, itemIndex, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
     const itemId = useStore(group.store, state => state.values.id);
-    const itenNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
-        <group.AppField
-          name={`name`}
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              itenNameSuggestionMutation.mutate({
-                type: 'itemName',
-                search: value ?? '',
-                context: getFormField('shopName') ?? undefined,
-              });
-            },
-            onBlurAsync: async ({ value, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              const isPriceCentsDirty = group.getFieldMeta('priceCents')?.isDirty;
-              if (!isPriceCentsDirty) {
-                const shopName = getFormField('shopName');
-                if (!value?.trim() || !shopName?.trim()) return;
-                const [itemDetail] = await inferItemPriceMutation.mutateAsync({ itemName: value, shopName });
-                if (itemDetail) {
-                  group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
-                }
-              }
-            },
-          }}
-        >
-          {field => (
-            <field.ComboBox
-              suggestionMode
-              label={`Item ${itemIndex + 1} name`}
-              containerCn='col-span-7 w-full'
-              options={itenNameSuggestionMutation.data?.suggestions ?? []}
-              triggerChangeOnFocus
-              hideError
-            />
-          )}
-        </group.AppField>
+        <ExpenseSuggestableField
+          form={group}
+          fields={{ text: 'name' }}
+          scope='itemName'
+          getContext={() => getFormField('shopName')}
+          label={`Item ${itemIndex + 1} name`}
+          containerCn='col-span-7 w-full'
+          triggerChangeOnFocus
+          hideError
+        />
+
         <button className='btn-ghost btn btn-sm' onClick={onRemoveClick}>
           <X />
         </button>
