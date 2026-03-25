@@ -690,20 +690,28 @@ const inferShopDetailsProcedure = protectedProcedure
 
 const inferItemPricesProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
-  .mutation(({ input, ctx }) => {
+  .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
-    const itemName = input.itemName.trim().toUpperCase();
+
+    const texts = [input.itemName];
+    if (input.shopName) {
+      texts.push(input.shopName);
+    }
+
+    const hashes = await getTextsHashes(userId, texts);
+    const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
+    if (input.shopName) {
+      where.push(eq(textsContextsTable.ctxTextHash, hashes.get(input.shopName)!));
+    } else {
+      where.push(isNull(textsContextsTable.ctxTextHash));
+    }
     return db
       .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
-      .from(expenseItemsTable)
+      .from(expenseTextsTable)
+      .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .where(
-        and(
-          eq(expensesTable.userId, userId),
-          eq(expenseItemsTable.name, itemName),
-          input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
-        ),
-      )
+      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
+      .where(and(...where))
       .groupBy(expenseItemsTable.priceCents)
       .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
       .limit(1);

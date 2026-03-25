@@ -4,6 +4,8 @@ import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
+import { useMutation } from '@tanstack/react-query';
+import { trpc } from '#client/trpc';
 
 const ItemResult = ({ itemId }: { itemId: string }) => {
   const form = useExpenseForm();
@@ -25,6 +27,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
   },
   render({ group, itemIndex, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
     const itemId = useStore(group.store, state => state.values.id);
+    const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
@@ -37,6 +40,18 @@ export const ItemDetailFieldGroup = withFieldGroup({
           containerCn='col-span-7 w-full'
           triggerChangeOnFocus
           hideError
+          onSuggestionSelected={suggestion => {
+            const isPriceCentsDirty = group.getFieldMeta('priceCents')?.isDirty;
+            if (!isPriceCentsDirty) {
+              const shopName = getFormField('shopName');
+              if (!suggestion?.trim() || !shopName?.trim()) return;
+              inferItemPriceMutation.mutateAsync({ itemName: suggestion, shopName }).then(([itemDetail]) => {
+                if (itemDetail) {
+                  group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+                }
+              });
+            }
+          }}
         />
 
         <button className='btn-ghost btn btn-sm' onClick={onRemoveClick}>

@@ -333,6 +333,7 @@ export type ComboBoxProps = {
   readOnly?: boolean;
   triggerChangeOnFocus?: boolean;
   hideError?: boolean;
+  onSuggestionSelected?: (suggestion: string) => void;
 };
 
 function ComboBox({
@@ -346,6 +347,7 @@ function ComboBox({
   readOnly = false,
   triggerChangeOnFocus = false,
   hideError,
+  onSuggestionSelected,
 }: ComboBoxProps) {
   const [query, setQuery] = useState('');
   const field = useFieldContext<Option | string | undefined>();
@@ -382,8 +384,9 @@ function ComboBox({
           if (!option) return;
           const opt = option as Option | string;
           if (suggestionMode) {
-            field.handleChange(typeof opt === 'string' ? opt : opt.label); // or .label
-            field.handleBlur();
+            const suggestion = typeof opt === 'string' ? opt : opt.label; // or .label
+            field.handleChange(suggestion);
+            onSuggestionSelected?.(suggestion);
           } else {
             field.handleChange(option); // store Option object
             setQuery(option.label);
