@@ -4,6 +4,7 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router';
 import { createContextFactory } from './lib/trpc';
 import { CookieHeaders } from './lib/CookieHeaders';
+export { VersionTwoDataMigrator } from './workflows/VersionTwoDataMigrator';
 
 export default {
   async fetch(req, env, ctx) {
