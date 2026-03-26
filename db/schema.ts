@@ -292,7 +292,10 @@ export const textsContextsTable = sqliteTable(
     textHash: textHashColumn(),
     ctxTextHash: textHashColumn(),
   },
-  t => [primaryKey({ columns: [t.textHash, t.ctxTextHash] })],
+  t => [
+    primaryKey({ columns: [t.textHash, t.ctxTextHash] }),
+    index('idx_texts_contexts_ctxTextHash_textHash').on(t.ctxTextHash, t.textHash),
+  ],
 );
 
 export const expenseTextsTable = sqliteTable(
