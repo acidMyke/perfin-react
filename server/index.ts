@@ -5,6 +5,7 @@ import { appRouter } from './router';
 import { createContextFactory } from './lib/trpc';
 import { CookieHeaders } from './lib/CookieHeaders';
 import { createIttyAppRouter } from './lib/itty';
+import { adminApiRouter } from './features/admin';
 import { error } from 'itty-router';
 export { VersionTwoDataMigrator } from './workflows/VersionTwoDataMigrator';
 
@@ -21,6 +22,7 @@ router
     resHeaders.forEach((value, key) => response.headers.append(key, value));
     return response;
   })
+  .all('/admin/*', adminApiRouter.fetch)
   .all('*', () => error(404));
 
 export default { ...router } satisfies ExportedHandler<Env>;
