@@ -4,10 +4,13 @@ import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { appRouter } from './router';
 import { createContextFactory } from './lib/trpc';
 import { CookieHeaders } from './lib/CookieHeaders';
+import { createIttyAppRouter } from './lib/itty';
+import { error } from 'itty-router';
 export { VersionTwoDataMigrator } from './workflows/VersionTwoDataMigrator';
 
-export default {
-  async fetch(req, env, ctx) {
+const router = createIttyAppRouter();
+router
+  .all('/trpc/*', async (req, env, ctx) => {
     const resHeaders = new CookieHeaders();
     const response = await fetchRequestHandler({
       endpoint: '/trpc',
@@ -15,8 +18,9 @@ export default {
       router: appRouter,
       createContext: createContextFactory(env, ctx, resHeaders),
     });
-
     resHeaders.forEach((value, key) => response.headers.append(key, value));
     return response;
-  },
-} satisfies ExportedHandler<Env>;
+  })
+  .all('*', () => error(404));
+
+export default { ...router } satisfies ExportedHandler<Env>;
