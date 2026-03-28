@@ -48,6 +48,7 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
   const db = createDatabase(env);
   let lastSeenId = params.lastSeenId;
   let processedCount = 0;
+  const procIds: string[] = [];
   try {
     const expenses = await retrieveExpensesWithChilds(db, lastSeenId, limit);
 
@@ -75,6 +76,7 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
 
         lastSeenId = expense.id;
         processedCount++;
+        procIds.push(expense.id);
         if (expenseUpdated) expenseUpdateSets.set(expense.id, updateExpenseSet);
         adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
         searchables.push(...shopAndItemsSearchables, ...adjustmentResult.searchables);
@@ -91,15 +93,15 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
     const searchableRecords = await processSearchables(searchables, db);
     await saveMigratedChanges({ db, ...searchableRecords, expenseUpdateSets, adjustmentUpserts });
 
-    return { isSuccess: true, lastSeenId, processedCount };
+    return { isSuccess: true, lastSeenId, processedCount, procIds } as const;
   } catch (error: unknown) {
     if (error instanceof Error) {
       const { message } = error;
-      return { isSuccess: false, error: message };
+      return { isSuccess: false, error: message } as const;
     } else if (typeof error === 'string') {
-      return { isSuccess: false, error };
+      return { isSuccess: false, error } as const;
     }
-    return { isSuccess: false, error: 'Unknown error' };
+    return { isSuccess: false, error: 'Unknown error' } as const;
   }
 }
 
@@ -356,11 +358,25 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
         executeMigrationCycle({ env: this.env, lastSeenId, limit: maxCount }),
       );
 
+      if (!migrationResult.isSuccess) {
+        await step.do(`noti-fail-${lastSeenId}-${curCycle}`, async () => {
+          this.logToDiscord(`migration at cycle ${curCycle} failed: ${migrationResult.error}`, {
+            ...migrationResult,
+            lastSeenId,
+            curCycle,
+          });
+        });
+
+        break;
+      }
+
+      lastSeenId = migrationResult.lastSeenId;
+      idProcSince.push(...migrationResult.procIds);
       const shouldNotify = cyclePerNoti <= 1 || curCycle % cyclePerNoti === 0;
 
       if (shouldNotify) {
         await step.do(`noti-batch-${curCycle}`, async () => {
-          this.logToDiscord(`${instanceId} proccessed count: ${idProcSince.length}`, idProcSince);
+          this.logToDiscord(`migration at cycle ${curCycle} processed`, { idProcSince, lastSeenId });
         });
         idProcSince = [];
       }
@@ -376,9 +392,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
           console.warn('kill signal recieved');
           break;
         }
-      } catch (e: unknown) {
-        console.log(e);
-      }
+      } catch (e: unknown) {}
     }
 
     await step.do('noti-end', async () => {
