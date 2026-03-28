@@ -1,4 +1,5 @@
 import { createDatabase, type AppDatabase } from '#server/lib/db';
+import { getLocationBoxId } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable } from 'db/schema';
 import { eq, getColumns, gt, inArray } from 'drizzle-orm';
@@ -26,7 +27,50 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
   try {
     const { expenseIds, expenses } = await retrieveExpensesWithChilds(db, lastSeenId, limit);
 
-    return { isSuccess: true };
+    const expenseUpdateSets = new Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>();
+    const adjustmnetUpserts: Partial<typeof expenseAdjustmentsTable.$inferInsert>[] = [];
+    type Searchable = { text: string; userId: string; sourceId: string; expenseId: string; context?: string };
+    const searchables: Searchable[] = [];
+
+    for (const expense of expenses) {
+      const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
+      let expenseUpdated = false;
+
+      if (expense.shopMall) {
+        searchables.push({
+          expenseId: expense.id,
+          sourceId: expense.id,
+          text: expense.shopMall,
+          userId: expense.userId,
+        });
+      }
+
+      if (expense.shopName) {
+        searchables.push({
+          expenseId: expense.id,
+          sourceId: expense.id,
+          text: expense.shopName,
+          userId: expense.userId,
+          context: expense.shopMall ?? undefined,
+        });
+      }
+
+      if (expense.latitude && expense.longitude) {
+        const [newBoxId] = getLocationBoxId({ latitude: expense.latitude, longitude: expense.longitude });
+        if (newBoxId !== expense.boxId) {
+          updateExpenseSet.boxId = newBoxId;
+          expenseUpdated ||= true;
+        }
+      }
+
+      // TODO
+
+      if (expenseUpdated) {
+        expenseUpdateSets.set(expense.id, updateExpenseSet);
+      }
+    }
+
+    return { isSuccess: true, expenseIds };
   } catch (error: unknown) {
     if (error instanceof Error) {
       const { message } = error;
