@@ -3,7 +3,7 @@ import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { getLocationBoxId } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable, generateId } from 'db/schema';
-import { eq, getColumns, gt, inArray } from 'drizzle-orm';
+import { gt, inArray } from 'drizzle-orm';
 
 export type VersionTwoDataMigratorParam = {
   maxCount: number;
@@ -45,7 +45,7 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
       const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
       let expenseUpdated = false;
 
-      searchables.push(...buildExpenseSearchables(expense));
+      searchables.push(...buildExistingSearchables(expense));
 
       if (latitude && longitude) {
         const [newBoxId] = getLocationBoxId({ latitude, longitude });
@@ -55,8 +55,9 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         }
       }
 
-      const [gstAndServiceChargeAdjustments, nextAdjSeq] = buildGstServiceChargeAdjustment(expense);
-      adjustmentUpserts.push(...gstAndServiceChargeAdjustments);
+      const adjustmentResult = buildAdjustmentsAndSearchables(expense);
+      adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
+      searchables.push(...adjustmentResult.searchables);
 
       // TODO
 
@@ -138,46 +139,43 @@ async function retrieveExpensesWithChilds(db: AppDatabase, lastSeenId: string | 
 
 type ExpenseWithChild = Awaited<ReturnType<typeof retrieveExpensesWithChilds>>['expenses'][0];
 
-function buildExpenseSearchables(expense: ExpenseWithChild) {
+function buildExistingSearchables(expense: ExpenseWithChild) {
+  const { id: expenseId, shopMall, shopName, items, userId } = expense;
   const searchables: Searchable[] = [];
 
-  if (expense.shopMall) {
-    searchables.push({
-      expenseId: expense.id,
-      sourceId: expense.id,
-      text: expense.shopMall,
-      userId: expense.userId,
-    });
+  if (shopMall) {
+    searchables.push({ expenseId, text: shopMall, sourceId: expenseId, userId });
   }
 
-  if (expense.shopName) {
-    searchables.push({
-      expenseId: expense.id,
-      sourceId: expense.id,
-      text: expense.shopName,
-      userId: expense.userId,
-      context: expense.shopMall ?? undefined,
-    });
+  if (shopName) {
+    searchables.push({ expenseId, text: shopName, sourceId: expenseId, userId, context: shopMall ?? undefined });
+  }
+
+  for (const { id: sourceId, name, isDeleted } of items) {
+    if (isDeleted) continue;
+    searchables.push({ expenseId, text: name, sourceId, userId, context: shopName ?? undefined });
   }
 
   return searchables;
 }
 
-function buildGstServiceChargeAdjustment(expense: ExpenseWithChild) {
-  const { id: expenseId, additionalServiceChargePercent, isGstExcluded } = expense;
-  const adjustments: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+function buildAdjustmentsAndSearchables(expense: ExpenseWithChild) {
+  const { id: expenseId, adjustments, additionalServiceChargePercent, isGstExcluded, refunds } = expense;
+  const adjustmentUpserts: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
 
   let adjSeq = 0;
   let serviceChargeAdjustmentExist = false;
   let gstAdjustmentExist = false;
-  for (const adjustment of expense.adjustments) {
+  const existingAdjIds = new Set<string>();
+  for (const adjustment of adjustments) {
+    existingAdjIds.add(adjustment.id);
     adjSeq++;
     serviceChargeAdjustmentExist ||= adjustment.name === SERVICE_CHARGE_NAME;
     gstAdjustmentExist ||= adjustment.name === GST_NAME;
   }
 
   if (additionalServiceChargePercent && additionalServiceChargePercent > 0 && !serviceChargeAdjustmentExist) {
-    adjustments.push({
+    adjustmentUpserts.push({
       id: generateId(),
       name: SERVICE_CHARGE_NAME,
       rateBps: additionalServiceChargePercent * 100,
@@ -188,7 +186,7 @@ function buildGstServiceChargeAdjustment(expense: ExpenseWithChild) {
   }
 
   if (isGstExcluded && !gstAdjustmentExist) {
-    adjustments.push({
+    adjustmentUpserts.push({
       id: generateId(),
       name: GST_NAME,
       rateBps: 9_00,
@@ -198,7 +196,30 @@ function buildGstServiceChargeAdjustment(expense: ExpenseWithChild) {
     });
   }
 
-  return [adjustments, adjSeq] as const;
+  const searchables: Searchable[] = [];
+
+  for (const refund of refunds) {
+    if (existingAdjIds.has(refund.id)) continue;
+    adjustmentUpserts.push({
+      id: refund.id,
+      name: refund.source,
+      amountCents: refund.actualAmountCents ?? 0,
+      expenseId,
+      isDeleted: refund.isDeleted,
+      version: refund.version,
+      sequence: adjSeq++,
+      expenseItemId: refund.expenseItemId,
+    });
+    searchables.push({
+      expenseId,
+      sourceId: refund.id,
+      text: refund.source,
+      userId: expense.userId,
+      context: expense.shopMall ?? undefined,
+    });
+  }
+
+  return { adjustmentUpserts, searchables };
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
