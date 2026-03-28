@@ -334,8 +334,11 @@ async function saveMigratedChanges(params: SaveMigratedChangesParams) {
     ...textsContextsUpsertsBatches.map(values => db.insert(textsContextsTable).values(values).onConflictDoNothing()),
   );
 
-  // @ts-ignore
-  await db.batch(batchItems);
+  if (batchItems.length > 0) {
+    console.warn('No query executed');
+    // @ts-ignore
+    await db.batch(batchItems);
+  }
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
@@ -345,9 +348,9 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       instanceId,
     } = event;
 
-    await step.do('noti-start', async () => {
-      this.logToDiscord(`Starting migration from ID: ${after}`, { maxCount, maxCycle, maxDelay, instanceId });
-    });
+    await step.do('noti-start', () =>
+      this.logToDiscord(`Starting migration from ID: ${after}`, { maxCount, maxCycle, maxDelay, instanceId }),
+    );
 
     const cyclePerNoti = Math.ceil(maxCycle / 50);
     let lastSeenId = after;
@@ -359,13 +362,13 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       );
 
       if (!migrationResult.isSuccess) {
-        await step.do(`noti-fail-${lastSeenId}-${curCycle}`, async () => {
+        await step.do(`noti-fail-${lastSeenId}-${curCycle}`, async () =>
           this.logToDiscord(`migration at cycle ${curCycle} failed: ${migrationResult.error}`, {
             ...migrationResult,
             lastSeenId,
             curCycle,
-          });
-        });
+          }),
+        );
 
         break;
       }
@@ -375,9 +378,9 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       const shouldNotify = cyclePerNoti <= 1 || curCycle % cyclePerNoti === 0;
 
       if (shouldNotify) {
-        await step.do(`noti-batch-${curCycle}`, async () => {
-          this.logToDiscord(`migration at cycle ${curCycle} processed`, { idProcSince, lastSeenId });
-        });
+        await step.do(`noti-batch-${curCycle}`, () =>
+          this.logToDiscord(`migration at cycle ${curCycle} processed`, { idProcSince, lastSeenId }),
+        );
         idProcSince = [];
       }
 
@@ -395,9 +398,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       } catch (e: unknown) {}
     }
 
-    await step.do('noti-end', async () => {
-      this.logToDiscord(`Finished ${curCycle}/${maxCycle}, Next after: ${lastSeenId}`, { instanceId });
-    });
+    await step.do('noti-end', async () => this.logToDiscord(`migration ended`, { instanceId }));
   }
 
   private async logToDiscord(message: string, data?: unknown): Promise<void> {
