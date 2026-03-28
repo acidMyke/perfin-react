@@ -1,4 +1,4 @@
-import { createDatabase, type AppDatabase } from '#server/lib/db';
+import { createDatabase, excludedAll, type AppDatabase } from '#server/lib/db';
 import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { getLocationBoxId, getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
@@ -13,7 +13,8 @@ import {
   textsContextsTable,
   textsTable,
 } from 'db/schema';
-import { gt, inArray } from 'drizzle-orm';
+import { eq, gt, inArray } from 'drizzle-orm';
+import type { BatchItem } from 'drizzle-orm/batch';
 
 export type VersionTwoDataMigratorParam = {
   maxCount: number;
@@ -304,7 +305,35 @@ type SaveMigratedChangesParams = Awaited<ReturnType<typeof processSearchables>> 
 };
 
 async function saveMigratedChanges(params: SaveMigratedChangesParams) {
-  //TODO
+  const db = params.db;
+
+  const batchItems: BatchItem<'sqlite'>[] = [];
+
+  for (const [expenseId, setData] of params.expenseUpdateSets.entries()) {
+    batchItems.push(db.update(expensesTable).set(setData).where(eq(expensesTable.id, expenseId)));
+  }
+
+  const adjBatches = splitArray(params.adjustmentUpserts, 9);
+  const textsUpsertsBatches = splitArray(params.textsUpserts, 30);
+  const textChunkUpsertsBatches = splitArray(params.textChunkUpserts, 30);
+  const expenseTextsUpsertsBatches = splitArray(params.expenseTextsUpserts, 30);
+  const textsContextsUpsertsBatches = splitArray(params.textsContextsUpserts, 30);
+
+  batchItems.push(
+    ...adjBatches.map(values =>
+      db
+        .insert(expenseAdjustmentsTable)
+        .values(values)
+        .onConflictDoUpdate({ target: expenseAdjustmentsTable.id, set: excludedAll(expenseAdjustmentsTable) }),
+    ),
+    ...textsUpsertsBatches.map(values => db.insert(textsTable).values(values).onConflictDoNothing()),
+    ...textChunkUpsertsBatches.map(values => db.insert(textChunksTable).values(values).onConflictDoNothing()),
+    ...expenseTextsUpsertsBatches.map(values => db.insert(expenseTextsTable).values(values).onConflictDoNothing()),
+    ...textsContextsUpsertsBatches.map(values => db.insert(textsContextsTable).values(values).onConflictDoNothing()),
+  );
+
+  // @ts-ignore
+  await db.batch(batchItems);
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
