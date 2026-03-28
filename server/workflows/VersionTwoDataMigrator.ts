@@ -231,7 +231,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
     adjustmentUpserts.push({
       id: refund.id,
       name: refund.source,
-      amountCents: refund.actualAmountCents ?? 0,
+      amountCents: -(refund.actualAmountCents ?? 0),
       expenseId,
       isDeleted: refund.isDeleted,
       version: refund.version,
@@ -282,7 +282,7 @@ async function processSearchables(searchables: Searchable[], db: AppDatabase) {
   const textsContextsUpserts: (typeof textsContextsTable.$inferInsert)[] = [];
 
   for (const { userId, expenseId, text, sourceId, context } of searchables) {
-    if (!blacklistSearchableText.has(text)) continue;
+    if (blacklistSearchableText.has(text)) continue;
     const textHash = searchableHashes.getHash(userId, text)!;
     if (!existingHashSet.has(textHash)) {
       textsUpserts.push({ textHash, userId, text });
