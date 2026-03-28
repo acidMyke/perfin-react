@@ -12,7 +12,7 @@ import {
   textChunksTable,
   textsContextsTable,
   textsTable,
-} from 'db/schema';
+} from '../../db/schema';
 import { eq, gt, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 
