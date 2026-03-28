@@ -22,6 +22,14 @@ export type ExecuteMigrationCycleParam = {
   limit?: number;
 };
 
+type Searchable = {
+  text: string;
+  userId: string;
+  sourceId: string;
+  expenseId: string;
+  context?: string;
+};
+
 async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
   const { env, lastSeenId, limit = 1 } = params;
   const db = createDatabase(env);
@@ -30,32 +38,14 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
 
     const expenseUpdateSets = new Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>();
     const adjustmentUpserts: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
-    type Searchable = { text: string; userId: string; sourceId: string; expenseId: string; context?: string };
     const searchables: Searchable[] = [];
 
     for (const expense of expenses) {
-      const { id: expenseId, latitude, longitude, additionalServiceChargePercent, isGstExcluded } = expense;
+      const { latitude, longitude } = expense;
       const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
       let expenseUpdated = false;
 
-      if (expense.shopMall) {
-        searchables.push({
-          expenseId: expense.id,
-          sourceId: expense.id,
-          text: expense.shopMall,
-          userId: expense.userId,
-        });
-      }
-
-      if (expense.shopName) {
-        searchables.push({
-          expenseId: expense.id,
-          sourceId: expense.id,
-          text: expense.shopName,
-          userId: expense.userId,
-          context: expense.shopMall ?? undefined,
-        });
-      }
+      searchables.push(...buildExpenseSearchables(expense));
 
       if (latitude && longitude) {
         const [newBoxId] = getLocationBoxId({ latitude, longitude });
@@ -65,35 +55,8 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         }
       }
 
-      let adjSeq = 0;
-      let serviceChargeAdjustmentExist = false;
-      let gstAdjustmentExist = false;
-      for (const adjustment of expense.adjustments) {
-        serviceChargeAdjustmentExist ||= adjustment.name === SERVICE_CHARGE_NAME;
-        gstAdjustmentExist ||= adjustment.name === GST_NAME;
-      }
-
-      if (additionalServiceChargePercent && additionalServiceChargePercent > 0 && !serviceChargeAdjustmentExist) {
-        adjustmentUpserts.push({
-          id: generateId(),
-          name: SERVICE_CHARGE_NAME,
-          rateBps: additionalServiceChargePercent * 100,
-          amountCents: 0,
-          expenseId,
-          sequence: adjSeq++,
-        });
-      }
-
-      if (isGstExcluded && !gstAdjustmentExist) {
-        adjustmentUpserts.push({
-          id: generateId(),
-          name: GST_NAME,
-          rateBps: 9_00,
-          amountCents: 0,
-          expenseId,
-          sequence: adjSeq++,
-        });
-      }
+      const [gstAndServiceChargeAdjustments, nextAdjSeq] = buildGstServiceChargeAdjustment(expense);
+      adjustmentUpserts.push(...gstAndServiceChargeAdjustments);
 
       // TODO
 
@@ -171,6 +134,71 @@ async function retrieveExpensesWithChilds(db: AppDatabase, lastSeenId: string | 
   });
 
   return { expenseIds, expenses };
+}
+
+type ExpenseWithChild = Awaited<ReturnType<typeof retrieveExpensesWithChilds>>['expenses'][0];
+
+function buildExpenseSearchables(expense: ExpenseWithChild) {
+  const searchables: Searchable[] = [];
+
+  if (expense.shopMall) {
+    searchables.push({
+      expenseId: expense.id,
+      sourceId: expense.id,
+      text: expense.shopMall,
+      userId: expense.userId,
+    });
+  }
+
+  if (expense.shopName) {
+    searchables.push({
+      expenseId: expense.id,
+      sourceId: expense.id,
+      text: expense.shopName,
+      userId: expense.userId,
+      context: expense.shopMall ?? undefined,
+    });
+  }
+
+  return searchables;
+}
+
+function buildGstServiceChargeAdjustment(expense: ExpenseWithChild) {
+  const { id: expenseId, additionalServiceChargePercent, isGstExcluded } = expense;
+  const adjustments: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+
+  let adjSeq = 0;
+  let serviceChargeAdjustmentExist = false;
+  let gstAdjustmentExist = false;
+  for (const adjustment of expense.adjustments) {
+    adjSeq++;
+    serviceChargeAdjustmentExist ||= adjustment.name === SERVICE_CHARGE_NAME;
+    gstAdjustmentExist ||= adjustment.name === GST_NAME;
+  }
+
+  if (additionalServiceChargePercent && additionalServiceChargePercent > 0 && !serviceChargeAdjustmentExist) {
+    adjustments.push({
+      id: generateId(),
+      name: SERVICE_CHARGE_NAME,
+      rateBps: additionalServiceChargePercent * 100,
+      amountCents: 0,
+      expenseId,
+      sequence: adjSeq++,
+    });
+  }
+
+  if (isGstExcluded && !gstAdjustmentExist) {
+    adjustments.push({
+      id: generateId(),
+      name: GST_NAME,
+      rateBps: 9_00,
+      amountCents: 0,
+      expenseId,
+      sequence: adjSeq++,
+    });
+  }
+
+  return [adjustments, adjSeq] as const;
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
