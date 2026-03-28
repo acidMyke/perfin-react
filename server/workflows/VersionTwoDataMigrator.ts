@@ -1,5 +1,5 @@
 import { createDatabase, type AppDatabase } from '#server/lib/db';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { getLocationBoxId } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable, generateId } from 'db/schema';
@@ -30,43 +30,57 @@ type Searchable = {
   context?: string;
 };
 
+type AdjustmentUpsert = typeof expenseAdjustmentsTable.$inferInsert & { id: string };
+
 async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
-  const { env, lastSeenId, limit = 1 } = params;
+  const { env, limit = 1 } = params;
   const db = createDatabase(env);
+  let lastSeenId = params.lastSeenId;
+  let processedCount = 0;
   try {
-    const { expenseIds, expenses } = await retrieveExpensesWithChilds(db, lastSeenId, limit);
+    const expenses = await retrieveExpensesWithChilds(db, lastSeenId, limit);
 
     const expenseUpdateSets = new Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>();
-    const adjustmentUpserts: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+    const adjustmentUpserts: AdjustmentUpsert[] = [];
     const searchables: Searchable[] = [];
+    try {
+      for (const expense of expenses) {
+        const { latitude, longitude } = expense;
+        const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
+        let expenseUpdated = false;
 
-    for (const expense of expenses) {
-      const { latitude, longitude } = expense;
-      const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
-      let expenseUpdated = false;
+        const shopAndItemsSearchables = buildShopAndItemsSearchables(expense);
 
-      searchables.push(...buildExistingSearchables(expense));
-
-      if (latitude && longitude) {
-        const [newBoxId] = getLocationBoxId({ latitude, longitude });
-        if (newBoxId !== expense.boxId) {
-          updateExpenseSet.boxId = newBoxId;
-          expenseUpdated ||= true;
+        if (latitude && longitude) {
+          const [newBoxId] = getLocationBoxId({ latitude, longitude });
+          if (newBoxId !== expense.boxId) {
+            updateExpenseSet.boxId = newBoxId;
+            expenseUpdated ||= true;
+          }
         }
+
+        const adjustmentResult = buildAdjustments(expense);
+        validateMigratedData(expense, adjustmentResult.adjustmentUpserts);
+
+        lastSeenId = expense.id;
+        processedCount++;
+        if (expenseUpdated) expenseUpdateSets.set(expense.id, updateExpenseSet);
+        searchables.push(...shopAndItemsSearchables);
+        adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
+        searchables.push(...adjustmentResult.searchables);
       }
-
-      const adjustmentResult = buildAdjustmentsAndSearchables(expense);
-      adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
-      searchables.push(...adjustmentResult.searchables);
-
-      // TODO
-
-      if (expenseUpdated) {
-        expenseUpdateSets.set(expense.id, updateExpenseSet);
+    } catch (e) {
+      // Partially / none processed
+      if (processedCount === 0) {
+        // none processed
+        throw e;
       }
     }
 
-    return { isSuccess: true, expenseIds };
+    // Partially / Fully processed
+    // TODO:
+
+    return { isSuccess: true, lastSeenId, processedCount };
   } catch (error: unknown) {
     if (error instanceof Error) {
       const { message } = error;
@@ -74,6 +88,7 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
     } else if (typeof error === 'string') {
       return { isSuccess: false, error };
     }
+    return { isSuccess: false, error: 'Unknown error' };
   }
 }
 
@@ -134,12 +149,12 @@ async function retrieveExpensesWithChilds(db: AppDatabase, lastSeenId: string | 
     return { ...expense, items, refunds, adjustments };
   });
 
-  return { expenseIds, expenses };
+  return expenses;
 }
 
-type ExpenseWithChild = Awaited<ReturnType<typeof retrieveExpensesWithChilds>>['expenses'][0];
+type ExpenseWithChild = Awaited<ReturnType<typeof retrieveExpensesWithChilds>>[number];
 
-function buildExistingSearchables(expense: ExpenseWithChild) {
+function buildShopAndItemsSearchables(expense: ExpenseWithChild) {
   const { id: expenseId, shopMall, shopName, items, userId } = expense;
   const searchables: Searchable[] = [];
 
@@ -159,9 +174,9 @@ function buildExistingSearchables(expense: ExpenseWithChild) {
   return searchables;
 }
 
-function buildAdjustmentsAndSearchables(expense: ExpenseWithChild) {
+function buildAdjustments(expense: ExpenseWithChild) {
   const { id: expenseId, adjustments, additionalServiceChargePercent, isGstExcluded, refunds } = expense;
-  const adjustmentUpserts: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+  const adjustmentUpserts: AdjustmentUpsert[] = [];
 
   let adjSeq = 0;
   let serviceChargeAdjustmentExist = false;
@@ -220,6 +235,18 @@ function buildAdjustmentsAndSearchables(expense: ExpenseWithChild) {
   }
 
   return { adjustmentUpserts, searchables };
+}
+
+function validateMigratedData(expense: ExpenseWithChild, adjustmentUpserts: AdjustmentUpsert[]) {
+  // Newly calculated expense should match the pre-calculated value
+  const newCalculatedResult = calculateExpense({
+    ...expense,
+    adjustments: [...expense.adjustments, ...adjustmentUpserts],
+  });
+
+  if (newCalculatedResult.netTotalCents !== expense.amountCents) {
+    throw `mismatched calculated output new (${newCalculatedResult.netTotalCents}) !== existing (${expense.amountCents})`;
+  }
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
