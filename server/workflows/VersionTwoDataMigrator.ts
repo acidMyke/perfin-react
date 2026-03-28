@@ -1,4 +1,7 @@
+import { createDatabase, type AppDatabase } from '#server/lib/db';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
+import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable } from 'db/schema';
+import { eq, getColumns, gt, inArray } from 'drizzle-orm';
 
 export type VersionTwoDataMigratorParam = {
   maxCount: number;
@@ -10,6 +13,89 @@ export type VersionTwoDataMigratorParam = {
 export type CycleCheckpointEvent = {
   kill?: boolean;
 };
+
+export type ExecuteMigrationCycleParam = {
+  env: Env;
+  lastSeenId?: string;
+  limit?: number;
+};
+
+async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
+  const { env, lastSeenId, limit = 1 } = params;
+  const db = createDatabase(env);
+  try {
+    const { expenseIds, expenses } = await retrieveExpensesWithChilds(db, lastSeenId, limit);
+
+    return { isSuccess: true };
+  } catch (error: unknown) {
+    if (error instanceof Error) {
+      const { message } = error;
+      return { isSuccess: false, error: message };
+    } else if (typeof error === 'string') {
+      return { isSuccess: false, error };
+    }
+  }
+}
+
+async function retrieveExpensesWithChilds(db: AppDatabase, lastSeenId: string | undefined, limit: number) {
+  // Fetch expenses
+  const rawExpenses = await db
+    .select()
+    .from(expensesTable)
+    .where(lastSeenId ? gt(expensesTable.id, lastSeenId) : undefined)
+    .orderBy(expensesTable.id)
+    .limit(limit);
+
+  if (rawExpenses.length < 0) {
+    throw 'No records found';
+  }
+
+  // Fetching child tables
+  const expenseIds = rawExpenses.map(({ id }) => id);
+  const [allItems, allRefunds, allAdjustments] = await db.batch([
+    db
+      .select()
+      .from(expenseItemsTable)
+      .where(inArray(expenseItemsTable.expenseId, expenseIds))
+      .orderBy(expenseItemsTable.expenseId, expenseItemsTable.sequence),
+    db
+      .select()
+      .from(expenseRefundsTable)
+      .where(inArray(expenseRefundsTable.expenseId, expenseIds))
+      .orderBy(expenseRefundsTable.expenseId, expenseRefundsTable.sequence),
+    db
+      .select()
+      .from(expenseAdjustmentsTable)
+      .where(inArray(expenseAdjustmentsTable.expenseId, expenseIds))
+      .orderBy(expenseAdjustmentsTable.expenseId, expenseAdjustmentsTable.sequence),
+  ]);
+
+  let [itemIdx, refundIdx, adjustmentsIdx] = [0, 0, 0];
+  const expenses = rawExpenses.map(expense => {
+    const items: typeof allItems = [];
+    const refunds: typeof allRefunds = [];
+    const adjustments: typeof allAdjustments = [];
+
+    while (itemIdx < allItems.length && allItems[itemIdx].expenseId === expense.id) {
+      items.push(allItems[itemIdx]);
+      itemIdx++;
+    }
+
+    while (refundIdx < allRefunds.length && allRefunds[refundIdx].expenseId === expense.id) {
+      refunds.push(allRefunds[refundIdx]);
+      refundIdx++;
+    }
+
+    while (adjustmentsIdx < allAdjustments.length && allAdjustments[adjustmentsIdx].expenseId === expense.id) {
+      adjustments.push(allAdjustments[adjustmentsIdx]);
+      adjustmentsIdx++;
+    }
+
+    return { ...expense, items, refunds, adjustments };
+  });
+
+  return { expenseIds, expenses };
+}
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
   async run(event: WorkflowEvent<VersionTwoDataMigratorParam>, step: WorkflowStep) {
@@ -27,8 +113,9 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
     let curCycle = 0;
     let idProcSince: string[] = [];
     for (; curCycle < event.payload.maxCycle; curCycle++) {
-      // TODO
-      await step.sleep('simulated migration', 50_000);
+      const migrationResult = await step.do(`migration-${lastSeenId}`, () =>
+        executeMigrationCycle({ env: this.env, lastSeenId, limit: maxCount }),
+      );
 
       const shouldNotify = cyclePerNoti <= 1 || curCycle % cyclePerNoti === 0;
 
