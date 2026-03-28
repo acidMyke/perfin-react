@@ -1,7 +1,8 @@
 import { createDatabase, type AppDatabase } from '#server/lib/db';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { getLocationBoxId } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
-import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable } from 'db/schema';
+import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable, generateId } from 'db/schema';
 import { eq, getColumns, gt, inArray } from 'drizzle-orm';
 
 export type VersionTwoDataMigratorParam = {
@@ -28,11 +29,12 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
     const { expenseIds, expenses } = await retrieveExpensesWithChilds(db, lastSeenId, limit);
 
     const expenseUpdateSets = new Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>();
-    const adjustmnetUpserts: Partial<typeof expenseAdjustmentsTable.$inferInsert>[] = [];
+    const adjustmentUpserts: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
     type Searchable = { text: string; userId: string; sourceId: string; expenseId: string; context?: string };
     const searchables: Searchable[] = [];
 
     for (const expense of expenses) {
+      const { id: expenseId, latitude, longitude, additionalServiceChargePercent, isGstExcluded } = expense;
       const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
       let expenseUpdated = false;
 
@@ -55,12 +57,42 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         });
       }
 
-      if (expense.latitude && expense.longitude) {
-        const [newBoxId] = getLocationBoxId({ latitude: expense.latitude, longitude: expense.longitude });
+      if (latitude && longitude) {
+        const [newBoxId] = getLocationBoxId({ latitude, longitude });
         if (newBoxId !== expense.boxId) {
           updateExpenseSet.boxId = newBoxId;
           expenseUpdated ||= true;
         }
+      }
+
+      let adjSeq = 0;
+      let serviceChargeAdjustmentExist = false;
+      let gstAdjustmentExist = false;
+      for (const adjustment of expense.adjustments) {
+        serviceChargeAdjustmentExist ||= adjustment.name === SERVICE_CHARGE_NAME;
+        gstAdjustmentExist ||= adjustment.name === GST_NAME;
+      }
+
+      if (additionalServiceChargePercent && additionalServiceChargePercent > 0 && !serviceChargeAdjustmentExist) {
+        adjustmentUpserts.push({
+          id: generateId(),
+          name: SERVICE_CHARGE_NAME,
+          rateBps: additionalServiceChargePercent * 100,
+          amountCents: 0,
+          expenseId,
+          sequence: adjSeq++,
+        });
+      }
+
+      if (isGstExcluded && !gstAdjustmentExist) {
+        adjustmentUpserts.push({
+          id: generateId(),
+          name: GST_NAME,
+          rateBps: 9_00,
+          amountCents: 0,
+          expenseId,
+          sequence: adjSeq++,
+        });
       }
 
       // TODO
