@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "4d08eb76-e481-40f0-bf39-4e624d5dc07f",
+  "id": "9bf38993-9aae-463e-9edf-0e9c63bc36eb",
   "prevIds": [
-    "726574f0-ee11-46a6-b7d3-cfd26b4f299f"
+    "8639a571-8532-49ac-bb12-6cdb279a9688"
   ],
   "ddl": [
     {
@@ -822,7 +822,7 @@
     },
     {
       "type": "text",
-      "notNull": false,
+      "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
@@ -2050,6 +2050,24 @@
       "name": "idx_user_chunks",
       "entityType": "indexes",
       "table": "texts_chunks"
+    },
+    {
+      "columns": [
+        {
+          "value": "ctx_text_hash",
+          "isExpression": false
+        },
+        {
+          "value": "text_hash",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_texts_contexts_ctxTextHash_textHash",
+      "entityType": "indexes",
+      "table": "texts_contexts"
     },
     {
       "columns": [
