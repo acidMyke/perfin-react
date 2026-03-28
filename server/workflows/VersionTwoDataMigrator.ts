@@ -1,8 +1,18 @@
 import { createDatabase, type AppDatabase } from '#server/lib/db';
-import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { getLocationBoxId } from '#server/lib/utils';
+import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { getLocationBoxId, getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
-import { expenseAdjustmentsTable, expenseItemsTable, expenseRefundsTable, expensesTable, generateId } from 'db/schema';
+import {
+  expenseAdjustmentsTable,
+  expenseItemsTable,
+  expenseRefundsTable,
+  expensesTable,
+  expenseTextsTable,
+  generateId,
+  textChunksTable,
+  textsContextsTable,
+  textsTable,
+} from 'db/schema';
 import { gt, inArray } from 'drizzle-orm';
 
 export type VersionTwoDataMigratorParam = {
@@ -65,9 +75,8 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         lastSeenId = expense.id;
         processedCount++;
         if (expenseUpdated) expenseUpdateSets.set(expense.id, updateExpenseSet);
-        searchables.push(...shopAndItemsSearchables);
         adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
-        searchables.push(...adjustmentResult.searchables);
+        searchables.push(...shopAndItemsSearchables, ...adjustmentResult.searchables);
       }
     } catch (e) {
       // Partially / none processed
@@ -78,7 +87,8 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
     }
 
     // Partially / Fully processed
-    // TODO:
+    const searchableRecords = await processSearchables(searchables, db);
+    await saveMigratedChanges({ db, ...searchableRecords, expenseUpdateSets, adjustmentUpserts });
 
     return { isSuccess: true, lastSeenId, processedCount };
   } catch (error: unknown) {
@@ -241,12 +251,60 @@ function validateMigratedData(expense: ExpenseWithChild, adjustmentUpserts: Adju
   // Newly calculated expense should match the pre-calculated value
   const newCalculatedResult = calculateExpense({
     ...expense,
-    adjustments: [...expense.adjustments, ...adjustmentUpserts],
+    adjustments: [...expense.adjustments, ...adjustmentUpserts].toSorted((a, b) => a.sequence - b.sequence),
   });
 
   if (newCalculatedResult.netTotalCents !== expense.amountCents) {
     throw `mismatched calculated output new (${newCalculatedResult.netTotalCents}) !== existing (${expense.amountCents})`;
   }
+}
+
+async function processSearchables(searchables: Searchable[], db: AppDatabase) {
+  const searchableHashes = await getMultiUserTextsHashes(searchables);
+
+  const existenceResult = await db.batch(
+    // @ts-ignore
+    splitArray(Array.from(searchableHashes.getAllHash()), 70).map(hashes =>
+      db.select({ hash: textsTable.textHash }).from(textsTable).where(inArray(textsTable.textHash, hashes)),
+    ),
+  );
+
+  const existingHashSet = new Set(
+    (existenceResult as unknown as { hash: number }[][]).flatMap(x => x.map(({ hash }) => hash)),
+  );
+
+  const textsUpserts: (typeof textsTable.$inferInsert)[] = [];
+  const textChunkUpserts: (typeof textChunksTable.$inferInsert)[] = [];
+  const expenseTextsUpserts: (typeof expenseTextsTable.$inferInsert)[] = [];
+  const textsContextsUpserts: (typeof textsContextsTable.$inferInsert)[] = [];
+
+  for (const { userId, expenseId, text, sourceId, context } of searchables) {
+    if (!blacklistSearchableText.has(text)) continue;
+    const textHash = searchableHashes.getHash(userId, text)!;
+    if (!existingHashSet.has(textHash)) {
+      textsUpserts.push({ textHash, userId, text });
+      textChunkUpserts.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
+    }
+    if (context) {
+      const ctxTextHash = searchableHashes.getHash(userId, context);
+      if (ctxTextHash) {
+        textsContextsUpserts.push({ textHash, ctxTextHash });
+      }
+    }
+    expenseTextsUpserts.push({ textHash, sourceId, expenseId });
+  }
+
+  return { textsUpserts, textChunkUpserts, expenseTextsUpserts, textsContextsUpserts };
+}
+
+type SaveMigratedChangesParams = Awaited<ReturnType<typeof processSearchables>> & {
+  expenseUpdateSets: Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>;
+  adjustmentUpserts: AdjustmentUpsert[];
+  db: AppDatabase;
+};
+
+async function saveMigratedChanges(params: SaveMigratedChangesParams) {
+  //TODO
 }
 
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {

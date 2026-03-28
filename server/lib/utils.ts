@@ -49,6 +49,42 @@ const hashTextInternal = async (userId: string, text: string, encoder: TextEncod
   return n;
 };
 
+type UserIdTextPair = { userId: string; text: string };
+export const getMultiUserTextsHashes = async (pairs: IteratorObject<UserIdTextPair> | UserIdTextPair[]) => {
+  const encoder = new TextEncoder();
+  const resultPromiseMap = new Map<string, Map<string, Promise<number>>>();
+  await Promise.all(
+    pairs.map(({ userId, text }) => {
+      let userMap = resultPromiseMap.get(userId);
+      if (!userMap || !userMap.has(text)) {
+        if (!userMap) {
+          userMap = new Map<string, Promise<number>>();
+          resultPromiseMap.set(userId, userMap);
+        }
+        userMap.set(text, hashTextInternal(userId, text, encoder));
+      }
+    }),
+  );
+
+  const finalMap = new Map<string, Map<string, number>>();
+  for (const [userId, texts] of resultPromiseMap) {
+    const resolvedTexts = new Map<string, number>();
+    for (const [text, promise] of texts) {
+      resolvedTexts.set(text, await promise);
+    }
+    finalMap.set(userId, resolvedTexts);
+  }
+
+  return Object.assign(finalMap, {
+    getHash(this: typeof finalMap, userId: string, text: string) {
+      return this.get(userId)?.get(text);
+    },
+    getAllHash(this: typeof finalMap) {
+      return this.values().flatMap(m => m.values());
+    },
+  });
+};
+
 export const getTextsHashes = async (userId: string, texts: IteratorObject<string> | string[]) => {
   const encoder = new TextEncoder();
   const resultMap = new Map<string, number>();
