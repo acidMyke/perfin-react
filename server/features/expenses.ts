@@ -368,8 +368,8 @@ const saveExpenseProcedure = protectedProcedure
           .insert(expenseAdjustmentsTable)
           .values(adjustmentsRecords)
           .onConflictDoUpdate({
-            target: expenseItemsTable.id,
-            set: excludedAll(expenseItemsTable),
+            target: expenseAdjustmentsTable.id,
+            set: excludedAll(expenseAdjustmentsTable),
           }),
       );
     }
