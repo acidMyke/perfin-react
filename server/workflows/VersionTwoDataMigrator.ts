@@ -243,6 +243,13 @@ function buildAdjustments(expense: ExpenseWithChild) {
   const searchables: Searchable[] = [];
 
   for (const refund of refunds) {
+    searchables.push({
+      expenseId,
+      sourceId: refund.id,
+      text: refund.source,
+      userId: expense.userId,
+      context: expense.shopMall ?? undefined,
+    });
     if (existingAdjIds.has(refund.id)) continue;
     adjustmentUpserts.push({
       id: refund.id,
@@ -253,13 +260,6 @@ function buildAdjustments(expense: ExpenseWithChild) {
       version: refund.version,
       sequence: adjSeq++,
       expenseItemId: refund.expenseItemId,
-    });
-    searchables.push({
-      expenseId,
-      sourceId: refund.id,
-      text: refund.source,
-      userId: expense.userId,
-      context: expense.shopMall ?? undefined,
     });
   }
 
