@@ -1,5 +1,6 @@
 import { createIttyAppRouter, withZod, type IttyCfArgs } from '#server/lib/itty.ts';
-import { json, type IRequest, type RequestHandler } from 'itty-router';
+import { CHECKPOINT_EVENT_TYPE } from '#server/workflows/VersionTwoDataMigrator';
+import { error, json, status, type IRequest, type RequestHandler } from 'itty-router';
 import z from 'zod';
 
 const withAdminCheck: RequestHandler<IRequest, IttyCfArgs> = (request, env) => {
@@ -38,5 +39,24 @@ adminApiRouter.post(
     const instance = await env.V2_MIGRATOR.create({ params: body });
 
     return json({ instanceId: instance.id });
+  },
+);
+
+adminApiRouter.post(
+  '/v2-migrator-checkpoint',
+  withZod({
+    body: z.object({
+      instanceId: z.guid(),
+      kill: z.boolean(),
+    }),
+  }),
+  async (request, env) => {
+    const { instanceId, kill } = request.validated.body;
+    const instance = await env.V2_MIGRATOR.get(instanceId);
+    if (!instance) {
+      return error(404, `instance ${instanceId} not found`);
+    }
+    instance.sendEvent({ type: CHECKPOINT_EVENT_TYPE, payload: { kill } });
+    return status(204);
   },
 );

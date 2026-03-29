@@ -23,6 +23,7 @@ export type VersionTwoDataMigratorParam = {
   after?: string;
 };
 
+export const CHECKPOINT_EVENT_TYPE = 'cycle-checkpoint' as const;
 export type CycleCheckpointEvent = {
   kill?: boolean;
 };
