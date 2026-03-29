@@ -347,7 +347,6 @@ async function saveMigratedChanges(params: SaveMigratedChangesParams) {
   );
 
   if (batchItems.length > 0) {
-    console.warn('No query executed');
     // @ts-ignore
     await db.batch(batchItems);
   }
