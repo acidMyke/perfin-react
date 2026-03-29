@@ -130,7 +130,7 @@ async function retrieveExpensesWithChilds(db: AppDatabase, lastSeenId: string | 
     .orderBy(expensesTable.id)
     .limit(limit);
 
-  if (rawExpenses.length < 0) {
+  if (rawExpenses.length <= 0) {
     throw 'No records found';
   }
 
@@ -371,6 +371,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
     const cyclePerNoti = Math.ceil(maxCycle / 50);
     let curCycle = 0;
     let idProcSince: string[] = [];
+    let totalProcessedCount = 0;
     for (; curCycle < event.payload.maxCycle; curCycle++) {
       const migrationResult = await step.do(`migration-${lastSeenId}`, () =>
         executeMigrationCycle({ env: this.env, lastSeenId, limit: maxCount }),
@@ -390,6 +391,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
 
       lastSeenId = migrationResult.lastSeenId;
       idProcSince.push(...migrationResult.procIds);
+      totalProcessedCount += migrationResult.processedCount;
       const shouldNotify = cyclePerNoti <= 1 || curCycle % cyclePerNoti === 0;
 
       if (shouldNotify) {
@@ -409,6 +411,10 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
         break;
       }
 
+      const isNoMoreRecords = migrationResult.processedCount < maxCount;
+      if (isNoMoreRecords) {
+        break;
+      }
       try {
         // Dual purpose: Delay & Kill switch
         const checkpointEvent = await step.waitForEvent<CycleCheckpointEvent>(`cycle-checkpoint-${curCycle}`, {
@@ -423,7 +429,9 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       } catch (e: unknown) {}
     }
 
-    await step.do('noti-end', async () => this.logToDiscord(`migration ended`, { instanceId }));
+    await step.do('noti-end', async () =>
+      this.logToDiscord(`migration ended, total processed: ${totalProcessedCount}`, { instanceId }),
+    );
   }
 
   private async logToDiscord(message: string, data?: unknown): Promise<void> {
