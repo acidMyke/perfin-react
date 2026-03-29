@@ -403,6 +403,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
             processingId: migrationResult.currentProcessingId,
           }),
         );
+        break;
       }
 
       try {

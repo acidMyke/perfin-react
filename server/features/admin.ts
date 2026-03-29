@@ -56,7 +56,7 @@ adminApiRouter.post(
     if (!instance) {
       return error(404, `instance ${instanceId} not found`);
     }
-    instance.sendEvent({ type: CHECKPOINT_EVENT_TYPE, payload: { kill } });
+    await instance.sendEvent({ type: CHECKPOINT_EVENT_TYPE, payload: { kill } });
     return status(204);
   },
 );
