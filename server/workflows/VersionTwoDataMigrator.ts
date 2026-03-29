@@ -49,15 +49,17 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
   let lastSeenId = params.lastSeenId;
   let processedCount = 0;
   const procIds: string[] = [];
+  let partialProcessedError: string | undefined;
+  let currentProcessingId: string | undefined;
   try {
     const expenses = await retrieveExpensesWithChilds(db, lastSeenId, limit);
-
     const expenseUpdateSets = new Map<string, Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'>>();
     const adjustmentUpserts: AdjustmentUpsert[] = [];
     const searchables: Searchable[] = [];
     try {
       for (const expense of expenses) {
         const { latitude, longitude } = expense;
+        currentProcessingId = expense.id;
         const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
         let expenseUpdated = false;
 
@@ -81,19 +83,29 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         adjustmentUpserts.push(...adjustmentResult.adjustmentUpserts);
         searchables.push(...shopAndItemsSearchables, ...adjustmentResult.searchables);
       }
-    } catch (e) {
+    } catch (error) {
       // Partially / none processed
       if (processedCount === 0) {
         // none processed
-        throw e;
+        throw error;
       }
+
+      partialProcessedError =
+        error instanceof Error ? error.message : typeof error === 'string' ? error : JSON.stringify(error);
     }
 
     // Partially / Fully processed
     const searchableRecords = await processSearchables(searchables, db);
     await saveMigratedChanges({ db, ...searchableRecords, expenseUpdateSets, adjustmentUpserts });
 
-    return { isSuccess: true, lastSeenId, processedCount, procIds } as const;
+    return {
+      isSuccess: true,
+      lastSeenId,
+      processedCount,
+      procIds,
+      partialProcessedError,
+      currentProcessingId,
+    } as const;
   } catch (error: unknown) {
     if (error instanceof Error) {
       const { message } = error;
@@ -382,6 +394,15 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
           this.logToDiscord(`migration at cycle ${curCycle} processed`, { idProcSince, lastSeenId }),
         );
         idProcSince = [];
+      }
+
+      if (migrationResult.partialProcessedError) {
+        await step.do(`noti-partial-processed-${curCycle}`, () =>
+          this.logToDiscord(`migration at cycle ${curCycle} partially failed`, {
+            error: migrationResult.partialProcessedError,
+            processingId: migrationResult.currentProcessingId,
+          }),
+        );
       }
 
       try {
