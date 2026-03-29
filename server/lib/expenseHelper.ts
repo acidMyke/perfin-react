@@ -88,29 +88,35 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       continue;
     }
 
-    let totalAdjAmountForThisRate = 0;
+    // switch to keeping track of netTotalCents * rateBps, prevent rounding issue.
+    let totalAdjCentBpsForThisRate = 0;
 
     if (expenseItemId) {
       const itemResult = itemResultsMap.get(expenseItemId);
       if (itemResult) {
-        const adjAmount = Math.round((itemResult.netTotalCents * rateBps) / 100_00);
-        const adjRateBps = Math.round((adjAmount / expenseNetTotal) * 100_00);
+        const adjCentBps = itemResult.netTotalCents * rateBps;
+        totalAdjCentBpsForThisRate += adjCentBps;
+
+        const adjAmount = Math.round(adjCentBps / 100_00);
+        const adjRateBps = Math.round((adjAmount / itemResult.netTotalCents) * 100_00);
         itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
         itemResult.netTotalCents += adjAmount;
-        totalAdjAmountForThisRate += adjAmount;
       }
     } else {
       for (const itemResult of itemResultsMap.values()) {
-        const adjAmount = Math.round((itemResult.netTotalCents * rateBps) / 100_00);
+        const adjCentBps = itemResult.netTotalCents * rateBps;
+        totalAdjCentBpsForThisRate += adjCentBps;
+
+        const adjAmount = Math.round(adjCentBps / 100_00);
         const adjRateBps = Math.round((adjAmount / expenseNetTotal) * 100_00);
         itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
         itemResult.netTotalCents += adjAmount;
-        totalAdjAmountForThisRate += adjAmount;
       }
     }
 
-    expenseNetTotal += totalAdjAmountForThisRate;
-    expenseAdjustments.push([id, totalAdjAmountForThisRate, rateBps]);
+    const totalAdjCents = Math.round(totalAdjCentBpsForThisRate / 100_00);
+    expenseNetTotal += totalAdjCents;
+    expenseAdjustments.push([id, totalAdjCents, rateBps]);
   }
 
   return {
