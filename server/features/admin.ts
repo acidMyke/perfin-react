@@ -1,5 +1,5 @@
 import { createIttyAppRouter, withZod, type IttyCfArgs } from '#server/lib/itty.ts';
-import { CHECKPOINT_EVENT_TYPE } from '#server/workflows/VersionTwoDataMigrator';
+import { CHECKPOINT_EVENT_TYPE, VersionTwoDataMigratorParamSchema } from '#server/workflows/VersionTwoDataMigrator';
 import { error, json, status, type IRequest, type RequestHandler } from 'itty-router';
 import z from 'zod';
 
@@ -27,12 +27,7 @@ export const adminApiRouter = createIttyAppRouter({ base: '/admin', before: [wit
 adminApiRouter.post(
   '/invoke-v2-migrator',
   withZod({
-    body: z.object({
-      maxCount: z.number(),
-      maxCycle: z.number(),
-      maxDelay: z.number(),
-      after: z.string().optional(),
-    }),
+    body: VersionTwoDataMigratorParamSchema,
   }),
   async (request, env) => {
     const { body } = request.validated;

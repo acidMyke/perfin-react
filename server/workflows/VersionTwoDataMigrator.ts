@@ -15,13 +15,16 @@ import {
 } from '../../db/schema';
 import { eq, gt, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
+import z from 'zod';
 
-export type VersionTwoDataMigratorParam = {
-  maxCount: number;
-  maxCycle: number;
-  maxDelay: number;
-  after?: string;
-};
+export const VersionTwoDataMigratorParamSchema = z.strictObject({
+  maxCount: z.number(),
+  maxCycle: z.number(),
+  maxDelay: z.number(),
+  lastSeenId: z.string().optional(),
+});
+
+export type VersionTwoDataMigratorParam = z.infer<typeof VersionTwoDataMigratorParamSchema>;
 
 export const CHECKPOINT_EVENT_TYPE = 'cycle-checkpoint' as const;
 export type CycleCheckpointEvent = {
@@ -356,16 +359,16 @@ async function saveMigratedChanges(params: SaveMigratedChangesParams) {
 export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDataMigratorParam> {
   async run(event: WorkflowEvent<VersionTwoDataMigratorParam>, step: WorkflowStep) {
     const {
-      payload: { maxCount, maxCycle, maxDelay, after },
+      payload: { maxCount, maxCycle, maxDelay },
       instanceId,
     } = event;
+    let lastSeenId = event.payload.lastSeenId;
 
     await step.do('noti-start', () =>
-      this.logToDiscord(`Starting migration from ID: ${after}`, { maxCount, maxCycle, maxDelay, instanceId }),
+      this.logToDiscord(`Starting migration`, { lastSeenId, maxCount, maxCycle, maxDelay, instanceId }),
     );
 
     const cyclePerNoti = Math.ceil(maxCycle / 50);
-    let lastSeenId = after;
     let curCycle = 0;
     let idProcSince: string[] = [];
     for (; curCycle < event.payload.maxCycle; curCycle++) {
@@ -409,7 +412,7 @@ export class VersionTwoDataMigrator extends WorkflowEntrypoint<Env, VersionTwoDa
       try {
         // Dual purpose: Delay & Kill switch
         const checkpointEvent = await step.waitForEvent<CycleCheckpointEvent>(`cycle-checkpoint-${curCycle}`, {
-          type: 'cycle-checkpoint',
+          type: CHECKPOINT_EVENT_TYPE,
           timeout: maxDelay,
         });
 
