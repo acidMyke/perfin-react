@@ -301,6 +301,7 @@ async function processSearchables(searchables: Searchable[], db: AppDatabase) {
     if (blacklistSearchableText.has(text)) continue;
     const textHash = searchableHashes.getHash(userId, text)!;
     if (!existingHashSet.has(textHash)) {
+      existingHashSet.add(textHash);
       textsUpserts.push({ textHash, userId, text });
       textChunkUpserts.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
     }
