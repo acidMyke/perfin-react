@@ -166,7 +166,9 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
+    /** @deprecated formula changed, replaced by geoId */
     boxId: integer(),
+    geoId: integer(),
     shopName: citext(),
     shopMall: citext(),
     /** @deprecated normalized to expenseAdjustmentsTable*/
@@ -232,8 +234,14 @@ export const expenseAdjustmentsTable = sqliteTable(
     expenseId: idColumn(),
     expenseItemId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
+    isInferable: boolean().notNull().default(false),
   },
-  t => [index('idx_expense_adjustments_expense_id').on(t.expenseId)],
+  t => [
+    index('idx_expense_adjustments_expense_id').on(t.expenseId),
+    index('idx_expense_adjustments_inferrable')
+      .on(t.expenseId, t.name, t.rateBps)
+      .where(sql`${t.isInferable} = 1`),
+  ],
 );
 
 /** @deprecated replaced by v2_search */
@@ -296,6 +304,17 @@ export const textsContextsTable = sqliteTable(
     primaryKey({ columns: [t.textHash, t.ctxTextHash] }),
     index('idx_texts_contexts_ctxTextHash_textHash').on(t.ctxTextHash, t.textHash),
   ],
+);
+
+export const geoTextsTable = sqliteTable(
+  'geo_texts',
+  {
+    geoId: integer().notNull(),
+    nameTextHash: textHashColumn(),
+    latitude: real().notNull(),
+    longitude: real().notNull(),
+  },
+  t => [primaryKey({ columns: [t.geoId, t.nameTextHash] })],
 );
 
 export const expenseTextsTable = sqliteTable(
