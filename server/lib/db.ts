@@ -79,6 +79,27 @@ export function coalesce<TValue, TFallback = ''>(
   return fallback ? sql`COALESCE(${value}, ${fallback})` : sql`COALESCE(${value},'')`;
 }
 
+type ExtractType<T> = T extends AnyColumn
+  ? T['_']['data']
+  : T extends SQL.Aliased<infer U>
+    ? U
+    : T extends SQL<infer U>
+      ? U
+      : unknown;
+
+type InferJsonGroupArrayObjectResult<TShape extends Record<string, any>> = {
+  [K in keyof TShape]: ExtractType<TShape[K]>;
+}[];
+
+export function jsonGroupArrayObject<T extends Record<string, SQLWrapper<any>>>(shape: T) {
+  const jsonObjectArgs: SQL[] = Object.entries(shape).flatMap(([key, value]) => [sql.raw(`'${key}'`), sql`${value}`]);
+  const joinedParams = sql.join(jsonObjectArgs, sql`,`);
+  const jsonGroupedArrayObject = sql`json_group_array(json_object(${joinedParams}))`;
+  return sql`coalesce(${jsonGroupedArrayObject}, '[]')`.mapWith({
+    mapFromDriverValue: v => (typeof v === 'string' ? JSON.parse(v) : []) as InferJsonGroupArrayObjectResult<T>,
+  });
+}
+
 export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,

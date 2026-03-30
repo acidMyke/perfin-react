@@ -309,12 +309,13 @@ export const textsContextsTable = sqliteTable(
 export const geoTextsTable = sqliteTable(
   'geo_texts',
   {
+    userId: idColumn(),
     geoId: integer().notNull(),
-    nameTextHash: textHashColumn(),
+    textHash: textHashColumn(),
     latitude: real().notNull(),
     longitude: real().notNull(),
   },
-  t => [primaryKey({ columns: [t.geoId, t.nameTextHash] })],
+  t => [primaryKey({ columns: [t.userId, t.geoId, t.textHash] })],
 );
 
 export const expenseTextsTable = sqliteTable(

@@ -10,6 +10,7 @@ import {
   textChunksTable,
   textsContextsTable,
   textsTable,
+  geoTextsTable,
 } from '../../db/schema';
 import {
   and,
@@ -31,7 +32,7 @@ import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { blacklistSearchableText, calculateExpense, INFERABLE_ADJ_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
+import { caseWhen, coalesce, concat, excludedAll, jsonGroupArrayObject } from '../lib/db';
 import { getLocationGeoId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
 
@@ -282,7 +283,7 @@ const saveExpenseProcedure = protectedProcedure
         ...adj,
         expenseId: input.expenseId,
         sequence: adjustmentsRecords.length,
-        isInferable: INFERABLE_ADJ_NAME.has(adj.name)
+        isInferable: INFERABLE_ADJ_NAME.has(adj.name),
       });
     }
 
@@ -604,6 +605,57 @@ const inferShopDetailsProcedure = protectedProcedure
   )
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
+
+    if (input.latitude && input.longitude) {
+      // Inferring using coordinates
+      const geoIds = getLocationGeoId({ latitude: input.latitude, longitude: input.longitude }, true);
+
+      const distinctNearbyCte = db.$with('distinct_nearby').as(
+        db
+          .select({
+            expenseId: expenseTextsTable.expenseId.as('expense_id'),
+            distance:
+              sql<number>`min((${geoTextsTable.latitude} - ${input.latitude}) * (${geoTextsTable.latitude} - ${input.latitude})
+              + (${geoTextsTable.longitude} - ${input.longitude}) * (${geoTextsTable.longitude} - ${input.longitude}))`.as(
+                'distance',
+              ),
+          })
+          .from(geoTextsTable)
+          .innerJoin(expenseTextsTable, eq(geoTextsTable.textHash, expenseTextsTable.textHash))
+          .where(and(eq(geoTextsTable.userId, userId), inArray(geoTextsTable.geoId, geoIds)))
+          .groupBy(expenseTextsTable.expenseId)
+          .orderBy(sql`'distance'`)
+          .limit(10),
+      );
+
+      const adjustmentSubquery = db
+        .select({
+          adjustments: jsonGroupArrayObject({
+            name: expenseAdjustmentsTable.name,
+            rateBps: expenseAdjustmentsTable.rateBps,
+          }).as('adjustments'),
+        })
+        .from(expenseAdjustmentsTable)
+        .where(
+          and(
+            eq(distinctNearbyCte.expenseId, expenseAdjustmentsTable.expenseId),
+            eq(expenseAdjustmentsTable.isInferable, true),
+          ),
+        )
+        .as('adjustments_sq');
+
+      const result = await db
+        .with(distinctNearbyCte)
+        .select({
+          shopName: expensesTable.shopName,
+          shopMall: expensesTable.shopMall,
+          categoryId: expensesTable.categoryId,
+          accountId: expensesTable.accountId,
+          adjustments: adjustmentSubquery,
+        })
+        .from(distinctNearbyCte)
+        .innerJoin(expensesTable, eq(distinctNearbyCte.expenseId, expensesTable.id));
+    }
 
     const itemNames =
       input.itemNames?.reduce((acc, name) => {
