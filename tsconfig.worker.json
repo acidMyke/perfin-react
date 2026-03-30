@@ -24,8 +24,7 @@
     /* Path Alias */
     "baseUrl": "./",
     "paths": {
-      "#server": ["server/*"],
-      "#client": ["client/*"]
+      "#server/*": ["server/*"]
     }
   },
   "include": ["server", "db/schema.ts"]

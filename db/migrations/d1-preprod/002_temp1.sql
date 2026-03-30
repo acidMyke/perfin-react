@@ -44,11 +44,14 @@ CREATE TABLE `texts` (
 );
 
 ALTER TABLE `expenses` ADD `specified_amount_cents` integer DEFAULT 0 NOT NULL;
-ALTER TABLE `expenses` ADD `merchant_id` text(21);
-DROP INDEX IF EXISTS `idx_expense_items_name`;
+ALTER TABLE `expenses` ADD `type` text DEFAULT 'physical' NOT NULL;
+DROP INDEX IF EXISTS `idx_expenses_user_box_id_active`;
 DROP INDEX IF EXISTS `idx_expenses_user_shopName_active`;
 DROP INDEX IF EXISTS `idx_expenses_user_shopMall_active`;
+DROP INDEX IF EXISTS `idx_expense_items_name`;
 CREATE INDEX `idx_expense_adjustments_expense_id` ON `expense_adjustments` (`expense_id`);
 CREATE INDEX `idx_expenses_texts_sourceId` ON `expenses_texts` (`source_id`);
 CREATE INDEX `idx_textHash_expenseId` ON `expenses_texts` (`text_hash`,`expense_id`);
+CREATE INDEX `idx_expenses_user_box_id` ON `expenses` (`user_id`,`box_id`);
 CREATE INDEX `idx_user_chunks` ON `texts_chunks` (`user_id`,`chunk`,`text_hash`);
+CREATE INDEX `idx_texts_contexts_ctxTextHash_textHash` ON `texts_contexts` (`ctx_text_hash`,`text_hash`);

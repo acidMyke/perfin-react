@@ -53,6 +53,9 @@ importers:
       drizzle-orm:
         specifier: 1.0.0-beta.4-4605abe
         version: 1.0.0-beta.4-4605abe(@types/mssql@9.1.8)(mssql@11.0.1)
+      itty-router:
+        specifier: ^5.0.23
+        version: 5.0.23
       lucide-react:
         specifier: ^0.562.0
         version: 0.562.0(react@19.2.3)
@@ -2310,6 +2313,9 @@ packages:
 
   isexe@2.0.0:
     resolution: {integrity: sha512-RHxMLp9lnKHGHRng9QFhRCMbYAcVpn69smSGcq3f36xjgVVWThj4qqLbTLlq7Ssj8B+fIQ1EuCEGI2lKsyQeIw==}
+
+  itty-router@5.0.23:
+    resolution: {integrity: sha512-i49WU+SNPrwOZA4Z61En1RYd5h2Lcqa+5IvCpMrNi4dxymzJK15ozUUnRrWIUAv95Zamd4eJPAot2UvHRrQg7w==}
 
   jiti@2.6.1:
     resolution: {integrity: sha512-ekilCSN1jwRvIbgeg/57YFh8qQDNbwDb9xT/qu2DAHbFFZUicIl4ygVaAvzveMhMVr3LnpSKTNnwt8PoOfmKhQ==}
@@ -5089,6 +5095,8 @@ snapshots:
   isbot@5.1.32: {}
 
   isexe@2.0.0: {}
+
+  itty-router@5.0.23: {}
 
   jiti@2.6.1: {}
 

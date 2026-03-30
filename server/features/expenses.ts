@@ -30,7 +30,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
+import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
@@ -113,7 +113,6 @@ const loadExpenseDetailProcedure = protectedProcedure
     return { ...expense, items, adjustments };
   });
 
-const blacklistSearchableText = new Set(['', GST_NAME, SERVICE_CHARGE_NAME]);
 const saveExpenseProcedure = protectedProcedure
   .input(
     z.object({
@@ -369,8 +368,8 @@ const saveExpenseProcedure = protectedProcedure
           .insert(expenseAdjustmentsTable)
           .values(adjustmentsRecords)
           .onConflictDoUpdate({
-            target: expenseItemsTable.id,
-            set: excludedAll(expenseItemsTable),
+            target: expenseAdjustmentsTable.id,
+            set: excludedAll(expenseAdjustmentsTable),
           }),
       );
     }
