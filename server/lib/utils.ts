@@ -17,7 +17,7 @@ export const GRID_SIZE = 0.002; // 222 meters
 export const BOUNDARY_THRESHOLD = 0.001; // 111 meters
 export const MAX_LON = 100_000;
 
-export function getLocationBoxId({ latitude, longitude }: { latitude: number; longitude: number }, withNearby = false) {
+export function getLocationGeoId({ latitude, longitude }: { latitude: number; longitude: number }, withNearby = false) {
   const latIndex = Math.floor(latitude / GRID_SIZE);
   const lonIndex = Math.floor(longitude / GRID_SIZE);
 

@@ -30,9 +30,9 @@ import {
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { blacklistSearchableText, calculateExpense } from '../lib/expenseHelper';
+import { blacklistSearchableText, calculateExpense, INFERABLE_ADJ_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
+import { getLocationGeoId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
@@ -282,6 +282,7 @@ const saveExpenseProcedure = protectedProcedure
         ...adj,
         expenseId: input.expenseId,
         sequence: adjustmentsRecords.length,
+        isInferable: INFERABLE_ADJ_NAME.has(adj.name)
       });
     }
 
@@ -307,7 +308,7 @@ const saveExpenseProcedure = protectedProcedure
     const { netTotalCents } = calculateExpense(input);
     const [boxId] =
       input.latitude && input.longitude
-        ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
+        ? getLocationGeoId({ latitude: input.latitude, longitude: input.longitude })
         : [null];
 
     batchItems.push(

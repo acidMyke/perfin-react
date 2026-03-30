@@ -1,6 +1,6 @@
 import { createDatabase, excludedAll, type AppDatabase } from '#server/lib/db';
 import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { getLocationBoxId, getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
+import { getLocationGeoId, getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import {
   expenseAdjustmentsTable,
@@ -62,7 +62,7 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
     const searchables: Searchable[] = [];
     try {
       for (const expense of expenses) {
-        const { latitude, longitude } = expense;
+        const { latitude, longitude, geoId } = expense;
         currentProcessingId = expense.id;
         const updateExpenseSet: Omit<Partial<typeof expensesTable.$inferInsert>, 'expenseId'> = {};
         let expenseUpdated = false;
@@ -70,9 +70,9 @@ async function executeMigrationCycle(params: ExecuteMigrationCycleParam) {
         const shopAndItemsSearchables = buildShopAndItemsSearchables(expense);
 
         if (latitude && longitude) {
-          const [newBoxId] = getLocationBoxId({ latitude, longitude });
-          if (newBoxId !== expense.boxId) {
-            updateExpenseSet.boxId = newBoxId;
+          const [newGeoId] = getLocationGeoId({ latitude, longitude });
+          if (geoId != newGeoId) {
+            updateExpenseSet.geoId = newGeoId;
             expenseUpdated ||= true;
           }
         }
@@ -226,6 +226,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
       amountCents: 0,
       expenseId,
       sequence: adjSeq++,
+      isInferable: true,
     });
   }
 
@@ -237,6 +238,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
       amountCents: 0,
       expenseId,
       sequence: adjSeq++,
+      isInferable: true,
     });
   }
 

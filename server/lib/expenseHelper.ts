@@ -1,5 +1,6 @@
 export const GST_NAME = '_gst' as const;
 export const SERVICE_CHARGE_NAME = '_service' as const;
+export const INFERABLE_ADJ_NAME = new Set<string>([GST_NAME, SERVICE_CHARGE_NAME]);
 export const blacklistSearchableText = new Set(['', GST_NAME, SERVICE_CHARGE_NAME]);
 
 export type ExpenseItemForCalculation = {
