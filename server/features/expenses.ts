@@ -30,7 +30,7 @@ import {
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
+import { blacklistSearchableText, calculateExpense } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
