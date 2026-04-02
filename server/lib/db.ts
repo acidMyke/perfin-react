@@ -100,6 +100,14 @@ export function jsonGroupArrayObject<T extends Record<string, SQLWrapper<any>>>(
   });
 }
 
+export function jsonGroupArray<T extends ExtractType<any>>(data: T, options: { distinct?: boolean } = {}) {
+  const { distinct } = options;
+  const jsonGroupedArray = distinct ? sql`json_group_array(distinct ${data})` : sql`json_group_array(${data})`;
+  return sql`coalesce(${jsonGroupedArray}, '[]')`.mapWith({
+    mapFromDriverValue: v => (typeof v === 'string' ? JSON.parse(v) : []) as ExtractType<T>[],
+  });
+}
+
 export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,
