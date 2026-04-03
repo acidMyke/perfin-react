@@ -35,25 +35,16 @@ class CaseBuilder<TReturn> implements SQLWrapper<TReturn | null> {
     this.whenThen(initialCondition, initialResult);
   }
 
-  /**
-   * Adds a WHEN condition THEN result clause.
-   */
-  whenThen(condition: SQL | undefined, result: ChunkValue<TReturn>): this {
+  whenThen<TMoreReturn = TReturn>(condition: SQL | undefined, result: ChunkValue<TMoreReturn>) {
     if (!condition) return this;
     this.chunks.push(sql`WHEN ${condition} THEN ${result}`);
-    return this;
+    return this as CaseBuilder<TReturn | TMoreReturn>;
   }
 
-  /**
-   * Adds the ELSE clause.
-   */
-  else(value: ChunkValue<TReturn>): SQL<TReturn> {
-    return sql<TReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE ${value} END`;
+  else<TMoreReturn = TReturn>(value: ChunkValue<TMoreReturn>) {
+    return sql<TReturn | TMoreReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE ${value} END`;
   }
 
-  /**
-   * Drizzle calls this automatically when you pass the object to a query.
-   */
   elseNull(): SQL<TReturn | null> {
     return sql<TReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE NULL END`;
   }
