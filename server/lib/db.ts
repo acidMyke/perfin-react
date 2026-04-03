@@ -26,7 +26,12 @@ export function excludedAll<T extends Table>(
   return excludedColumns;
 }
 
-type ChunkValue<TReturn> = TReturn | SQL<TReturn> | SQL.Aliased<TReturn> | SQLWrapper<TReturn>;
+type ChunkValue<TReturn> =
+  | TReturn
+  | SQL<TReturn>
+  | SQL.Aliased<TReturn>
+  | SQLWrapper<TReturn>
+  | AnyColumn<{ data: TReturn }>;
 
 class CaseBuilder<TReturn> implements SQLWrapper<TReturn | null> {
   private chunks: SQL[] = [];

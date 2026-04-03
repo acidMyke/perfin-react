@@ -15,7 +15,7 @@ import { and, asc, count, countDistinct, desc, eq, gte, inArray, isNotNull, isNu
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { blacklistSearchableText, calculateExpense } from '../lib/expenseHelper';
+import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, excludedAll, jsonGroupArray, max } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
@@ -460,8 +460,8 @@ const listExpenseProcedure = protectedProcedure
     ];
 
     const itemCount = count(expenseItemsTable.id);
-    const itemOne = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
-    const itemTwo = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
+    const itemOne = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
+    const itemTwo = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
     const expenses = await db
       .select({
@@ -593,6 +593,48 @@ const suggestShopByLocationProcedure = protectedProcedure
       .groupBy(expensesTable.shopName);
   });
 
+const getShopDetailProcedure = protectedProcedure
+  .input(z.object({ shopName: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    const { db, userId } = ctx;
+    const shopNameHash = await getTextHash(userId, input.shopName);
+    const expenseIdCte = db.$with('expense_id_cte').as(
+      db
+        .select({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
+        .from(expenseTextsTable)
+        .where(eq(expenseTextsTable.textHash, shopNameHash)),
+    );
+
+    const adjustmentCte = db.$with('adjustment_cte').as(
+      db
+        .select({
+          expenseId: expenseAdjustmentsTable.expenseId.as('expense_id'),
+          isGstExcluded: max(
+            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
+          ).as('is_gst_excluded'),
+          serviceChargeBps: max(
+            caseWhen(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+          ).as('service_charge_bps'),
+        })
+        .from(expenseIdCte)
+        .innerJoin(expenseAdjustmentsTable, eq(expenseIdCte.expenseId, expenseAdjustmentsTable.expenseId))
+        .where(eq(expenseAdjustmentsTable.isInferable, true))
+        .groupBy(expenseAdjustmentsTable.expenseId),
+    );
+
+    return db
+      .with(expenseIdCte, adjustmentCte)
+      .select({
+        accountId: expensesTable.accountId,
+        categoryId: expensesTable.categoryId,
+        isGstExcluded: coalesce(adjustmentCte.isGstExcluded, sql<number>`0`).mapWith(Boolean),
+        serviceChargeBps: adjustmentCte.serviceChargeBps,
+      })
+      .from(expenseIdCte)
+      .innerJoin(expensesTable, eq(expenseIdCte.expenseId, expensesTable.id))
+      .leftJoin(adjustmentCte, eq(expenseIdCte.expenseId, adjustmentCte.expenseId));
+  });
+
 const inferItemPricesProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
   .mutation(async ({ input, ctx }) => {
@@ -657,6 +699,7 @@ export const expenseProcedures = {
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
   suggestShopByLocation: suggestShopByLocationProcedure,
+  getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
 };
