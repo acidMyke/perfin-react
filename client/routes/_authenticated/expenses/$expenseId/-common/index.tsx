@@ -17,7 +17,6 @@ export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = SaveExpenseDetailPayload['items'][number];
 export type ExpenseAdjustment = SaveExpenseDetailPayload['adjustments'][number];
-export type InferredShopDetail = RouterOutputs['expense']['inferShopDetail'];
 
 export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
@@ -104,7 +103,7 @@ export function mapExpenseDetailToForm(
 export type ExpenseFormData = ReturnType<typeof mapExpenseDetailToForm>;
 export const createEditExpenseFormOptions = formOptions({ defaultValues: mapExpenseDetailToForm() });
 
-type TExpenseForm =
+export type ExpenseFormApi =
   typeof createEditExpenseFormOptions extends FormOptions<
     infer TFormData,
     infer TOnMount,
@@ -175,10 +174,10 @@ export type TGetExpenseFormField = <TField extends DeepKeys<ExpenseFormData>>(
 
 export function useExpenseForm() {
   const form = useFormContext();
-  return form as unknown as TExpenseForm;
+  return form as unknown as ExpenseFormApi;
 }
 
-export function calculateExpenseForm(form: TExpenseForm) {
+export function calculateExpenseForm(form: ExpenseFormApi) {
   const specifiedAmountCents = form.getFieldValue('specifiedAmountCents');
   const items = form.getFieldValue('items');
   const adjustments = form.getFieldValue('adjustments');
@@ -217,7 +216,7 @@ export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirec
   return navigate({ to: '/expenses', search: monthYear });
 }
 
-export async function setCurrentLocation(form: TExpenseForm) {
+export async function setCurrentLocation(form: ExpenseFormApi) {
   if (navigator.geolocation) {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
@@ -233,7 +232,7 @@ export async function setCurrentLocation(form: TExpenseForm) {
   }
 }
 
-export const useItemCallbacks = (form: TExpenseForm, expenseId: string, navigate: UseNavigateResult<string>) =>
+export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, navigate: UseNavigateResult<string>) =>
   useMemo(
     () => ({
       createItem: (length: number, isSubpage?: true) => {
@@ -277,7 +276,7 @@ export type CreateAdjustmentOption =
   | { special: typeof GST_NAME | typeof SERVICE_CHARGE_NAME }
   | { expenseItemId: string };
 
-export const useAdjustmentCallbacks = (form: TExpenseForm) =>
+export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
   useMemo(
     () => ({
       createAdjustment: (option?: CreateAdjustmentOption) => {

@@ -575,7 +575,7 @@ const getSuggestionsProcedure = protectedProcedure
     return { suggestions: result.map(({ text }) => text!) };
   });
 
-const getShopDetailByLocationProcedure = protectedProcedure
+const suggestShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))
   .mutation(({ input, ctx }) => {
     const { db, userId } = ctx;
@@ -656,7 +656,7 @@ export const expenseProcedures = {
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
-  getShopDetailByLocation: getShopDetailByLocationProcedure,
+  suggestShopByLocation: suggestShopByLocationProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
 };
