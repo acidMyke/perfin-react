@@ -178,7 +178,7 @@ export const expensesTable = sqliteTable(
     isDeleted: boolean().notNull().default(false),
   },
   t => [
-    index('idx_expenses_user_box_id').on(t.userId, t.boxId),
+    index('idx_expenses_user_geo_id').on(t.userId, t.geoId),
     index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
   ],
 );

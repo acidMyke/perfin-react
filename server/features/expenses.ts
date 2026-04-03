@@ -595,127 +595,61 @@ const getSuggestionsProcedure = protectedProcedure
 const inferShopDetailsProcedure = protectedProcedure
   .input(
     z.object({
-      latitude: z.number().nullish(),
-      longitude: z.number().nullish(),
-
-      shopName: z.string().nullish(),
-
-      itemNames: z.array(z.string()).optional(),
+      latitude: z.number(),
+      longitude: z.number(),
     }),
   )
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
 
-    if (input.latitude && input.longitude) {
-      // Inferring using coordinates
-      const geoIds = getLocationGeoId({ latitude: input.latitude, longitude: input.longitude }, true);
-      const distance = sql<number>`min(pow(${geoTextsTable.latitude} - ${input.latitude}, 2) + pow(${geoTextsTable.longitude} - ${input.longitude}, 2))`;
-      const distinctNearbyCte = db.$with('distinct_nearby').as(
-        db
-          .select({
-            expenseId: expenseTextsTable.expenseId.as('expense_id'),
-            distance:
-              sql<number>`min(pow(${geoTextsTable.latitude} - ${input.latitude}, 2) + pow(${geoTextsTable.longitude} - ${input.longitude}, 2))`.as(
-                'distance',
-              ),
-          })
-          .from(geoTextsTable)
-          .innerJoin(expenseTextsTable, eq(geoTextsTable.textHash, expenseTextsTable.textHash))
-          .where(and(eq(geoTextsTable.userId, userId), inArray(geoTextsTable.geoId, geoIds)))
-          .groupBy(expenseTextsTable.expenseId)
-          .orderBy(sql`distance`)
-          .limit(20),
-      );
+    // Inferring using coordinates
+    const geoIds = getLocationGeoId({ latitude: input.latitude, longitude: input.longitude }, true);
+    const distance = sql<number>`min((${geoTextsTable.latitude} - ${input.latitude}) * (${geoTextsTable.latitude} - ${input.latitude}) + pow(${geoTextsTable.longitude} - ${input.longitude}, 2))`;
+    const distinctNearbyCte = db.$with('distinct_nearby').as(
+      db
+        .select({
+          expenseId: expenseTextsTable.expenseId.as('expense_id'),
+          distance: distance.as('distance'),
+        })
+        .from(geoTextsTable)
+        .innerJoin(expenseTextsTable, eq(geoTextsTable.textHash, expenseTextsTable.textHash))
+        .where(and(eq(geoTextsTable.userId, userId), inArray(geoTextsTable.geoId, geoIds)))
+        .groupBy(expenseTextsTable.expenseId),
+    );
 
-      const adjustmentQuery = db
+    const adjustmentCte = db.$with('dist_adj').as(
+      db
         .selectDistinct({
           expenseId: expenseAdjustmentsTable.expenseId.as('expense_id'),
           name: expenseAdjustmentsTable.name.as('name'),
           rateBps: expenseAdjustmentsTable.rateBps.as('rateBps'),
         })
-        .from(expenseAdjustmentsTable)
-        .where(eq(expenseAdjustmentsTable.isInferable, true))
-        .as('dist_adj');
-
-      const results = await db
-        .with(distinctNearbyCte)
-        .select({
-          shopName: expensesTable.shopName,
-          shopMall: expensesTable.shopMall,
-          accountIds: jsonGroupArray(expensesTable.accountId, { distinct: true }),
-          categoryIds: jsonGroupArray(expensesTable.categoryId, { distinct: true }),
-          adjustments: jsonGroupArrayObject({ name: adjustmentQuery.name, rateBps: adjustmentQuery.rateBps }),
-        })
         .from(distinctNearbyCte)
-        .innerJoin(expensesTable, eq(expensesTable.id, distinctNearbyCte.expenseId))
-        .leftJoin(adjustmentQuery, and(eq(adjustmentQuery.expenseId, distinctNearbyCte.expenseId)))
-        .groupBy(expensesTable.shopName, expensesTable.shopMall);
-    }
+        .innerJoin(
+          expenseAdjustmentsTable,
+          and(
+            eq(expenseAdjustmentsTable.isInferable, true),
+            eq(expenseAdjustmentsTable.expenseId, distinctNearbyCte.expenseId),
+          ),
+        ),
+    );
 
-    const itemNames =
-      input.itemNames?.reduce((acc, name) => {
-        const trimmed = name.trim();
-        if (trimmed.length) acc.push(trimmed.toUpperCase());
-        return acc;
-      }, [] as string[]) ?? [];
-
-    // Infer shop / mall and shopdetails by coordinate
-    if (!input.shopName && input.latitude && input.longitude) {
-      const boxIds = getLocationBoxId({ latitude: input.latitude, longitude: input.longitude }, true);
-
-      const nearbyShopsColumns = {
+    const results = await db
+      .with(distinctNearbyCte, adjustmentCte)
+      .select({
+        latestDate: sql`max(${expensesTable.billedAt})`.mapWith(expensesTable.billedAt),
         shopName: expensesTable.shopName,
         shopMall: expensesTable.shopMall,
-        additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-        isGstExcluded: expensesTable.isGstExcluded,
-        categoryId: expensesTable.categoryId,
         accountId: expensesTable.accountId,
-      } as const;
-      const nearbyShopsCondition = and(eq(expensesTable.userId, userId), inArray(expensesTable.boxId, boxIds));
+        categoryId: expensesTable.categoryId,
+        adjustments: jsonGroupArrayObject({ name: adjustmentCte.name, rateBps: adjustmentCte.rateBps }),
+      })
+      .from(distinctNearbyCte)
+      .innerJoin(expensesTable, eq(expensesTable.id, distinctNearbyCte.expenseId))
+      .leftJoin(adjustmentCte, and(eq(adjustmentCte.expenseId, distinctNearbyCte.expenseId)))
+      .groupBy(expensesTable.shopName);
 
-      const distance = sql<number>`min((${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
-                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude}))`;
-
-      const groupByColumns = [
-        nearbyShopsColumns.shopName,
-        nearbyShopsColumns.categoryId,
-        nearbyShopsColumns.accountId,
-      ] as const;
-
-      if (itemNames.length === 0) {
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      } else {
-        const hasMatchingItems = sql<number>`MIN(CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END)`;
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(hasMatchingItems, distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      }
-    } else if (input.shopName) {
-      // Infer shop detail by shop name
-      return await db
-        .selectDistinct({
-          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-          isGstExcluded: expensesTable.isGstExcluded,
-          categoryId: expensesTable.categoryId,
-          accountId: expensesTable.accountId,
-        })
-        .from(expensesTable)
-        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())))
-        .orderBy(desc(expensesTable.billedAt))
-        .limit(5);
-    }
-    throw new TRPCError({ code: 'BAD_REQUEST' });
+    return results;
   });
 
 const inferItemPricesProcedure = protectedProcedure
