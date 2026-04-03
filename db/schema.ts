@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { sql } from 'drizzle-orm';
+import { isNotNull, sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
@@ -176,8 +176,11 @@ export const expensesTable = sqliteTable(
     isDeleted: boolean().notNull().default(false),
   },
   t => [
-    index('idx_expenses_user_box_id').on(t.userId, t.boxId),
-    index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
+    index('idx_expenses_partial_user_box_shop')
+      .on(t.userId, t.boxId, t.shopName, t.shopMall)
+      .where(isNotNull(t.shopName)), // Used by getShopDetailByLocationProcedure
+    index('idx_expenses_id_account_category').on(t.id, t.accountId, t.categoryId),
+    index('idx_expenses_user_billedAt').on(t.userId, t.billedAt),
   ],
 );
 
@@ -232,8 +235,14 @@ export const expenseAdjustmentsTable = sqliteTable(
     expenseId: idColumn(),
     expenseItemId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
+    isInferable: boolean().notNull().default(false),
   },
-  t => [index('idx_expense_adjustments_expense_id').on(t.expenseId)],
+  t => [
+    index('idx_expense_adjustments_expense_id').on(t.expenseId),
+    index('idx_expense_adjustments_inferrable')
+      .on(t.expenseId, t.name, t.rateBps)
+      .where(sql`${t.isInferable} = 1`),
+  ],
 );
 
 /** @deprecated replaced by v2_search */

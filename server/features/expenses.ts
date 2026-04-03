@@ -11,27 +11,12 @@ import {
   textsContextsTable,
   textsTable,
 } from '../../db/schema';
-import {
-  and,
-  asc,
-  count,
-  countDistinct,
-  desc,
-  eq,
-  gte,
-  inArray,
-  isNotNull,
-  isNull,
-  lt,
-  max,
-  sql,
-  SQL,
-} from 'drizzle-orm';
+import { and, asc, count, countDistinct, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
 import { blacklistSearchableText, calculateExpense } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
+import { caseWhen, coalesce, concat, excludedAll, jsonGroupArray, max } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
 
@@ -590,84 +575,22 @@ const getSuggestionsProcedure = protectedProcedure
     return { suggestions: result.map(({ text }) => text!) };
   });
 
-const inferShopDetailsProcedure = protectedProcedure
-  .input(
-    z.object({
-      latitude: z.number().nullish(),
-      longitude: z.number().nullish(),
-
-      shopName: z.string().nullish(),
-
-      itemNames: z.array(z.string()).optional(),
-    }),
-  )
-  .mutation(async ({ input, ctx }) => {
+const getShopDetailByLocationProcedure = protectedProcedure
+  .input(z.object({ latitude: z.number(), longitude: z.number() }))
+  .mutation(({ input, ctx }) => {
     const { db, userId } = ctx;
-
-    const itemNames =
-      input.itemNames?.reduce((acc, name) => {
-        const trimmed = name.trim();
-        if (trimmed.length) acc.push(trimmed.toUpperCase());
-        return acc;
-      }, [] as string[]) ?? [];
-
-    // Infer shop / mall and shopdetails by coordinate
-    if (!input.shopName && input.latitude && input.longitude) {
-      const boxIds = getLocationBoxId({ latitude: input.latitude, longitude: input.longitude }, true);
-
-      const nearbyShopsColumns = {
-        shopName: expensesTable.shopName,
-        shopMall: expensesTable.shopMall,
-        additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-        isGstExcluded: expensesTable.isGstExcluded,
-        categoryId: expensesTable.categoryId,
-        accountId: expensesTable.accountId,
-      } as const;
-      const nearbyShopsCondition = and(eq(expensesTable.userId, userId), inArray(expensesTable.boxId, boxIds));
-
-      const distance = sql<number>`min((${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
-                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude}))`;
-
-      const groupByColumns = [
-        nearbyShopsColumns.shopName,
-        nearbyShopsColumns.categoryId,
-        nearbyShopsColumns.accountId,
-      ] as const;
-
-      if (itemNames.length === 0) {
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      } else {
-        const hasMatchingItems = sql<number>`MIN(CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END)`;
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(hasMatchingItems, distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      }
-    } else if (input.shopName) {
-      // Infer shop detail by shop name
-      return await db
-        .selectDistinct({
-          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-          isGstExcluded: expensesTable.isGstExcluded,
-          categoryId: expensesTable.categoryId,
-          accountId: expensesTable.accountId,
-        })
-        .from(expensesTable)
-        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())))
-        .orderBy(desc(expensesTable.billedAt))
-        .limit(5);
-    }
-    throw new TRPCError({ code: 'BAD_REQUEST' });
+    const queryBoxIds = getLocationBoxId(input);
+    return db
+      .select({ shopName: sql<string>`${expensesTable.shopName}`, shopMalls: jsonGroupArray(expensesTable.shopMall) })
+      .from(expensesTable)
+      .where(
+        and(
+          isNotNull(expensesTable.shopName),
+          eq(expensesTable.userId, userId),
+          inArray(expensesTable.boxId, queryBoxIds),
+        ),
+      )
+      .groupBy(expensesTable.shopName);
   });
 
 const inferItemPricesProcedure = protectedProcedure
@@ -733,7 +656,7 @@ export const expenseProcedures = {
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
-  inferShopDetail: inferShopDetailsProcedure,
+  getShopDetailByLocation: getShopDetailByLocationProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
 };
