@@ -15,8 +15,8 @@ import { useMemo } from 'react';
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
-export type ExpenseItem = SaveExpenseDetailPayload['items'][number];
-export type ExpenseAdjustment = SaveExpenseDetailPayload['adjustments'][number];
+export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
+export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 
 export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
@@ -34,48 +34,55 @@ export function defaultExpenseAdjustment(): ExpenseAdjustment {
     name: '',
     isDeleted: false,
     amountCents: 0,
+    rateBps: null,
+    expenseItemId: null,
   };
 }
 
 export const MAX_ITEMS_IN_MAIN = 2;
+
+function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
+  const { accountOptions, categoryOptions } = options;
+  const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
+  const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
+  const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+
+  if (param?.isCopy) {
+    const remappedItemId = new Map<string, string>();
+    rest.items = rest.items.map(item => {
+      const id = generateId();
+      remappedItemId.set(item.id, id);
+      return { ...item, id };
+    });
+    rest.adjustments = rest.adjustments.map(adjustment => ({
+      ...adjustment,
+      id: generateId(),
+      expenseItemId: adjustment.expenseItemId && remappedItemId.get(adjustment.expenseItemId)!,
+    }));
+  }
+
+  return {
+    ui: {
+      isCreate: false,
+      isCurrentLocationError: false,
+      shouldInferShopDetail: false,
+      calculateResult: calculateExpense(detail),
+    },
+    billedAt: param?.isCopy ? new Date() : new Date(billedAt),
+    account,
+    category,
+    geolocation: latitude !== null && longitude !== null ? { latitude, longitude, accuracy: geoAccuracy } : undefined,
+    ...rest,
+  };
+}
+
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
   options?: ExpenseOptions,
   param?: { isCopy: boolean },
 ) {
   if (detail && options) {
-    const { accountOptions, categoryOptions } = options;
-    const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
-    const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
-    const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
-
-    if (param?.isCopy) {
-      const remappedItemId = new Map<string, string>();
-      rest.items = rest.items.map(item => {
-        const id = generateId();
-        remappedItemId.set(item.id, id);
-        return { ...item, id };
-      });
-      rest.adjustments = rest.adjustments.map(adjustment => ({
-        ...adjustment,
-        id: generateId(),
-        expenseItemId: adjustment.expenseItemId && remappedItemId.get(adjustment.expenseItemId)!,
-      }));
-    }
-
-    return {
-      ui: {
-        isCreate: false,
-        isCurrentLocationError: false,
-        shouldInferShopDetail: false,
-        calculateResult: calculateExpense(detail),
-      },
-      billedAt: param?.isCopy ? new Date() : new Date(billedAt),
-      account,
-      category,
-      geolocation: latitude !== null && longitude !== null ? { latitude, longitude, accuracy: geoAccuracy } : undefined,
-      ...rest,
-    };
+    return processApiResponse(detail, options, param);
   } else {
     return {
       ui: {
@@ -84,19 +91,20 @@ export function mapExpenseDetailToForm(
         shouldInferShopDetail: true,
         calculateResult: calculateExpense({ specifiedAmountCents: 0, items: [], adjustments: [] }),
       },
-      description: undefined,
+      version: 0,
+      amountCents: 0,
       billedAt: new Date(),
       account: undefined,
       category: undefined,
       type: undefined as 'online' | 'physical' | undefined,
       geolocation: undefined,
-      shopName: undefined,
-      shopMall: undefined,
+      shopName: null,
+      shopMall: null,
       isDeleted: false,
       specifiedAmountCents: 0,
       items: [] as ExpenseItem[],
       adjustments: [] as ExpenseAdjustment[],
-    };
+    } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
   }
 }
 

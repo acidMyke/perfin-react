@@ -106,7 +106,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
           <button
             className='btn-ghost btn btn-sm px-0'
             onClick={() => {
-              group.setFieldValue('expenseItemId', undefined);
+              group.setFieldValue('expenseItemId', null);
               onPricingChange();
             }}
           >
