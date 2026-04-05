@@ -3,15 +3,18 @@ import { PageHeader } from '#components/PageHeader';
 import { useAppForm } from '#components/Form';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync, type RouterOutputs } from '#client/trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
-import { useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
 import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
   type ExpenseFormData,
   type ExpenseFormApi,
+  useAdjustmentCallbacks,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
+import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -87,6 +90,11 @@ function RouteComponent() {
           }
         }
       },
+      onBlurDebounceMs: 200,
+      onBlur: ({ fieldApi }) => {
+        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        if (fieldName === 'shopName') triggerFetchShopDetail(fieldApi.state.value);
+      },
     },
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
@@ -112,6 +120,18 @@ function RouteComponent() {
       },
     },
   });
+  const { createAdjustment } = useAdjustmentCallbacks(form);
+  const shopDetailPickerRef = useShopDetailPickerRef();
+  const triggerFetchShopDetail = useCallback(
+    (shopName?: string | null) => {
+      const source = form.getFieldValue('ui.shopDetailSource');
+      if (source !== 'user') {
+        shopName ??= form.getFieldValue('shopName');
+        if (shopName) shopDetailPickerRef.current?.fetchShopDetail({ shopName });
+      }
+    },
+    [form, shopDetailPickerRef],
+  );
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
@@ -143,6 +163,34 @@ function RouteComponent() {
             )}
           </div>
         </dialog>
+        <ShopDetailPicker
+          ref={shopDetailPickerRef}
+          onFinalized={data => {
+            const { accountOptions, categoryOptions } = optionsData;
+            const { accountId, categoryId, isGstExcluded, serviceChargeBps } = data;
+            if (accountId) {
+              form.setFieldValue(
+                'account',
+                accountOptions.find(({ value }) => value === accountId),
+                { dontUpdateMeta: true },
+              );
+            }
+            if (categoryId) {
+              form.setFieldValue(
+                'category',
+                categoryOptions.find(({ value }) => value === categoryId),
+                { dontUpdateMeta: true },
+              );
+            }
+            if (isGstExcluded) {
+              createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
+            }
+            if (serviceChargeBps) {
+              createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
+            }
+            form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+          }}
+        />
       </form.AppForm>
     </div>
   );

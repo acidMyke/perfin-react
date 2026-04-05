@@ -613,7 +613,7 @@ const getShopDetailProcedure = protectedProcedure
             caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
           ).as('is_gst_excluded'),
           serviceChargeBps: max(
-            caseWhen(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
           ).as('service_charge_bps'),
         })
         .from(expenseIdCte)

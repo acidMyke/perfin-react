@@ -4,6 +4,7 @@ import {
   type DeepKeys,
   type DeepValue,
   type FormOptions,
+  type UpdateMetaOptions,
 } from '@tanstack/react-form';
 import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { useAppForm, useFormContext } from '#components/Form';
@@ -17,6 +18,7 @@ export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
+export type InputSource = null | 'user' | 'autocomplete';
 
 export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
@@ -66,6 +68,7 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
       isCreate: false,
       isCurrentLocationError: false,
       shouldInferShopDetail: false,
+      shopDetailSource: 'user' as InputSource,
       calculateResult: calculateExpense(detail),
     },
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
@@ -89,6 +92,7 @@ export function mapExpenseDetailToForm(
         isCreate: true,
         isCurrentLocationError: false,
         shouldInferShopDetail: true,
+        shopDetailSource: null,
         calculateResult: calculateExpense({ specifiedAmountCents: 0, items: [], adjustments: [] }),
       },
       version: 0,
@@ -280,9 +284,12 @@ export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, naviga
     [form, expenseId, navigate],
   );
 
-export type CreateAdjustmentOption =
-  | { special: typeof GST_NAME | typeof SERVICE_CHARGE_NAME }
-  | { expenseItemId: string };
+export type CreateAdjustmentOption = UpdateMetaOptions &
+  (
+    | { special: typeof GST_NAME }
+    | { special: typeof SERVICE_CHARGE_NAME; rateBps?: number }
+    | { expenseItemId: string }
+  );
 
 export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
   useMemo(
@@ -292,14 +299,14 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
         if (option) {
           if ('special' in option) {
             adjustment.name = option.special;
-            adjustment.rateBps = option.special === GST_NAME ? 9_00 : 10_00;
+            adjustment.rateBps = option.special === GST_NAME ? 9_00 : (option.rateBps ?? 10_00);
           }
           if ('expenseItemId' in option) {
             adjustment.expenseItemId = option.expenseItemId;
             adjustment.rateBps = -100_00;
           }
         }
-        form.pushFieldValue('adjustments', adjustment);
+        form.pushFieldValue('adjustments', adjustment, option);
         calculateExpenseForm(form);
       },
       removeAdjustment: (adjustmentIndex: number) => {
