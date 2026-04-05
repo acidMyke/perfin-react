@@ -165,6 +165,7 @@ function RouteComponent() {
         </dialog>
         <ShopDetailPicker
           ref={shopDetailPickerRef}
+          optionsData={optionsData}
           onFinalized={data => {
             const { accountOptions, categoryOptions } = optionsData;
             const { accountId, categoryId, isGstExcluded, serviceChargeBps } = data;
