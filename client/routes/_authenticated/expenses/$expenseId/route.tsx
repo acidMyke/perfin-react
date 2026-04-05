@@ -1,20 +1,20 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { PageHeader } from '#components/PageHeader';
 import { useAppForm } from '#components/Form';
-import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync, type RouterOutputs } from '#client/trpc';
+import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '#client/trpc';
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
-import { useCallback, useEffect, useMemo, useRef, type RefObject } from 'react';
+import { useCallback, useEffect } from 'react';
 import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
   type ExpenseFormData,
-  type ExpenseFormApi,
   useAdjustmentCallbacks,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
-import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
+import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -63,17 +63,6 @@ function RouteComponent() {
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
-  const autocompleteSelectionDialogRef = useRef<HTMLDialogElement>(null);
-  const shopSuggestionMutation = useMutation(
-    trpc.expense.suggestShopByLocation.mutationOptions({
-      onSuccess: inferredResults => {
-        if (inferredResults?.length) {
-          autocompleteSelectionDialogRef.current?.showModal();
-          form.setFieldValue('ui.shouldInferShopDetail', false);
-        }
-      },
-    }),
-  );
 
   const form = useAppForm({
     ...createEditExpenseFormOptions,
@@ -83,10 +72,7 @@ function RouteComponent() {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
         if (/(geolocation.*)/.test(fieldName)) {
           if (form.getFieldValue('ui.shouldInferShopDetail')) {
-            const { category, account, geolocation } = form.state.values;
-            if (category === undefined && account === undefined && geolocation) {
-              shopSuggestionMutation.mutate(geolocation);
-            }
+            triggerFetchShopSuggestion();
           }
         }
       },
@@ -121,6 +107,17 @@ function RouteComponent() {
     },
   });
   const { createAdjustment } = useAdjustmentCallbacks(form);
+  const shopNameMallPickerRef = useShopNameMallPickerRef();
+  const triggerFetchShopSuggestion = useCallback(
+    (param?: { latitude: number; longitude: number }) => {
+      if (form.getFieldValue('ui.shouldFetchShopSuggestion')) {
+        param ??= form.getFieldValue('geolocation');
+        if (param) shopNameMallPickerRef.current?.fetchShopSuggestions(param);
+      }
+    },
+    [form, shopNameMallPickerRef],
+  );
+
   const shopDetailPickerRef = useShopDetailPickerRef();
   const triggerFetchShopDetail = useCallback(
     (shopName?: string | null) => {
@@ -154,15 +151,20 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
-        <dialog className='modal' ref={autocompleteSelectionDialogRef}>
-          <div className='modal-box'>
-            <h3 className='text-lg font-bold'>You seem to have came here before!!</h3>
-            <p className='indent-2 italic'>Select an option below to autocomplete the form</p>
-            {shopSuggestionMutation.data?.length && (
-              <ShopSuggestionsList {...{ form, autocompleteSelectionDialogRef, data: shopSuggestionMutation.data }} />
-            )}
-          </div>
-        </dialog>
+        <ShopNameMallPicker
+          ref={shopNameMallPickerRef}
+          onTryAgainClick={() => form.setFieldValue('ui.shouldFetchShopSuggestion', true)}
+          onFinalized={data => {
+            const { shopMall, shopName } = data;
+            if (shopMall) {
+              form.setFieldValue('shopMall', shopMall);
+            }
+            if (shopName) {
+              form.setFieldValue('shopName', shopName);
+              triggerFetchShopDetail(shopName);
+            }
+          }}
+        />
         <ShopDetailPicker
           ref={shopDetailPickerRef}
           optionsData={optionsData}
@@ -183,11 +185,11 @@ function RouteComponent() {
                 { dontUpdateMeta: true },
               );
             }
-            if (isGstExcluded) {
-              createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
-            }
             if (serviceChargeBps) {
               createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
+            }
+            if (isGstExcluded) {
+              createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
             }
             form.setFieldValue('ui.shopDetailSource', 'autocomplete');
           }}
@@ -211,76 +213,6 @@ function ExpenseNotFoundComponent() {
       <Link to='..' className='btn btn-primary btn-lg btn-block mt-8'>
         Back
       </Link>
-    </div>
-  );
-}
-
-type ShopSuggestion = { shopName: string | null; shopMall: string | null };
-type ShopSuggestionsListProps = {
-  form: ExpenseFormApi;
-  data: RouterOutputs['expense']['suggestShopByLocation'];
-  autocompleteSelectionDialogRef: RefObject<HTMLDialogElement | null>;
-};
-
-function ShopSuggestionsList({ form, data, autocompleteSelectionDialogRef }: ShopSuggestionsListProps) {
-  const normalized = useMemo(() => {
-    const normalized: ShopSuggestion[] = [];
-    const uniqueMalls = new Set<string>();
-    for (const { shopName, shopMalls } of data) {
-      let nullMallAdded = false;
-      for (const mall of shopMalls) {
-        if (mall) {
-          uniqueMalls.add(mall);
-          normalized.push({ shopName, shopMall: mall });
-        } else if (!nullMallAdded) {
-          normalized.push({ shopName, shopMall: null });
-          nullMallAdded = true;
-        }
-      }
-    }
-
-    normalized.push(...uniqueMalls.values().map(shopMall => ({ shopName: null, shopMall })));
-
-    return normalized;
-  }, [data]);
-
-  return (
-    <div className='mt-2 flex flex-col gap-y-4'>
-      {normalized.map(
-        ({ shopMall, shopName }, idx) =>
-          (shopMall || shopName) && (
-            <button
-              key={idx}
-              onClick={() => {
-                if (shopName) form.setFieldValue('shopName', shopName);
-                if (shopMall) form.setFieldValue('shopMall', shopMall);
-                autocompleteSelectionDialogRef.current?.close();
-              }}
-              className='btn btn-soft odd:btn-primary even:btn-secondary'
-            >
-              {shopName ?? 'Just the mall: '}
-              {shopName && shopMall && ' @ '}
-              {shopMall}
-            </button>
-          ),
-      )}
-      <button
-        key='no0'
-        className='btn btn-soft btn-warning w-full'
-        onClick={() => {
-          form.setFieldValue('ui.shouldInferShopDetail', true);
-          autocompleteSelectionDialogRef.current?.close();
-        }}
-      >
-        No, try again later
-      </button>
-      <button
-        key='no1'
-        className='btn btn-soft btn-error w-full'
-        onClick={() => autocompleteSelectionDialogRef.current?.close()}
-      >
-        No, I have never been here, STOP ASKING
-      </button>
     </div>
   );
 }
