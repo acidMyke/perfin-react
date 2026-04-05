@@ -577,10 +577,10 @@ const getSuggestionsProcedure = protectedProcedure
 
 const suggestShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .mutation(({ input, ctx }) => {
+  .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
     const queryBoxIds = getLocationBoxId(input);
-    return db
+    const data = await db
       .select({
         shopName: sql<string>`${expensesTable.shopName}`,
         shopMalls: jsonGroupArray(expensesTable.shopMall, { distinct: true }),
@@ -594,6 +594,8 @@ const suggestShopByLocationProcedure = protectedProcedure
         ),
       )
       .groupBy(expensesTable.shopName);
+
+    return data;
   });
 
 const getShopDetailProcedure = protectedProcedure
@@ -603,39 +605,27 @@ const getShopDetailProcedure = protectedProcedure
     const shopNameHash = await getTextHash(userId, input.shopName);
     const expenseIdCte = db.$with('expense_id_cte').as(
       db
-        .select({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
+        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
         .from(expenseTextsTable)
         .where(eq(expenseTextsTable.textHash, shopNameHash)),
     );
 
-    const adjustmentCte = db.$with('adjustment_cte').as(
-      db
-        .select({
-          expenseId: expenseAdjustmentsTable.expenseId.as('expense_id'),
-          isGstExcluded: max(
-            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
-          ).as('is_gst_excluded'),
-          serviceChargeBps: max(
-            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
-          ).as('service_charge_bps'),
-        })
-        .from(expenseIdCte)
-        .innerJoin(expenseAdjustmentsTable, eq(expenseIdCte.expenseId, expenseAdjustmentsTable.expenseId))
-        .where(eq(expenseAdjustmentsTable.isInferable, true))
-        .groupBy(expenseAdjustmentsTable.expenseId),
-    );
-
-    return db
-      .with(expenseIdCte, adjustmentCte)
-      .select({
+    const data = await db
+      .with(expenseIdCte)
+      .selectDistinct({
         accountId: expensesTable.accountId,
         categoryId: expensesTable.categoryId,
-        isGstExcluded: coalesce(adjustmentCte.isGstExcluded, sql<number>`0`).mapWith(Boolean),
-        serviceChargeBps: adjustmentCte.serviceChargeBps,
+        isGstExcluded: max(caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`)),
+        serviceChargeBps: max(
+          caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+        ),
       })
       .from(expenseIdCte)
       .innerJoin(expensesTable, eq(expenseIdCte.expenseId, expensesTable.id))
-      .leftJoin(adjustmentCte, eq(expenseIdCte.expenseId, adjustmentCte.expenseId));
+      .leftJoin(expenseAdjustmentsTable, eq(expenseIdCte.expenseId, expenseAdjustmentsTable.expenseId))
+      .groupBy(expenseAdjustmentsTable.expenseId);
+
+    return data;
   });
 
 const inferItemPricesProcedure = protectedProcedure
