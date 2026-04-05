@@ -226,6 +226,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
       amountCents: 0,
       expenseId,
       sequence: adjSeq++,
+      isInferable: true,
     });
   }
 
@@ -237,6 +238,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
       amountCents: 0,
       expenseId,
       sequence: adjSeq++,
+      isInferable: true,
     });
   }
 
