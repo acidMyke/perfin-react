@@ -525,27 +525,25 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
-    const { textColumn, sourceTable } = {
-      shopName: { textColumn: expensesTable.shopName, sourceTable: expensesTable },
-      shopMall: { textColumn: expensesTable.shopMall, sourceTable: expensesTable },
-      itemName: { textColumn: expenseItemsTable.name, sourceTable: expenseItemsTable },
-      adjName: { textColumn: expenseAdjustmentsTable.name, sourceTable: expenseAdjustmentsTable },
+    const { type } = {
+      shopName: { type: TEXT_TYPE.SHOP_NAME },
+      shopMall: { type: TEXT_TYPE.MALL_NAME },
+      itemName: { type: TEXT_TYPE.ITEM_NAME },
+      adjName: { type: TEXT_TYPE.ADJ_NAME },
     }[input.scope];
 
-    const where: SQL[] = [];
+    const where: SQL[] = [eq(textsTable.type, type)];
     let having: SQL | undefined;
 
-    const orderBy: SQL[] = [desc(countDistinct(expenseTextsTable.sourceId))]; // By frequency
+    const orderBy: SQL[] = [];
 
-    let baseQuery = db
-      .select({ text: max(textColumn) })
-      .from(sourceTable)
-      .innerJoin(expenseTextsTable, eq(sourceTable.id, expenseTextsTable.sourceId));
+    let baseQuery = db.select({ text: textsTable.text }).from(textsTable);
 
     if (search) {
       // search by chunks
       const trigrams = getTrigrams(search);
-      baseQuery = baseQuery.innerJoin(textChunksTable, eq(expenseTextsTable.textHash, textChunksTable.textHash));
+      // @ts-ignore
+      baseQuery = baseQuery.innerJoin(textChunksTable, eq(textsTable.textHash, textChunksTable.textHash));
       where.push(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams));
 
       if (trigrams.length > 5) {
@@ -560,21 +558,24 @@ const getSuggestionsProcedure = protectedProcedure
 
     if (context) {
       const contextHash = await getTextHash(userId, context);
-      baseQuery = baseQuery.leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash));
       if (search) {
         // contextual sort, since it will be filtered by chunks
+        // @ts-ignore
+        baseQuery = baseQuery.innerJoin(textsContextsTable, eq(textsTable.textHash, textsContextsTable.textHash));
         const hasMatchingContext = caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
         const relevance = sql`${max(hasMatchingContext)} + ${countDistinct(textChunksTable.chunk)}`;
         orderBy.unshift(desc(relevance));
       } else {
         // contextual search, filtering by context
+        // @ts-ignore
+        baseQuery = baseQuery.leftJoin(textsContextsTable, eq(textsTable.textHash, textsContextsTable.textHash));
         where.push(eq(textsContextsTable.ctxTextHash, contextHash));
       }
     }
 
     const orderedQuery = baseQuery
-      .where(and(...where, isNotNull(textColumn)))
-      .groupBy(expenseTextsTable.textHash)
+      .where(and(...where))
+      .groupBy(textsTable.textHash)
       .orderBy(...orderBy);
     const finalQuery = having ? orderedQuery.having(having) : orderedQuery;
     const result = await finalQuery;
