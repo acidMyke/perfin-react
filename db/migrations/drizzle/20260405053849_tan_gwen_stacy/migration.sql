@@ -1,3 +1,4 @@
+ALTER TABLE `texts` ADD `type` integer NOT NULL;
 ALTER TABLE `expense_adjustments` ADD `is_inferable` integer DEFAULT 0 NOT NULL;
 DROP INDEX IF EXISTS `idx_expenses_user_box_id`;
 DROP INDEX IF EXISTS `idx_expenses_user_billed`;

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "f9ebc66a-d5a3-4a90-8b73-a8b230de7984",
+  "id": "05ecbf24-a027-4bf6-8863-e1bff20bca22",
   "prevIds": [
     "9bf38993-9aae-463e-9edf-0e9c63bc36eb"
   ],
@@ -1367,6 +1367,16 @@
       "default": null,
       "generated": null,
       "name": "user_id",
+      "entityType": "columns",
+      "table": "texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "type",
       "entityType": "columns",
       "table": "texts"
     },
