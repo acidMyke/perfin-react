@@ -385,8 +385,11 @@ function ComboBox({
           const opt = option as Option | string;
           if (suggestionMode) {
             const suggestion = typeof opt === 'string' ? opt : opt.label; // or .label
-            field.handleChange(suggestion);
-            onSuggestionSelected?.(suggestion);
+            if (onSuggestionSelected) {
+              onSuggestionSelected(suggestion);
+            } else {
+              field.handleChange(suggestion);
+            }
           } else {
             field.handleChange(option); // store Option object
             setQuery(option.label);

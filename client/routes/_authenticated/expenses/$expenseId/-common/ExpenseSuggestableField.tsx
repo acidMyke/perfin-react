@@ -14,7 +14,7 @@ type SuggestionFieldProps = {
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, scope, getContext, fetchDebouncing = 500, ...rest }) {
+  render({ group, scope, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
     const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -36,7 +36,17 @@ export const ExpenseSuggestableField = withFieldGroup({
           },
         }}
       >
-        {field => <field.ComboBox suggestionMode {...rest} options={data?.suggestions ?? []} />}
+        {field => (
+          <field.ComboBox
+            suggestionMode
+            {...rest}
+            options={data?.suggestions ?? []}
+            onSuggestionSelected={suggestion => {
+              group.setFieldValue('text', suggestion, { dontValidate: true });
+              onSuggestionSelected?.(suggestion);
+            }}
+          />
+        )}
       </group.AppField>
     );
   },
