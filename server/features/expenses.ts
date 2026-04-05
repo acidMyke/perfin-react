@@ -10,6 +10,8 @@ import {
   textChunksTable,
   textsContextsTable,
   textsTable,
+  type TextTypeValue,
+  TEXT_TYPE,
 } from '../../db/schema';
 import { and, asc, count, countDistinct, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -207,12 +209,13 @@ const saveExpenseProcedure = protectedProcedure
     }
 
     const inputSearchables = new Set<string>();
-    const newSearchables: { text: string; context?: string | null; sourceId: string }[] = [];
+    const newSearchables: { type: TextTypeValue; text: string; context?: string | null; sourceId: string }[] = [];
     let shopNameSearchable: (typeof newSearchables)[number] | undefined = undefined;
 
     if (input.shopName) {
       inputSearchables.add(input.shopName);
       shopNameSearchable = {
+        type: TEXT_TYPE.SHOP_NAME,
         text: input.shopName,
         context: input.shopMall,
         sourceId: input.expenseId,
@@ -227,7 +230,11 @@ const saveExpenseProcedure = protectedProcedure
       inputSearchables.add(input.shopMall);
       if (!existingSearchableSet.has(input.shopMall)) {
         shopNameSearchable && newSearchables.push(shopNameSearchable);
-        newSearchables.push({ text: input.shopMall, sourceId: input.expenseId });
+        newSearchables.push({
+          type: TEXT_TYPE.MALL_NAME,
+          text: input.shopMall,
+          sourceId: input.expenseId,
+        });
         existingSearchableSet.add(input.shopMall);
       }
     }
@@ -240,7 +247,7 @@ const saveExpenseProcedure = protectedProcedure
       removedItemIds.delete(item.id);
       inputSearchables.add(item.name);
       if (!existingSearchableSet.has(item.name)) {
-        newSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
+        newSearchables.push({ type: TEXT_TYPE.ITEM_NAME, text: item.name, context: input.shopName, sourceId: item.id });
         existingSearchableSet.add(item.name);
       }
 
@@ -259,7 +266,7 @@ const saveExpenseProcedure = protectedProcedure
       removedAdjustmentIds.delete(adj.id);
       inputSearchables.add(adj.name);
       if (!existingSearchableSet.has(adj.name)) {
-        newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
+        newSearchables.push({ type: TEXT_TYPE.ADJ_NAME, text: adj.name, context: input.shopName, sourceId: adj.id });
         existingSearchableSet.add(adj.name);
       }
 
@@ -412,11 +419,11 @@ const saveExpenseProcedure = protectedProcedure
       const expenseTexts: (typeof expenseTextsTable.$inferInsert)[] = [];
       const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
 
-      for (const { text, sourceId, context } of newSearchables) {
+      for (const { type, text, sourceId, context } of newSearchables) {
         if (!blacklistSearchableText.has(text)) continue;
         const textHash = searchableHashes.get(text)!;
         if (missingTextHashSet.has(textHash)) {
-          texts.push({ textHash, userId, text });
+          texts.push({ textHash, userId, text, type });
           textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
         }
         if (context) {

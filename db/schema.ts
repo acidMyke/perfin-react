@@ -263,11 +263,21 @@ export const searchTable = sqliteTable(
   ],
 );
 
+export const TEXT_TYPE = {
+  SHOP_NAME: 0,
+  MALL_NAME: 1,
+  ITEM_NAME: 2,
+  ADJ_NAME: 3,
+} as const;
+
+export type TextTypeValue = (typeof TEXT_TYPE)[keyof typeof TEXT_TYPE];
+
 export const textsTable = sqliteTable(
   'texts',
   {
     textHash: integer().primaryKey({ onConflict: 'ignore' }),
     userId: idColumn(),
+    type: integer().notNull().$type<TextTypeValue>(),
     text: text().notNull(),
   },
   t => [unique('uq_texts_userId').on(t.userId, t.text)],

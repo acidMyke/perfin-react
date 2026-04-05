@@ -9,9 +9,11 @@ import {
   expensesTable,
   expenseTextsTable,
   generateId,
+  TEXT_TYPE,
   textChunksTable,
   textsContextsTable,
   textsTable,
+  type TextTypeValue,
 } from '../../db/schema';
 import { eq, gt, inArray } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
@@ -38,6 +40,7 @@ export type ExecuteMigrationCycleParam = {
 };
 
 type Searchable = {
+  type: TextTypeValue;
   text: string;
   userId: string;
   sourceId: string;
@@ -188,16 +191,36 @@ function buildShopAndItemsSearchables(expense: ExpenseWithChild) {
   const searchables: Searchable[] = [];
 
   if (shopMall) {
-    searchables.push({ expenseId, text: shopMall, sourceId: expenseId, userId });
+    searchables.push({
+      expenseId,
+      type: TEXT_TYPE.MALL_NAME,
+      text: shopMall,
+      sourceId: expenseId,
+      userId,
+    });
   }
 
   if (shopName) {
-    searchables.push({ expenseId, text: shopName, sourceId: expenseId, userId, context: shopMall ?? undefined });
+    searchables.push({
+      expenseId,
+      type: TEXT_TYPE.SHOP_NAME,
+      text: shopName,
+      sourceId: expenseId,
+      userId,
+      context: shopMall ?? undefined,
+    });
   }
 
   for (const { id: sourceId, name, isDeleted } of items) {
     if (isDeleted) continue;
-    searchables.push({ expenseId, text: name, sourceId, userId, context: shopName ?? undefined });
+    searchables.push({
+      expenseId,
+      type: TEXT_TYPE.ITEM_NAME,
+      text: name,
+      sourceId,
+      userId,
+      context: shopName ?? undefined,
+    });
   }
 
   return searchables;
@@ -247,6 +270,7 @@ function buildAdjustments(expense: ExpenseWithChild) {
   for (const refund of refunds) {
     searchables.push({
       expenseId,
+      type: TEXT_TYPE.ADJ_NAME,
       sourceId: refund.id,
       text: refund.source,
       userId: expense.userId,
@@ -299,12 +323,12 @@ async function processSearchables(searchables: Searchable[], db: AppDatabase) {
   const expenseTextsUpserts: (typeof expenseTextsTable.$inferInsert)[] = [];
   const textsContextsUpserts: (typeof textsContextsTable.$inferInsert)[] = [];
 
-  for (const { userId, expenseId, text, sourceId, context } of searchables) {
+  for (const { userId, expenseId, type, text, sourceId, context } of searchables) {
     if (blacklistSearchableText.has(text)) continue;
     const textHash = searchableHashes.getHash(userId, text)!;
     if (!existingHashSet.has(textHash)) {
       existingHashSet.add(textHash);
-      textsUpserts.push({ textHash, userId, text });
+      textsUpserts.push({ textHash, userId, text, type });
       textChunkUpserts.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
     }
     if (context) {
