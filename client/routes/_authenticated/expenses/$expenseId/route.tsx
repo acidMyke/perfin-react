@@ -258,8 +258,9 @@ function ShopSuggestionsList({ form, data, autocompleteSelectionDialogRef }: Sho
               }}
               className='btn btn-soft odd:btn-primary even:btn-secondary'
             >
-              {shopName ?? 'Just the mall:'}
-              {shopName && shopMall && ' @ ' + shopMall}
+              {shopName ?? 'Just the mall: '}
+              {shopName && shopMall && ' @ '}
+              {shopMall}
             </button>
           ),
       )}

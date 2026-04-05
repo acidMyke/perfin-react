@@ -581,7 +581,10 @@ const suggestShopByLocationProcedure = protectedProcedure
     const { db, userId } = ctx;
     const queryBoxIds = getLocationBoxId(input);
     return db
-      .select({ shopName: sql<string>`${expensesTable.shopName}`, shopMalls: jsonGroupArray(expensesTable.shopMall) })
+      .select({
+        shopName: sql<string>`${expensesTable.shopName}`,
+        shopMalls: jsonGroupArray(expensesTable.shopMall, { distinct: true }),
+      })
       .from(expensesTable)
       .where(
         and(
