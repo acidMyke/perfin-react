@@ -71,12 +71,7 @@ function RouteComponent() {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (/(geolocation.*)/.test(fieldName)) {
-          if (form.getFieldValue('ui.shouldInferShopDetail')) {
-            triggerFetchShopSuggestion();
-            form.setFieldValue('ui.shouldInferShopDetail', false);
-          }
-        }
+        if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
@@ -141,7 +136,7 @@ function RouteComponent() {
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
       const formData = mapExpenseDetailToForm(existingExpenseQuery.data, optionsData, { isCopy });
-      form.reset(formData, { keepDefaultValues: !isCopy });
+      form.reset(formData, { keepDefaultValues: isCopy });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError, isCopy]);
 

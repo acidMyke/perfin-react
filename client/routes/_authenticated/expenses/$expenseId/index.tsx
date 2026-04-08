@@ -80,14 +80,15 @@ function RouteComponent() {
         inProgressLabel='Submitting...'
       />
       {expenseId === 'create' ? (
-        <Link className='btn col-span-full w-full' to='/expenses'>
+        <Link className='btn col-span-4 w-full' to='/expenses'>
           Cancel
         </Link>
       ) : (
-        <Link className='btn col-span-full w-full' to='/expenses/$expenseId/view' params={{ expenseId }}>
+        <Link className='btn col-span-4 w-full' to='/expenses/$expenseId/view' params={{ expenseId }}>
           Cancel
         </Link>
       )}
+      <form.ResetButton buttonCn='col-span-4 mt-0 btn-md btn-warning' />
     </div>
   );
 }
