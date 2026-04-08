@@ -198,14 +198,6 @@ export function calculateExpenseForm(form: ExpenseFormApi) {
 
   const result = calculateExpense({ specifiedAmountCents, items, adjustments });
   form.setFieldValue('ui.calculateResult', result);
-  // TODO: update logic here to V2 logic
-
-  // for (let i = 0; i < items.length; i++) {
-  //   const item = items[i];
-  //   if (!item.expenseRefund) continue;
-  //   const { grossAmountCents } = calculateExpenseItem(item, { additionalServiceChargePercent, isGstExcluded });
-  //   form.setFieldValue(`items[${i}].expenseRefund.expectedAmountCents`, grossAmountCents);
-  // }
 }
 
 type InvalidateAndRedirectBackToListOptions = {
