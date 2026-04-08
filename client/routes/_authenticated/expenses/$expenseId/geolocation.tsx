@@ -37,7 +37,12 @@ function RouteComponent() {
           <button className='btn-primary btn' onClick={() => setCurrentLocation(form)}>
             Use my location
           </button>
-          <button className='btn-warning btn' onClick={() => form.setFieldValue('geolocation', undefined)}>
+          <button
+            className='btn-warning btn'
+            onClick={() =>
+              form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false })
+            }
+          >
             Clear
           </button>
         </>
@@ -62,7 +67,12 @@ function RouteComponent() {
           onClick={e => {
             const latLng = e.detail.latLng;
             if (!latLng || readOnly) return;
-            form.setFieldValue('geolocation', { accuracy: 0, latitude: latLng.lat, longitude: latLng.lng });
+            form.setFieldValue('geolocation', {
+              accuracy: null,
+              latitude: latLng.lat,
+              longitude: latLng.lng,
+              isError: false,
+            });
           }}
           options={{
             zoomControlOptions: {
@@ -75,16 +85,17 @@ function RouteComponent() {
               field.state.value && (
                 <Marker
                   position={{ lat: field.state.value.latitude, lng: field.state.value.longitude }}
-                  draggable
+                  draggable={readOnly}
                   onDragEnd={e => {
                     const lat = e.latLng?.lat();
                     const lng = e.latLng?.lng();
                     if (!lat || !lng) return;
 
                     field.handleChange({
-                      accuracy: 0,
+                      accuracy: null,
                       latitude: lat,
                       longitude: lng,
+                      isError: false,
                     });
                   }}
                 />

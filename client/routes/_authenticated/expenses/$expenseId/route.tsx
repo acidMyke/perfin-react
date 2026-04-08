@@ -10,6 +10,7 @@ import {
   mapExpenseDetailToForm,
   type ExpenseFormData,
   useAdjustmentCallbacks,
+  setCurrentLocation,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
@@ -111,8 +112,14 @@ function RouteComponent() {
   const triggerFetchShopSuggestion = useCallback(
     (param?: { latitude: number; longitude: number }) => {
       if (form.getFieldValue('ui.shouldFetchShopSuggestion')) {
-        param ??= form.getFieldValue('geolocation');
-        if (param) shopNameMallPickerRef.current?.fetchShopSuggestions(param);
+        if (!param) {
+          const { latitude, longitude } = form.getFieldValue('geolocation');
+          if (latitude && longitude) {
+            shopNameMallPickerRef.current?.fetchShopSuggestions({ latitude, longitude });
+          }
+        } else {
+          shopNameMallPickerRef.current?.fetchShopSuggestions(param);
+        }
       }
     },
     [form, shopNameMallPickerRef],
@@ -140,8 +147,9 @@ function RouteComponent() {
   useEffect(() => {
     if (isCreate) {
       form.setFieldValue('billedAt', new Date());
+      setCurrentLocation(form);
     }
-  }, [isCreate]);
+  }, [isCreate, form]);
 
   return (
     <div className='mx-auto max-w-md'>

@@ -66,7 +66,6 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
   return {
     ui: {
       isCreate: false,
-      isCurrentLocationError: false,
       shouldInferShopDetail: false,
       shouldFetchShopSuggestion: false,
       shopDetailSource: 'user' as InputSource,
@@ -75,7 +74,7 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
     account,
     category,
-    geolocation: latitude !== null && longitude !== null ? { latitude, longitude, accuracy: geoAccuracy } : undefined,
+    geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
     ...rest,
   };
 }
@@ -91,7 +90,6 @@ export function mapExpenseDetailToForm(
     return {
       ui: {
         isCreate: true,
-        isCurrentLocationError: false,
         shouldInferShopDetail: true,
         shouldFetchShopSuggestion: true,
         shopDetailSource: null,
@@ -102,8 +100,8 @@ export function mapExpenseDetailToForm(
       billedAt: new Date(),
       account: undefined,
       category: undefined,
-      type: undefined as 'online' | 'physical' | undefined,
-      geolocation: undefined,
+      type: 'physical' as 'online' | 'physical',
+      geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
       shopName: null,
       shopMall: null,
       isDeleted: false,
@@ -227,12 +225,10 @@ export async function setCurrentLocation(form: ExpenseFormApi) {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const { latitude, longitude, accuracy } = coords;
-        form.setFieldValue('geolocation', { latitude, longitude, accuracy });
-        form.setFieldValue('ui.isCurrentLocationError', false);
+        form.setFieldValue('geolocation', { latitude, longitude, accuracy, isError: false });
       },
       () => {
-        form.setFieldMeta('geolocation', meta => ({ ...meta, isTouched: true, isDirty: true }));
-        form.setFieldValue('ui.isCurrentLocationError', true);
+        form.setFieldValue('geolocation.isError', false);
       },
     );
   }

@@ -6,9 +6,9 @@ import {
   createEditExpenseFormOptions,
   useItemCallbacks,
   MAX_ITEMS_IN_MAIN,
-  setCurrentLocation,
   useAdjustmentCallbacks,
   useExpenseForm,
+  setCurrentLocation,
 } from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
@@ -33,33 +33,6 @@ function RouteComponent() {
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
 
-  const expenseType = useStore(form.store, state => state.values.type);
-
-  if (!expenseType) {
-    return (
-      <div className='mb-20 grid grid-cols-2 gap-2'>
-        <p className='col-span-2 text-center text-xl'>Select the type of expense</p>
-        <button
-          className='btn btn-primary btn-lg btn-block'
-          onClick={() => {
-            setCurrentLocation(form);
-            form.setFieldValue('type', 'physical');
-          }}
-        >
-          Physical
-        </button>
-        <button
-          className='btn btn-secondary btn-lg btn-block'
-          onClick={() => {
-            form.setFieldValue('type', 'online');
-          }}
-        >
-          Online
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div className='mb-20 grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
@@ -67,7 +40,7 @@ function RouteComponent() {
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label col-span-8 mt-2'>
+          <label htmlFor={field.name} className='floating-label col-span-8 mt-4'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -228,43 +201,49 @@ const ItemsDetailsSubForm = withForm({
 
 const LocationSubForm = withForm({
   ...createEditExpenseFormOptions,
-  render() {
-    const form = useExpenseForm();
+  render({ form }) {
+    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
     const { expenseId } = Route.useParams();
 
+    if (!isPhysical) {
+      return (
+        <button
+          className='btn btn-link col-span-8'
+          onClick={() => {
+            form.setFieldValue('type', 'physical');
+            setCurrentLocation(form);
+          }}
+        >
+          Convert to physical
+        </button>
+      );
+    }
+
     return (
-      <form.Subscribe selector={state => [state.values.ui.isCurrentLocationError, state.values.type]}>
-        {([isCurrentLocationError, expenseType]) =>
-          expenseType === 'physical' ? (
-            <form.AppField name='geolocation'>
-              {field => {
-                const geolocation = field.state.value;
-                return (
-                  <>
-                    <p className='col-span-6 mt-2 mb-4'>
-                      Coordinate:{' '}
-                      {geolocation
-                        ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
-                        : isCurrentLocationError
-                          ? 'Unable to retrieve location'
-                          : 'Unspecified'}
-                    </p>
-                    <Link
-                      className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
-                      to='/expenses/$expenseId/geolocation'
-                      params={{ expenseId }}
-                    >
-                      View / Edit
-                    </Link>
-                  </>
-                );
-              }}
-            </form.AppField>
-          ) : (
-            <></>
-          )
-        }
-      </form.Subscribe>
+      <>
+        <form.AppField name='geolocation'>
+          {field => {
+            const geolocation = field.state.value;
+            return (
+              <p className='col-span-6 mt-2 mb-4'>
+                Coordinate:{' '}
+                {geolocation.latitude && geolocation.longitude
+                  ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
+                  : geolocation.isError
+                    ? 'Unable to retrieve location'
+                    : 'Unspecified'}
+              </p>
+            );
+          }}
+        </form.AppField>
+        <Link
+          className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
+          to='/expenses/$expenseId/geolocation'
+          params={{ expenseId }}
+        >
+          View / Edit
+        </Link>
+      </>
     );
   },
 });
