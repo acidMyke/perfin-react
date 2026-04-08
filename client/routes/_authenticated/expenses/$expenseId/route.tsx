@@ -74,6 +74,7 @@ function RouteComponent() {
         if (/(geolocation.*)/.test(fieldName)) {
           if (form.getFieldValue('ui.shouldInferShopDetail')) {
             triggerFetchShopSuggestion();
+            form.setFieldValue('ui.shouldInferShopDetail', false);
           }
         }
       },

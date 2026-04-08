@@ -100,7 +100,7 @@ export function mapExpenseDetailToForm(
       billedAt: new Date(),
       account: undefined,
       category: undefined,
-      type: 'physical' as 'online' | 'physical',
+      type: 'online' as 'online' | 'physical',
       geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
       shopName: null,
       shopMall: null,

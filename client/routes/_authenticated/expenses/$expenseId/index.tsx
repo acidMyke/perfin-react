@@ -135,9 +135,6 @@ const ItemsDetailsSubForm = withForm({
                       {name} {quantity > 1 && <span>x{quantity}</span>}
                     </span>
 
-                    {/* <span className='col-start-3 self-center justify-self-end'>
-                      {currencyNumberFormat.format(grossAmount)}
-                    </span> */}
                     <Link
                       className='btn btn-sm btn-primary col-start-4'
                       to='/expenses/$expenseId/items/$indexStr'
@@ -203,6 +200,7 @@ const LocationSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
     const isPhysical = useStore(form.store, state => state.values.type === 'physical');
+    const isCreate = useStore(form.store, state => state.values.ui.isCreate);
     const { expenseId } = Route.useParams();
 
     if (!isPhysical) {
@@ -211,7 +209,7 @@ const LocationSubForm = withForm({
           className='btn btn-link col-span-8'
           onClick={() => {
             form.setFieldValue('type', 'physical');
-            setCurrentLocation(form);
+            if (isCreate) setCurrentLocation(form);
           }}
         >
           Convert to physical
@@ -225,7 +223,7 @@ const LocationSubForm = withForm({
           {field => {
             const geolocation = field.state.value;
             return (
-              <p className='col-span-6 mt-2 mb-4'>
+              <p className='col-span-5 mt-2 mb-4'>
                 Coordinate:{' '}
                 {geolocation.latitude && geolocation.longitude
                   ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
@@ -236,6 +234,15 @@ const LocationSubForm = withForm({
             );
           }}
         </form.AppField>
+        <button
+          className='btn btn-link btn-secondary'
+          onClick={() => {
+            form.setFieldValue('type', 'online');
+            form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false });
+          }}
+        >
+          Online
+        </button>
         <Link
           className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
           to='/expenses/$expenseId/geolocation'
