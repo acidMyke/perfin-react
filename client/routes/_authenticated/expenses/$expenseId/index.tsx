@@ -13,7 +13,7 @@ import {
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
-import { cn, withForm } from '#components/Form';
+import { withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
@@ -36,7 +36,6 @@ function RouteComponent() {
   return (
     <div className='mb-20 grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
-      <LocationSubForm form={form} />
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
@@ -197,7 +196,7 @@ const ItemsDetailsSubForm = withForm({
   },
 });
 
-const LocationSubForm = withForm({
+const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
     const isPhysical = useStore(form.store, state => state.values.type === 'physical');
@@ -206,15 +205,27 @@ const LocationSubForm = withForm({
 
     if (!isPhysical) {
       return (
-        <button
-          className='btn btn-link col-span-8'
-          onClick={() => {
-            form.setFieldValue('type', 'physical');
-            if (isCreate) setCurrentLocation(form);
-          }}
-        >
-          Convert to physical
-        </button>
+        <>
+          <button
+            className='btn btn-link col-span-8'
+            onClick={() => {
+              form.setFieldValue('type', 'physical');
+              if (isCreate) setCurrentLocation(form);
+            }}
+          >
+            Convert to physical
+          </button>
+          <ExpenseSuggestableField
+            form={form}
+            fields={{ text: 'shopName' }}
+            scope='shopName'
+            getContext={() => form.getFieldValue('shopMall')}
+            label='Shop name'
+            containerCn='col-span-8 mt-2'
+            triggerChangeOnFocus
+            hideError
+          />
+        </>
       );
     }
 
@@ -251,40 +262,25 @@ const LocationSubForm = withForm({
         >
           View / Edit
         </Link>
-      </>
-    );
-  },
-});
-
-const ShopDetailSubForm = withForm({
-  ...createEditExpenseFormOptions,
-  render({ form }) {
-    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
-
-    return (
-      <>
         <ExpenseSuggestableField
           form={form}
           fields={{ text: 'shopName' }}
           scope='shopName'
           getContext={() => form.getFieldValue('shopMall')}
           label='Shop name'
-          containerCn={cn('col-span-4 mt-2', { 'col-span-8': !isPhysical })}
+          containerCn='col-span-4 mt-2'
           triggerChangeOnFocus
           hideError
         />
-
-        {isPhysical && (
-          <ExpenseSuggestableField
-            form={form}
-            fields={{ text: 'shopMall' }}
-            scope='shopMall'
-            label='Mall'
-            containerCn='col-span-4 mt-2'
-            triggerChangeOnFocus
-            hideError
-          />
-        )}
+        <ExpenseSuggestableField
+          form={form}
+          fields={{ text: 'shopMall' }}
+          scope='shopMall'
+          label='Mall'
+          containerCn='col-span-4 mt-2'
+          triggerChangeOnFocus
+          hideError
+        />
       </>
     );
   },
