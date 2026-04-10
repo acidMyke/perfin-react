@@ -11,7 +11,7 @@ import {
   textsContextsTable,
   textsTable,
 } from '../../db/schema';
-import { and, asc, count, countDistinct, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
@@ -19,6 +19,7 @@ import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAM
 import { caseWhen, coalesce, concat, excludedAll, jsonGroupArray, max } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -518,59 +519,92 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
-    const { textColumn, sourceTable } = {
-      shopName: { textColumn: expensesTable.shopName, sourceTable: expensesTable },
-      shopMall: { textColumn: expensesTable.shopMall, sourceTable: expensesTable },
-      itemName: { textColumn: expenseItemsTable.name, sourceTable: expenseItemsTable },
-      adjName: { textColumn: expenseAdjustmentsTable.name, sourceTable: expenseAdjustmentsTable },
-    }[input.scope];
-
     const where: SQL[] = [];
     let having: SQL | undefined;
 
-    const orderBy: SQL[] = [desc(countDistinct(expenseTextsTable.sourceId))]; // By frequency
+    const orderBy: SQL[] = [desc(count(expenseTextsTable.sourceId))]; // By frequency
+    const hashQuery = db
+      .select({
+        textHash: expenseTextsTable.textHash.as('text_hash'),
+        sourceId: min(expenseTextsTable.sourceId).as('source_id'),
+      })
+      .from(expenseTextsTable);
 
-    let baseQuery = db
-      .select({ text: max(textColumn) })
-      .from(sourceTable)
-      .innerJoin(expenseTextsTable, eq(sourceTable.id, expenseTextsTable.sourceId));
+    let joinedHashQuery: ReturnType<typeof hashQuery.innerJoin> | undefined;
 
     if (search) {
       // search by chunks
       const trigrams = getTrigrams(search);
-      baseQuery = baseQuery.innerJoin(textChunksTable, eq(expenseTextsTable.textHash, textChunksTable.textHash));
+      joinedHashQuery = hashQuery.innerJoin(textChunksTable, eq(expenseTextsTable.textHash, textChunksTable.textHash));
       where.push(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams));
 
       if (trigrams.length > 5) {
         // If there is more than 5 chunks for searching, remove those with less matches
-        having = gte(countDistinct(textChunksTable.chunk), trigrams.length - 5);
+        having = gte(count(textChunksTable.chunk), trigrams.length - 5);
       }
 
       if (!context) {
-        orderBy.unshift(desc(countDistinct(textChunksTable.chunk)));
+        orderBy.unshift(desc(count(textChunksTable.chunk)));
       }
     }
 
     if (context) {
       const contextHash = await getTextHash(userId, context);
-      baseQuery = baseQuery.leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash));
       if (search) {
         // contextual sort, since it will be filtered by chunks
+        joinedHashQuery = hashQuery.leftJoin(
+          textsContextsTable,
+          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
+        );
         const hasMatchingContext = caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
-        const relevance = sql`${max(hasMatchingContext)} + ${countDistinct(textChunksTable.chunk)}`;
+        const relevance = sql`${max(hasMatchingContext)} + ${count(textChunksTable.chunk)}`;
         orderBy.unshift(desc(relevance));
       } else {
         // contextual search, filtering by context
+        joinedHashQuery = hashQuery.innerJoin(
+          textsContextsTable,
+          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
+        );
         where.push(eq(textsContextsTable.ctxTextHash, contextHash));
       }
     }
 
-    const orderedQuery = baseQuery
-      .where(and(...where, isNotNull(textColumn)))
-      .groupBy(expenseTextsTable.textHash)
-      .orderBy(...orderBy);
-    const finalQuery = having ? orderedQuery.having(having) : orderedQuery;
-    const result = await finalQuery;
+    if (!joinedHashQuery) {
+      return { suggestions: [] };
+    }
+
+    const groupedHashQuery = hashQuery.where(and(...where)).groupBy(expenseTextsTable.textHash);
+    const topHashesSubquery = (having ? groupedHashQuery.having(having) : groupedHashQuery)
+      .orderBy(...orderBy)
+      .limit(15)
+      .as('top_hashes');
+
+    let textColumn: AnySQLiteColumn<{ data: string }>;
+    let sourceTable: typeof expensesTable | typeof expenseItemsTable | typeof expenseAdjustmentsTable;
+    switch (input.scope) {
+      case 'shopName':
+        textColumn = expensesTable.shopName;
+        sourceTable = expensesTable;
+        break;
+      case 'shopMall':
+        textColumn = expensesTable.shopMall;
+        sourceTable = expensesTable;
+        break;
+      case 'itemName':
+        textColumn = expenseItemsTable.name;
+        sourceTable = expenseItemsTable;
+        break;
+      case 'adjName':
+        textColumn = expenseAdjustmentsTable.name;
+        sourceTable = expenseAdjustmentsTable;
+        break;
+    }
+
+    const result = await db
+      .select({ text: textColumn })
+      .from(topHashesSubquery)
+      .innerJoin(sourceTable, eq(topHashesSubquery.sourceId, sourceTable.id))
+      .where(isNotNull(textColumn));
 
     return { suggestions: result.map(({ text }) => text!) };
   });
