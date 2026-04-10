@@ -60,7 +60,6 @@ function RouteComponent() {
             <span className='font-medium'>
               {item.name} ({formatCents(item.priceCents)}) × {item.quantity}
             </span>
-            {/* <span className={amount === 0 ? 'line-through' : ''}>{currencyNumberFormat.format(grossAmount)}</span> */}
           </div>
         );
       })}
