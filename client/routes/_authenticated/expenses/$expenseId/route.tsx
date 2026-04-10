@@ -161,10 +161,10 @@ function RouteComponent() {
           onFinalized={data => {
             const { shopMall, shopName } = data;
             if (shopMall) {
-              form.setFieldValue('shopMall', shopMall);
+              form.setFieldValue('shopMall', shopMall, { dontValidate: true });
             }
             if (shopName) {
-              form.setFieldValue('shopName', shopName);
+              form.setFieldValue('shopName', shopName, { dontValidate: true });
               triggerFetchShopDetail(shopName);
             }
           }}
