@@ -309,7 +309,7 @@ const AdjustmentsDetailsSubForm = withForm({
                     onRemoveClick={adjIndex => removeAdjustment(adjIndex)}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
-                    toggleAdjustmentType={adjIndex => toggleAdjustmentType(adjIndex)}
+                    toggleAdjustmentType={(adjIndex, itemId) => toggleAdjustmentType(adjIndex, itemId)}
                     onSwapClick={adjIndex =>
                       adjIndex == 0
                         ? field.swapValues(adjIndex, adjIndex + 1)

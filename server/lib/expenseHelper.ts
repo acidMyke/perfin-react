@@ -34,7 +34,7 @@ export type ItemCalculationResult = {
 
 export type ExpenseCalculationResult = ItemCalculationResult & {
   /** Individual item result */
-  itemResults: Map<string, ItemCalculationResult>;
+  itemResults: Record<string, ItemCalculationResult>;
 };
 
 export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCalculationResult {
@@ -120,7 +120,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
   }
 
   return {
-    itemResults: itemResultsMap,
+    itemResults: Object.fromEntries(itemResultsMap),
     grossTotalCents: expenseGrossTotal,
     netTotalCents: expenseNetTotal,
     adjustmentCents: expenseAdjustments,
