@@ -9,9 +9,7 @@ import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 const AdjustmnetResult = ({ adjIndex, type }: { adjIndex: number; type: 'amountCents' | 'rateBps' }) => {
   const form = useExpenseForm();
   return (
-    <form.Subscribe
-      selector={state => [state.values.ui.calculateResult.adjustmentCents[adjIndex][type === 'amountCents' ? 1 : 2]]}
-    >
+    <form.Subscribe selector={state => [state.values.ui.calculateResult.adjustmentResults[adjIndex][1][type]]}>
       {([value]) => {
         return type === 'amountCents' ? formatCents(value) : formatBps(isNaN(value) ? 0 : value);
       }}
@@ -69,7 +67,10 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                 />
               )}
             </group.AppField>
-            <button className='btn btn-ghost w-16 justify-end pr-3' onClick={() => toggleAdjustmentType(adjIndex, expenseItemId)}>
+            <button
+              className='btn btn-ghost w-16 justify-end pr-3'
+              onClick={() => toggleAdjustmentType(adjIndex, expenseItemId)}
+            >
               <AdjustmnetResult adjIndex={adjIndex} type='rateBps' />
             </button>
           </>

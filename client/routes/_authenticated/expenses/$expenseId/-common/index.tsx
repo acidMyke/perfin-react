@@ -304,11 +304,11 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
         calculateExpenseForm(form);
       },
       toggleAdjustmentType: (adjustmentIndex: number, expenseItemId?: string | null) => {
-        const innerKey = expenseItemId ? `.itemResults.${expenseItemId}` as const : '' as const;
-        const formFieldKey = `ui.calculateResult${innerKey}.adjustmentCents[${adjustmentIndex}]` as const;
-        const [, amountCents, rateBps] = form.getFieldValue(formFieldKey);
+        const formFieldKey = `ui.calculateResult.adjustmentResults[${adjustmentIndex}]` as const;
+        const [, totalResult, itemizedResult] = form.getFieldValue(formFieldKey);
         const fieldPrefix = `adjustments[${adjustmentIndex}]` as const;
         const adjustment = form.getFieldValue(fieldPrefix);
+        const { amountCents, rateBps } = (expenseItemId ? itemizedResult[expenseItemId] : null) ?? totalResult;
         if (adjustment.rateBps != null) {
           form.setFieldValue(`${fieldPrefix}.rateBps`, null);
           form.setFieldValue(`${fieldPrefix}.amountCents`, amountCents);

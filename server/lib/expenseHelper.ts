@@ -26,15 +26,22 @@ export type ExpenseDetailForCalculation = {
 export type ItemCalculationResult = {
   /** Before Adjustments */
   grossTotalCents: number;
-  /** Amount for each adjustments: [adjustmentId, amountInCent, rateBps] */
-  adjustmentCents: [string, number, number][];
   /** After Adjustments */
   netTotalCents: number;
+};
+
+export type AdjustmentResult = {
+  /** Adjustmnent amount in cents */
+  amountCents: number;
+  /** Adjustment percent in basis points */
+  rateBps: number;
 };
 
 export type ExpenseCalculationResult = ItemCalculationResult & {
   /** Individual item result */
   itemResults: Record<string, ItemCalculationResult>;
+  /** Amount for each adjustments*/
+  adjustmentResults: [string, AdjustmentResult, Record<string, AdjustmentResult>][];
 };
 
 export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCalculationResult {
@@ -51,12 +58,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       const { id, quantity, priceCents } = item;
       const gross = quantity * priceCents;
       expenseGrossTotal += gross;
-
-      itemResultsMap.set(id, {
-        grossTotalCents: gross,
-        netTotalCents: gross,
-        adjustmentCents: [],
-      });
+      itemResultsMap.set(id, { grossTotalCents: gross, netTotalCents: gross });
     }
   } else {
     // Non-itemized bill. Just grossTotalCents then adjustments
@@ -64,32 +66,33 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
   }
 
   let expenseNetTotal = expenseGrossTotal;
-  const expenseAdjustments: [string, number, number][] = [];
+  const adjustmentResults: ExpenseCalculationResult['adjustmentResults'] = [];
 
   for (const adjustment of adjustments) {
     if (adjustment.isDeleted) continue;
-    const { id, rateBps, amountCents, expenseItemId } = adjustment;
+    const { id, rateBps, amountCents = 0, expenseItemId } = adjustment;
 
     if (rateBps == null) {
       // Flat adjustment
-      const amount = amountCents ?? 0;
-      const rateBps = Math.round((amount / expenseNetTotal) * 100_00);
-      expenseAdjustments.push([id, amount, rateBps]);
-      expenseNetTotal += amount;
+      const rateBps = Math.round((amountCents / expenseNetTotal) * 100_00);
+      adjustmentResults.push([id, { amountCents, rateBps }, {}]);
+      // expenseAdjustments.push([id, amount, rateBps]);
+      expenseNetTotal += amountCents;
       continue;
     }
 
     // Rate adjustment: Basis Points (10000 bps = 100%)
     if (!isItemizedExpense) {
       // Base amount from net total
-      const adjAmount = Math.round((expenseNetTotal * rateBps) / 100_00);
-      expenseNetTotal += adjAmount;
-      expenseAdjustments.push([id, adjAmount, rateBps]);
+      const amountCents = Math.round((expenseNetTotal * rateBps) / 100_00);
+      expenseNetTotal += amountCents;
+      adjustmentResults.push([id, { amountCents, rateBps }, {}]);
       continue;
     }
 
     // switch to keeping track of netTotalCents * rateBps, prevent rounding issue.
     let totalAdjCentBpsForThisRate = 0;
+    const itemsAdjustmentResults: Record<string, AdjustmentResult> = {};
 
     if (expenseItemId) {
       const itemResult = itemResultsMap.get(expenseItemId);
@@ -99,30 +102,31 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
 
         const adjAmount = Math.round(adjCentBps / 100_00);
         const adjRateBps = Math.round((adjAmount / itemResult.netTotalCents) * 100_00);
-        itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
+        itemsAdjustmentResults[expenseItemId] = { amountCents: adjCentBps, rateBps: adjRateBps };
+
         itemResult.netTotalCents += adjAmount;
       }
     } else {
-      for (const itemResult of itemResultsMap.values()) {
+      for (const [itemId, itemResult] of itemResultsMap.entries()) {
         const adjCentBps = itemResult.netTotalCents * rateBps;
         totalAdjCentBpsForThisRate += adjCentBps;
 
         const adjAmount = Math.round(adjCentBps / 100_00);
         const adjRateBps = Math.round((adjAmount / expenseNetTotal) * 100_00);
-        itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
+        itemsAdjustmentResults[itemId] = { amountCents: adjCentBps, rateBps: adjRateBps };
         itemResult.netTotalCents += adjAmount;
       }
     }
 
     const totalAdjCents = Math.round(totalAdjCentBpsForThisRate / 100_00);
     expenseNetTotal += totalAdjCents;
-    expenseAdjustments.push([id, totalAdjCents, rateBps]);
+    adjustmentResults.push([id, { amountCents: totalAdjCents, rateBps }, itemsAdjustmentResults]);
   }
 
   return {
     itemResults: Object.fromEntries(itemResultsMap),
     grossTotalCents: expenseGrossTotal,
     netTotalCents: expenseNetTotal,
-    adjustmentCents: expenseAdjustments,
+    adjustmentResults,
   };
 }
