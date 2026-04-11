@@ -45,7 +45,7 @@ CREATE TABLE `texts` (
 );
 
 ALTER TABLE `expenses` ADD `specified_amount_cents` integer DEFAULT 0 NOT NULL;
-ALTER TABLE `expenses` ADD `type` text NOT NULL;
+ALTER TABLE `expenses` ADD `type` text DEFAULT 'physical' NOT NULL;
 DROP INDEX IF EXISTS `idx_expenses_user_billed`;
 DROP INDEX IF EXISTS `idx_expenses_user_box_id_active`;
 DROP INDEX IF EXISTS `idx_expenses_user_shopName_active`;
