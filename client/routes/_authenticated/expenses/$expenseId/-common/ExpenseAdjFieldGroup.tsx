@@ -26,16 +26,17 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
     onRemoveClick: (_: number) => {},
     getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
-    toggleAdjustmentType: (_: number) => {},
+    toggleAdjustmentType: (_: number, _itemId?: string | null) => {},
     onSwapClick: (_: number) => {},
   },
   render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType, onSwapClick }) {
-    const [isGst, isServiceCharge, isRateAdjustment, isItemBounded] = useStore(group.store, state => [
+    const [isGst, isServiceCharge, isRateAdjustment, expenseItemId] = useStore(group.store, state => [
       state.values?.name === GST_NAME,
       state.values?.name === SERVICE_CHARGE_NAME,
       state.values?.rateBps == null,
-      !!state.values?.expenseItemId,
+      state.values?.expenseItemId,
     ]);
+    const isItemBounded = !!expenseItemId;
 
     return (
       <li className='flex flex-row items-center gap-2'>
@@ -68,7 +69,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                 />
               )}
             </group.AppField>
-            <button className='btn btn-ghost w-16 justify-end pr-3' onClick={() => toggleAdjustmentType(adjIndex)}>
+            <button className='btn btn-ghost w-16 justify-end pr-3' onClick={() => toggleAdjustmentType(adjIndex, expenseItemId)}>
               <AdjustmnetResult adjIndex={adjIndex} type='rateBps' />
             </button>
           </>
@@ -79,7 +80,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
                 <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
               </p>
             ) : (
-              <button className='btn btn-ghost w-16' onClick={() => toggleAdjustmentType(adjIndex)}>
+              <button className='btn btn-ghost w-16' onClick={() => toggleAdjustmentType(adjIndex, expenseItemId)}>
                 <AdjustmnetResult adjIndex={adjIndex} type='amountCents' />
               </button>
             )}

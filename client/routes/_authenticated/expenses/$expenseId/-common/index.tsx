@@ -303,8 +303,10 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
         form.removeFieldValue('adjustments', adjustmentIndex);
         calculateExpenseForm(form);
       },
-      toggleAdjustmentType: (adjustmentIndex: number) => {
-        const [, amountCents, rateBps] = form.getFieldValue(`ui.calculateResult.adjustmentCents[${adjustmentIndex}]`);
+      toggleAdjustmentType: (adjustmentIndex: number, expenseItemId?: string | null) => {
+        const innerKey = expenseItemId ? `.itemResults.${expenseItemId}` as const : '' as const;
+        const formFieldKey = `ui.calculateResult${innerKey}.adjustmentCents[${adjustmentIndex}]` as const;
+        const [, amountCents, rateBps] = form.getFieldValue(formFieldKey);
         const fieldPrefix = `adjustments[${adjustmentIndex}]` as const;
         const adjustment = form.getFieldValue(fieldPrefix);
         if (adjustment.rateBps != null) {
