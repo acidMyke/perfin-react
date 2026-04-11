@@ -10,7 +10,7 @@ import { trpc } from '#client/trpc';
 const ItemResult = ({ itemId }: { itemId: string }) => {
   const form = useExpenseForm();
   return (
-    <form.Subscribe selector={state => [state.values.ui.calculateResult.itemResults.get(itemId)]}>
+    <form.Subscribe selector={state => [state.values.ui.calculateResult.itemResults[itemId]]}>
       {([itemResult]) => <p className='col-span-2 text-lg'>{formatCents(itemResult?.grossTotalCents ?? 0)}</p>}
     </form.Subscribe>
   );
