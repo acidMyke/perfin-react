@@ -310,11 +310,10 @@ const AdjustmentsDetailsSubForm = withForm({
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     toggleAdjustmentType={(adjIndex, itemId) => toggleAdjustmentType(adjIndex, itemId)}
-                    onSwapClick={adjIndex =>
-                      adjIndex == 0
-                        ? field.swapValues(adjIndex, adjIndex + 1)
-                        : field.swapValues(adjIndex, adjIndex - 1)
-                    }
+                    onSwapClick={adjIndex => {
+                      field.swapValues(adjIndex, adjIndex + (adjIndex == 0 ? 1 : -1));
+                      calculateExpenseForm(form);
+                    }}
                   />
                 );
               })}
