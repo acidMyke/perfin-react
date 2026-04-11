@@ -1,150 +1,128 @@
-export type ExpenseSurchargeOption = {
-  additionalServiceChargePercent?: number | null | undefined;
-  isGstExcluded?: boolean | null | undefined;
+export const GST_NAME = '_gst' as const;
+export const SERVICE_CHARGE_NAME = '_service' as const;
+export const blacklistSearchableText = new Set(['', GST_NAME, SERVICE_CHARGE_NAME]);
+
+export type ExpenseItemForCalculation = {
+  id: string;
+  isDeleted?: boolean | null | undefined;
+  quantity: number;
+  priceCents: number;
 };
 
-function applyExpenseSurcharge(baseAmountCents: number, surchargeOption?: ExpenseSurchargeOption) {
-  const { additionalServiceChargePercent, isGstExcluded } = surchargeOption ?? {};
-  const serviceChargeCents = additionalServiceChargePercent
-    ? Math.floor(baseAmountCents * (additionalServiceChargePercent / 100))
-    : 0;
-  const gstCents = isGstExcluded ? Math.floor((baseAmountCents + serviceChargeCents) * 0.09) : 0;
+export type ExpenseAdjustmentForCalculation = {
+  id: string;
+  isDeleted?: boolean | null | undefined;
+  amountCents?: number;
+  rateBps?: number | null;
+  expenseItemId?: string | null;
+};
+
+export type ExpenseDetailForCalculation = {
+  specifiedAmountCents: number;
+  items: ExpenseItemForCalculation[];
+  adjustments: ExpenseAdjustmentForCalculation[];
+};
+
+export type ItemCalculationResult = {
+  /** Before Adjustments */
+  grossTotalCents: number;
+  /** Amount for each adjustments: [adjustmentId, amountInCent, rateBps] */
+  adjustmentCents: [string, number, number][];
+  /** After Adjustments */
+  netTotalCents: number;
+};
+
+export type ExpenseCalculationResult = ItemCalculationResult & {
+  /** Individual item result */
+  itemResults: Map<string, ItemCalculationResult>;
+};
+
+export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCalculationResult {
+  const { specifiedAmountCents, items, adjustments } = detail;
+
+  const isItemizedExpense = items.length > 0;
+  let expenseGrossTotal = 0;
+  const itemResultsMap = new Map<string, ItemCalculationResult>();
+
+  if (isItemizedExpense) {
+    // Itemized bill. Ignore specifiedAmountCents
+    for (const item of items) {
+      if (item.isDeleted) continue;
+      const { id, quantity, priceCents } = item;
+      const gross = quantity * priceCents;
+      expenseGrossTotal += gross;
+
+      itemResultsMap.set(id, {
+        grossTotalCents: gross,
+        netTotalCents: gross,
+        adjustmentCents: [],
+      });
+    }
+  } else {
+    // Non-itemized bill. Just grossTotalCents then adjustments
+    expenseGrossTotal = specifiedAmountCents;
+  }
+
+  let expenseNetTotal = expenseGrossTotal;
+  const expenseAdjustments: [string, number, number][] = [];
+
+  for (const adjustment of adjustments) {
+    if (adjustment.isDeleted) continue;
+    const { id, rateBps, amountCents, expenseItemId } = adjustment;
+
+    if (rateBps == null) {
+      // Flat adjustment
+      const amount = amountCents ?? 0;
+      const rateBps = Math.round((amount / expenseNetTotal) * 100_00);
+      expenseAdjustments.push([id, amount, rateBps]);
+      expenseNetTotal += amount;
+      continue;
+    }
+
+    // Rate adjustment: Basis Points (10000 bps = 100%)
+    if (!isItemizedExpense) {
+      // Base amount from net total
+      const adjAmount = Math.round((expenseNetTotal * rateBps) / 100_00);
+      expenseNetTotal += adjAmount;
+      expenseAdjustments.push([id, adjAmount, rateBps]);
+      continue;
+    }
+
+    // switch to keeping track of netTotalCents * rateBps, prevent rounding issue.
+    let totalAdjCentBpsForThisRate = 0;
+
+    if (expenseItemId) {
+      const itemResult = itemResultsMap.get(expenseItemId);
+      if (itemResult) {
+        const adjCentBps = itemResult.netTotalCents * rateBps;
+        totalAdjCentBpsForThisRate += adjCentBps;
+
+        const adjAmount = Math.round(adjCentBps / 100_00);
+        const adjRateBps = Math.round((adjAmount / itemResult.netTotalCents) * 100_00);
+        itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
+        itemResult.netTotalCents += adjAmount;
+      }
+    } else {
+      for (const itemResult of itemResultsMap.values()) {
+        const adjCentBps = itemResult.netTotalCents * rateBps;
+        totalAdjCentBpsForThisRate += adjCentBps;
+
+        const adjAmount = Math.round(adjCentBps / 100_00);
+        const adjRateBps = Math.round((adjAmount / expenseNetTotal) * 100_00);
+        itemResult.adjustmentCents.push([id, adjAmount, adjRateBps]);
+        itemResult.netTotalCents += adjAmount;
+      }
+    }
+
+    const totalAdjCents = Math.round(totalAdjCentBpsForThisRate / 100_00);
+    expenseNetTotal += totalAdjCents;
+    expenseAdjustments.push([id, totalAdjCents, rateBps]);
+  }
 
   return {
-    grossAmountCents: baseAmountCents + serviceChargeCents + gstCents,
-    serviceChargeCents,
-    gstCents,
-  };
-}
-
-export type ExpenseDetailForCalculation = ExpenseSurchargeOption & {
-  items: {
-    isDeleted?: boolean | null | undefined;
-    quantity: number;
-    priceCents: number;
-    expenseRefund?:
-      | null
-      | undefined
-      | {
-          isDeleted?: boolean | null | undefined;
-          expectedAmountCents: number;
-          actualAmountCents: number | null | undefined;
-        };
-  }[];
-  refunds: {
-    isDeleted?: boolean | null | undefined;
-    expectedAmountCents: number;
-    actualAmountCents: number | null | undefined;
-  }[];
-};
-
-type WithDollarFields<T extends Record<string, number>> = T & {
-  [K in keyof T as K extends `${infer Name}Cents` ? Name : never]: number;
-};
-
-type CalcualeExpenseResult = {
-  /** Price * Quantity */
-  baseAmountCents: number;
-  /** Price * Quantity + Surcharges */
-  grossAmountCents: number;
-  expectedRefundSumCents: number;
-  /** Refunded */
-  minRefundSumCents: number;
-  /** Net amount: For budgeting and dashboard reporting */
-  amountCents: number;
-  /** Service charges */
-  serviceChargeCents: number;
-  /** Taxes */
-  gstCents: number;
-};
-
-export function calculateExpense(detail: ExpenseDetailForCalculation): WithDollarFields<CalcualeExpenseResult> {
-  const { items, refunds } = detail;
-  let { baseAmountCents, itemBondedRefunds } = items.reduce(
-    (result, { isDeleted, quantity, priceCents, expenseRefund }) => {
-      if (isDeleted) return result;
-
-      return {
-        baseAmountCents: result.baseAmountCents + quantity * priceCents,
-        itemBondedRefunds: expenseRefund ? [...result.itemBondedRefunds, expenseRefund] : result.itemBondedRefunds,
-      };
-    },
-    { baseAmountCents: 0, itemBondedRefunds: [] as ExpenseDetailForCalculation['refunds'] },
-  );
-
-  const { grossAmountCents, serviceChargeCents, gstCents } = applyExpenseSurcharge(baseAmountCents, detail);
-
-  const { expectedRefundSumCents, minRefundSumCents } = [...refunds, ...itemBondedRefunds].reduce(
-    (result, { isDeleted, expectedAmountCents, actualAmountCents }) => {
-      if (isDeleted) return result;
-
-      return {
-        expectedRefundSumCents: result.expectedRefundSumCents + expectedAmountCents,
-        minRefundSumCents: result.minRefundSumCents + Math.min(expectedAmountCents, actualAmountCents ?? 0),
-      };
-    },
-    { expectedRefundSumCents: 0, minRefundSumCents: 0 },
-  );
-
-  return {
-    baseAmountCents,
-    grossAmountCents,
-    expectedRefundSumCents,
-    minRefundSumCents,
-    /** For budgeting and dashboard reporting */
-    amountCents: grossAmountCents - minRefundSumCents,
-    serviceChargeCents,
-    gstCents,
-
-    baseAmount: baseAmountCents / 100,
-    grossAmount: grossAmountCents / 100,
-    expectedRefundSum: expectedRefundSumCents / 100,
-    minRefundSum: minRefundSumCents / 100,
-    amount: (grossAmountCents - minRefundSumCents) / 100,
-    serviceCharge: serviceChargeCents / 100,
-    gst: gstCents / 100,
-  };
-}
-
-type CalcualeExpenseItemResult = {
-  /** Price * Quantity */
-  baseAmountCents: number;
-  /** Service charges */
-  serviceChargeCents: number;
-  /** Taxes */
-  gstCents: number;
-  /** Price * Quantity + Surcharges */
-  grossAmountCents: number;
-  /** Refunded */
-  minRefundCents: number;
-  /** Net amount: For budgeting and dashboard reporting */
-  amountCents: number;
-};
-
-export function calculateExpenseItem(
-  item: ExpenseDetailForCalculation['items'][number],
-  surchargeOption?: ExpenseSurchargeOption,
-): WithDollarFields<CalcualeExpenseItemResult> {
-  const { priceCents, quantity, expenseRefund } = item;
-  const baseAmountCents = priceCents * quantity;
-  const { grossAmountCents, serviceChargeCents, gstCents } = applyExpenseSurcharge(baseAmountCents, surchargeOption);
-  const minRefundCents = expenseRefund
-    ? Math.min(expenseRefund.expectedAmountCents, expenseRefund.actualAmountCents ?? 0)
-    : 0;
-
-  return {
-    baseAmountCents,
-    serviceChargeCents,
-    gstCents,
-    grossAmountCents,
-    minRefundCents,
-    amountCents: grossAmountCents - minRefundCents,
-
-    baseAmount: baseAmountCents / 100,
-    serviceCharge: serviceChargeCents / 100,
-    gst: gstCents / 100,
-    grossAmount: grossAmountCents / 100,
-    minRefund: minRefundCents / 100,
-    amount: (grossAmountCents - minRefundCents) / 100,
+    itemResults: itemResultsMap,
+    grossTotalCents: expenseGrossTotal,
+    netTotalCents: expenseNetTotal,
+    adjustmentCents: expenseAdjustments,
   };
 }

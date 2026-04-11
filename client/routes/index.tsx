@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { whoamiQueryOptions } from '../queryOptions';
-import { queryClient } from '../trpc';
+import { whoamiQueryOptions } from '#client/queryOptions';
+import { queryClient } from '#client/trpc';
 
 export const Route = createFileRoute('/')({
   async beforeLoad() {

@@ -26,35 +26,31 @@ export function excludedAll<T extends Table>(
   return excludedColumns;
 }
 
-type ChunkValue<TReturn> = TReturn | SQL<TReturn> | SQL.Aliased<TReturn> | SQLWrapper;
+type ChunkValue<TReturn> =
+  | TReturn
+  | SQL<TReturn>
+  | SQL.Aliased<TReturn>
+  | SQLWrapper<TReturn>
+  | AnyColumn<{ data: TReturn }>;
 
-class CaseBuilder<TReturn> implements SQLWrapper {
+class CaseBuilder<TReturn> implements SQLWrapper<TReturn | null> {
   private chunks: SQL[] = [];
 
   constructor(initialCondition: SQL, initialResult: ChunkValue<TReturn>) {
     this.whenThen(initialCondition, initialResult);
   }
 
-  /**
-   * Adds a WHEN condition THEN result clause.
-   */
-  whenThen(condition: SQL | undefined, result: ChunkValue<TReturn>): this {
+  whenThen<TMoreReturn = TReturn>(condition: SQL | undefined, result: ChunkValue<TMoreReturn>) {
     if (!condition) return this;
     this.chunks.push(sql`WHEN ${condition} THEN ${result}`);
-    return this;
+    return this as CaseBuilder<TReturn | TMoreReturn>;
   }
 
-  /**
-   * Adds the ELSE clause.
-   */
-  else(value: ChunkValue<TReturn>): SQL<TReturn> {
-    return sql<TReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE ${value} END`;
+  else<TMoreReturn = TReturn>(value: ChunkValue<TMoreReturn>) {
+    return sql<TReturn | TMoreReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE ${value} END`;
   }
 
-  /**
-   * Drizzle calls this automatically when you pass the object to a query.
-   */
-  elseNull(): SQL<TReturn> {
+  elseNull(): SQL<TReturn | null> {
     return sql<TReturn>`CASE ${sql.join(this.chunks, sql` `)} ELSE NULL END`;
   }
 
@@ -72,11 +68,34 @@ export function concat(...chunks: ConcatValue[]): SQL<string> {
   return sql<string>`(${sql.join(chunks, sql` || `)})`;
 }
 
-export function coalesce<TValue, TFallback = ''>(
-  value: ChunkValue<TValue>,
-  fallback?: ChunkValue<TFallback>,
-): SQL<TValue | TFallback> {
-  return fallback ? sql`COALESCE(${value}, ${fallback})` : sql`COALESCE(${value},'')`;
+type ExtractableData = AnyColumn | SQL | SQL.Aliased | SQLWrapper;
+
+type ExtractType<T> = T extends AnyColumn
+  ? T['_']['notNull'] extends true
+    ? T['_']['data']
+    : T['_']['data'] | null
+  : T extends SQL.Aliased<infer U> | SQL<infer U> | SQLWrapper<infer U>
+    ? U
+    : unknown;
+
+export function coalesce<TValue extends ExtractableData, TFallback extends ExtractableData = SQL<string>>(
+  value: TValue,
+  fallback?: TFallback,
+) {
+  fallback ??= sql`''` as TFallback;
+  return sql<Exclude<ExtractType<TValue>, null> | ExtractType<TFallback>>`coalesce(${value}, ${fallback})`;
+}
+
+export function jsonGroupArray<T extends ExtractableData>(data: T, options: { distinct?: boolean } = {}) {
+  const { distinct } = options;
+  const jsonGroupedArray = distinct ? sql`json_group_array(distinct ${data})` : sql`json_group_array(${data})`;
+  return sql`coalesce(${jsonGroupedArray}, '[]')`.mapWith({
+    mapFromDriverValue: v => (typeof v === 'string' ? JSON.parse(v) : []) as ExtractType<T>[],
+  });
+}
+
+export function max<T extends ExtractableData>(data: T) {
+  return sql<ExtractType<T>>`max(${data})`;
 }
 
 export function createDatabase(env: Env) {

@@ -1,10 +1,10 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../trpc';
+import { handleFormMutateAsync, queryClient, trpc } from '#client/trpc';
 import { useMutation } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { useAppForm } from '../../components/Form';
-import { sleep } from '../../../server/lib/utils';
-import { PageHeader } from '../../components/PageHeader';
+import { useAppForm } from '#components/Form';
+import { sleep } from '#client/utils';
+import { PageHeader } from '#components/PageHeader';
 import z from 'zod';
 
 export const Route = createFileRoute('/signup/verify')({

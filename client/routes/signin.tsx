@@ -1,9 +1,9 @@
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, useRouter, redirect, Link } from '@tanstack/react-router';
-import { whoamiQueryOptions } from '../queryOptions';
-import { trpc, queryClient, handleFormMutateAsync, extractMutationError } from '../trpc';
-import { sleep } from '../../server/lib/utils';
-import { useAppForm } from '../components/Form';
+import { whoamiQueryOptions } from '#client/queryOptions';
+import { trpc, queryClient, handleFormMutateAsync, extractMutationError } from '#client/trpc';
+import { sleep } from '#client/utils';
+import { useAppForm } from '#components/Form';
 import { ChevronRight } from 'lucide-react';
 import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useCallback, useEffect, useRef } from 'react';

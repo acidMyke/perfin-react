@@ -1,7 +1,7 @@
 import { createFileRoute, Outlet } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../trpc';
+import { queryClient, trpc } from '#client/trpc';
 import { useSuspenseQuery } from '@tanstack/react-query';
-import { PageHeader } from '../../components/PageHeader';
+import { PageHeader } from '#components/PageHeader';
 
 export const Route = createFileRoute('/signup')({
   component: RouteComponent,

@@ -2,20 +2,24 @@ import { protectedProcedure } from '../lib/trpc';
 import {
   accountsTable,
   categoriesTable,
+  expenseAdjustmentsTable,
   expenseItemsTable,
-  expenseRefundsTable,
   expensesTable,
   generateId,
-  searchTable,
+  expenseTextsTable,
+  textChunksTable,
+  textsContextsTable,
+  textsTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNull, like, lt, max, notInArray, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth, parseISO } from 'date-fns';
-import { calculateExpense, calculateExpenseItem } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, excludedAll } from '../lib/db';
-import { getLocationBoxId, getTrigrams } from '../lib/utils';
+import { blacklistSearchableText, calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
+import { caseWhen, coalesce, concat, excludedAll, jsonGroupArray, max } from '../lib/db';
+import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams, splitArray } from '../lib/utils';
 import type { BatchItem } from 'drizzle-orm/batch';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -43,22 +47,22 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [[expense], rawItems, rawRefunds] = await db.batch([
+    const [[expense], items, adjustments] = await db.batch([
       db
         .select({
           amountCents: expensesTable.amountCents,
           billedAt: expensesTable.billedAt,
           accountId: expensesTable.accountId,
           categoryId: expensesTable.categoryId,
+          type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
           geoAccuracy: expensesTable.geoAccuracy,
-          shopMall: expensesTable.shopMall,
           shopName: expensesTable.shopName,
+          shopMall: expensesTable.shopMall,
           version: expensesTable.version,
-          isGstExcluded: expensesTable.isGstExcluded,
-          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
           isDeleted: expensesTable.isDeleted,
+          specifiedAmountCents: expensesTable.specifiedAmountCents,
         })
         .from(expensesTable)
         .where(and(eq(expensesTable.userId, userId), eq(expensesTable.id, input.expenseId)))
@@ -70,42 +74,29 @@ const loadExpenseDetailProcedure = protectedProcedure
           quantity: expenseItemsTable.quantity,
           priceCents: expenseItemsTable.priceCents,
           isDeleted: expenseItemsTable.isDeleted,
-          itemRefundId: expenseItemsTable.expenseRefundId,
         })
         .from(expenseItemsTable)
         .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
       db
         .select({
-          id: expenseRefundsTable.id,
-          source: expenseRefundsTable.source,
-          expectedAmountCents: expenseRefundsTable.expectedAmountCents,
-          actualAmountCents: expenseRefundsTable.actualAmountCents,
-          isDeleted: expenseRefundsTable.isDeleted,
-          expenseItemId: expenseRefundsTable.expenseItemId,
+          id: expenseAdjustmentsTable.id,
+          name: expenseAdjustmentsTable.name,
+          amountCents: expenseAdjustmentsTable.amountCents,
+          rateBps: expenseAdjustmentsTable.rateBps,
+          expenseItemId: expenseAdjustmentsTable.expenseItemId,
+          isDeleted: expenseAdjustmentsTable.isDeleted,
         })
-        .from(expenseRefundsTable)
-        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), eq(expenseRefundsTable.isDeleted, false))),
+        .from(expenseAdjustmentsTable)
+        .where(
+          and(eq(expenseAdjustmentsTable.expenseId, input.expenseId), eq(expenseAdjustmentsTable.isDeleted, false)),
+        ),
     ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    const items = rawItems.map(({ itemRefundId, ...item }) => ({
-      ...item,
-      expenseRefund: itemRefundId
-        ? rawRefunds.splice(
-            rawRefunds.findIndex(({ id }) => id == itemRefundId),
-            1,
-          )[0]
-        : null,
-    }));
-
-    return {
-      ...expense,
-      items,
-      refunds: rawRefunds,
-    };
+    return { ...expense, items, adjustments };
   });
 
 const saveExpenseProcedure = protectedProcedure
@@ -115,82 +106,58 @@ const saveExpenseProcedure = protectedProcedure
       version: z.int().optional().default(0),
       billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
       account: z
-        .object({ value: z.string(), label: z.string() })
+        .object({ value: z.string(), label: z.string().trim() })
         .nullish()
         .transform(v => v ?? null),
       category: z
-        .object({ value: z.string(), label: z.string() })
+        .object({ value: z.string(), label: z.string().trim() })
         .nullish()
         .transform(v => v ?? null),
       latitude: z.number().nullish(),
       longitude: z.number().nullish(),
       geoAccuracy: z.number().nullish(),
-      shopName: z.string().nullish(),
-      shopMall: z.string().nullish(),
-      additionalServiceChargePercent: z.number().nullable().default(null),
-      isGstExcluded: z.boolean().nullable().default(false),
+      shopName: z.string().trim().nullish(),
+      shopMall: z.string().trim().nullish(),
+      type: z.enum(['online', 'physical']).default('physical'),
+      specifiedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       items: z.array(
         z.object({
           id: z.string(),
-          name: z.string(),
+          name: z.string().trim(),
           priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
           quantity: z.int().min(0, { error: 'Must be non-negative value' }),
           isDeleted: z.boolean().optional().default(false),
-          expenseRefundId: z.string().optional(),
-          expenseRefund: z
-            .object({
-              id: z.string(),
-              source: z.string(),
-              expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
-              actualAmountCents: z
-                .int()
-                .min(0, { error: 'Must be non-negative value' })
-                .nullish()
-                .transform(v => v ?? null),
-              confirmedAt: z.iso
-                .datetime({ error: 'Invalid date time' })
-                .nullish()
-                .transform(val => (val ? parseISO(val) : null)),
-            })
-            .nullable(),
         }),
       ),
-      refunds: z
-        .array(
-          z.object({
-            id: z.string(),
-            source: z.string(),
-            expectedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
-            actualAmountCents: z
-              .int()
-              .min(0, { error: 'Must be non-negative value' })
-              .nullish()
-              .transform(v => v ?? null),
-            confirmedAt: z.iso
-              .datetime({ error: 'Invalid date time' })
-              .nullish()
-              .transform(val => (val ? parseISO(val) : null)),
-            isDeleted: z.boolean().default(false).optional(),
-            expenseItemId: z
-              .string()
-              .nullish()
-              .transform(v => v ?? null),
-          }),
-        )
-        .default([]),
+      adjustments: z.array(
+        z.object({
+          id: z.string(),
+          name: z.string().trim(),
+          amountCents: z.int().default(0),
+          rateBps: z
+            .int()
+            .nullish()
+            .transform(v => v ?? undefined),
+          expenseItemId: z
+            .string()
+            .nullish()
+            .transform(v => v ?? undefined),
+          isDeleted: z.boolean().optional().default(false),
+        }),
+      ),
     }),
   )
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
 
     const existingSearchableSet = new Set<string>();
+    const existingItemIds = new Set<string>();
+    const existingAdjustmentIds = new Set<string>();
     if (input.expenseId !== 'create') {
-      const [existing] = await db.batch([
-        db.query.expensesTable.findFirst({
-          where: { id: input.expenseId, userId },
-          columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
-        }),
-      ]);
+      const existing = await db.query.expensesTable.findFirst({
+        where: { id: input.expenseId, userId },
+        columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
+      });
 
       if (!existing) {
         throw new TRPCError({ code: 'FORBIDDEN' });
@@ -208,75 +175,100 @@ const saveExpenseProcedure = protectedProcedure
         existingSearchableSet.add(existing.shopName);
       }
 
-      const otherExistingSearchables = await db
-        .select({ text: expenseItemsTable.name })
-        .from(expenseItemsTable)
-        .where(eq(expenseItemsTable.expenseId, input.expenseId))
-        .union(
-          db
-            .select({ text: expenseRefundsTable.source })
-            .from(expenseRefundsTable)
-            .where(eq(expenseRefundsTable.expenseId, input.expenseId)),
-        );
+      const [items, adjustments] = await db.batch([
+        db
+          .select({
+            text: expenseItemsTable.name,
+            sourceId: expenseItemsTable.id,
+          })
+          .from(expenseItemsTable)
+          .where(and(eq(expenseItemsTable.expenseId, input.expenseId), eq(expenseItemsTable.isDeleted, false))),
+        db
+          .select({
+            text: expenseAdjustmentsTable.name,
+            sourceId: expenseAdjustmentsTable.id,
+          })
+          .from(expenseAdjustmentsTable)
+          .where(
+            and(eq(expenseAdjustmentsTable.expenseId, input.expenseId), eq(expenseAdjustmentsTable.isDeleted, false)),
+          ),
+      ]);
 
-      for (const { text } of otherExistingSearchables) {
+      for (const { text, sourceId } of items) {
         existingSearchableSet.add(text);
+        existingItemIds.add(sourceId);
+      }
+
+      for (const { text, sourceId } of adjustments) {
+        existingSearchableSet.add(text);
+        existingAdjustmentIds.add(sourceId);
       }
     } else {
       input.expenseId = generateId();
     }
 
-    const searchables: { type: string; text: string; context?: string | null }[] = [];
-    if (
-      input.shopName &&
-      existingSearchableSet.has(input.shopName) &&
-      (!input.shopMall || existingSearchableSet.has(input.shopMall))
-    ) {
-      searchables.push({ type: 'shopName', text: input.shopName, context: input.shopMall });
+    const inputSearchables = new Set<string>();
+    const newSearchables: { text: string; context?: string | null; sourceId: string }[] = [];
+    let shopNameSearchable: (typeof newSearchables)[number] | undefined = undefined;
+
+    if (input.shopName) {
+      inputSearchables.add(input.shopName);
+      shopNameSearchable = {
+        text: input.shopName,
+        context: input.shopMall,
+        sourceId: input.expenseId,
+      };
+      if (!existingSearchableSet.has(input.shopName)) {
+        newSearchables.push(shopNameSearchable);
+        existingSearchableSet.add(input.shopName);
+      }
     }
 
-    if (input.shopMall && existingSearchableSet.has(input.shopMall)) {
-      searchables.push({ type: 'shopMall', text: input.shopMall });
+    if (input.shopMall) {
+      inputSearchables.add(input.shopMall);
+      if (!existingSearchableSet.has(input.shopMall)) {
+        shopNameSearchable && newSearchables.push(shopNameSearchable);
+        newSearchables.push({ text: input.shopMall, sourceId: input.expenseId });
+        existingSearchableSet.add(input.shopMall);
+      }
     }
 
-    const refunds: Omit<typeof expenseRefundsTable.$inferInsert, 'expenseId' | 'sequence'>[] = [...input.refunds];
-    const activeIds: string[] = [];
-
+    const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
+    const removedItemIds = new Set(existingItemIds);
     for (const item of input.items) {
-      if (item.id === 'create') {
-        item.id = generateId();
+      if (item.isDeleted) continue;
+      if (item.id === 'create') item.id = generateId();
+      removedItemIds.delete(item.id);
+      inputSearchables.add(item.name);
+      if (!existingSearchableSet.has(item.name)) {
+        newSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
+        existingSearchableSet.add(item.name);
       }
-      activeIds.push(item.id);
-      if (!existingSearchableSet.has(item.name) && (!input.shopName || !existingSearchableSet.has(input.shopName))) {
-        searchables.push({ type: 'itemName', text: item.name, context: input.shopName });
-      }
-      if (item.expenseRefund) {
-        if (item.expenseRefund.id === 'create') {
-          item.expenseRefund.id = generateId();
-        }
-        item.expenseRefundId = item.expenseRefund.id;
 
-        const { grossAmountCents } = calculateExpenseItem(item, input);
-
-        refunds.push({
-          ...item.expenseRefund,
-          expectedAmountCents: grossAmountCents,
-          expenseItemId: item.id,
-        });
-      }
+      itemsRecords.push({
+        ...item,
+        expenseId: input.expenseId,
+        sequence: itemsRecords.length,
+      });
     }
 
-    for (const refund of refunds) {
-      if (refund.id === 'create') {
-        refund.id = generateId();
+    const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+    const removedAdjustmentIds = new Set(existingAdjustmentIds);
+    for (const adj of input.adjustments) {
+      if (adj.isDeleted) continue;
+      if (adj.id === 'create') adj.id = generateId();
+      removedAdjustmentIds.delete(adj.id);
+      inputSearchables.add(adj.name);
+      if (!existingSearchableSet.has(adj.name)) {
+        newSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
+        existingSearchableSet.add(adj.name);
       }
-      activeIds.push(refund.id!);
-      if (!existingSearchableSet.has(refund.source)) {
-        searchables.push({ type: 'refundSource', text: refund.source });
-      }
-      if (refund.actualAmountCents && !refund.confirmedAt) {
-        refund.confirmedAt = new Date();
-      }
+
+      adjustmentsRecords.push({
+        ...adj,
+        expenseId: input.expenseId,
+        sequence: adjustmentsRecords.length,
+      });
     }
 
     const batchItems: BatchItem<'sqlite'>[] = [];
@@ -298,7 +290,7 @@ const saveExpenseProcedure = protectedProcedure
     const accountId = input.account?.value ?? null;
     const categoryId = input.category?.value ?? null;
 
-    const { amountCents } = calculateExpense(input);
+    const { netTotalCents } = calculateExpense(input);
     const [boxId] =
       input.latitude && input.longitude
         ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
@@ -309,11 +301,12 @@ const saveExpenseProcedure = protectedProcedure
         .insert(expensesTable)
         .values({
           id: input.expenseId,
-          amountCents,
+          amountCents: netTotalCents,
           billedAt: input.billedAt,
           userId: userId,
           accountId: accountId,
           categoryId: categoryId,
+          type: input.type,
           updatedBy: userId,
           latitude: input.latitude,
           longitude: input.longitude,
@@ -321,8 +314,7 @@ const saveExpenseProcedure = protectedProcedure
           boxId,
           shopName: input.shopName,
           shopMall: input.shopMall,
-          additionalServiceChargePercent: input.additionalServiceChargePercent,
-          isGstExcluded: input.isGstExcluded,
+          specifiedAmountCents: input.specifiedAmountCents,
         })
         .onConflictDoUpdate({
           target: expensesTable.id,
@@ -330,75 +322,123 @@ const saveExpenseProcedure = protectedProcedure
         }),
     );
 
-    batchItems.push(
-      db
-        .insert(expenseItemsTable)
-        .values(
-          input.items.map((item, idx) => ({
-            ...item,
-            sequence: idx,
-            expenseId: input.expenseId,
-          })),
-        )
-        .onConflictDoUpdate({
-          target: expenseItemsTable.id,
-          set: excludedAll(expenseItemsTable),
-        }),
-    );
-
-    batchItems.push(
-      db
-        .update(expenseItemsTable)
-        .set({ isDeleted: true })
-        .where(and(eq(expenseItemsTable.expenseId, input.expenseId), notInArray(expenseItemsTable.id, activeIds))),
-    );
-
-    if (refunds.length > 0) {
+    if (itemsRecords.length > 0) {
       batchItems.push(
         db
-          .insert(expenseRefundsTable)
-          .values(
-            refunds.map((refund, idx) => ({
-              ...refund,
-              sequence: idx,
-              expenseId: input.expenseId,
-            })),
-          )
+          .insert(expenseItemsTable)
+          .values(itemsRecords)
           .onConflictDoUpdate({
-            target: expenseRefundsTable.id,
-            set: excludedAll(expenseRefundsTable),
+            target: expenseItemsTable.id,
+            set: excludedAll(expenseItemsTable),
           }),
       );
     }
 
-    batchItems.push(
-      db
-        .update(expenseRefundsTable)
-        .set({ isDeleted: true })
-        .where(and(eq(expenseRefundsTable.expenseId, input.expenseId), notInArray(expenseRefundsTable.id, activeIds))),
-    );
+    if (removedItemIds.size > 0) {
+      batchItems.push(
+        db
+          .update(expenseItemsTable)
+          .set({ isDeleted: true })
+          .where(
+            and(
+              eq(expenseItemsTable.expenseId, input.expenseId),
+              inArray(expenseItemsTable.id, Array.from(removedItemIds)),
+            ),
+          ),
+      );
+    }
 
-    if (searchables.length) {
-      const records = searchables.flatMap(({ text, type, context }) =>
-        getTrigrams(text).map(chunk => ({ userId, chunk, text, type, context: context ?? '' })),
+    if (adjustmentsRecords.length > 0) {
+      batchItems.push(
+        db
+          .insert(expenseAdjustmentsTable)
+          .values(adjustmentsRecords)
+          .onConflictDoUpdate({
+            target: expenseAdjustmentsTable.id,
+            set: excludedAll(expenseAdjustmentsTable),
+          }),
+      );
+    }
+
+    if (removedAdjustmentIds.size > 0) {
+      batchItems.push(
+        db
+          .update(expenseAdjustmentsTable)
+          .set({ isDeleted: true })
+          .where(
+            and(
+              eq(expenseAdjustmentsTable.expenseId, input.expenseId),
+              inArray(expenseAdjustmentsTable.id, Array.from(removedAdjustmentIds)),
+            ),
+          ),
+      );
+    }
+
+    const searchableHashes = await getTextsHashes(userId, existingSearchableSet.keys());
+    const removedSearchables = existingSearchableSet.difference(inputSearchables);
+    if (removedSearchables.size > 0) {
+      const removedHashes = removedSearchables
+        .values()
+        .map(text => searchableHashes.get(text)!)
+        .toArray();
+
+      batchItems.push(
+        db
+          .delete(expenseTextsTable)
+          .where(
+            and(inArray(expenseTextsTable.textHash, removedHashes), eq(expenseTextsTable.expenseId, input.expenseId)),
+          ),
+      );
+    }
+
+    if (newSearchables.some(({ text }) => !blacklistSearchableText.has(text))) {
+      const textHashesValues = sql.join(
+        newSearchables.map(({ text }, i) =>
+          i === 0
+            ? sql`SELECT ${searchableHashes.get(text)!} AS hash`
+            : sql`UNION ALL SELECT ${searchableHashes.get(text)!}`,
+        ),
+        sql` `,
       );
 
-      // each record have 6 params, cloudflare D1 max params is 100.
-      // 100 / 6 = 16.666, keep it safe, insert records in batches of 15 to stay under D1's 100-parameter limit
-      const groupSize = 15;
-      const groupsCount = Math.ceil(records.length / groupSize);
-      for (let i = 0; i < groupsCount; i++) {
-        const values = records.slice(i * groupSize, (i + 1) * groupSize);
-        batchItems.push(
-          db
-            .insert(searchTable)
-            .values(values)
-            .onConflictDoUpdate({
-              target: [searchTable.chunk, searchTable.text, searchTable.type, searchTable.userId, searchTable.context],
-              set: { usageCount: sql`${searchTable.usageCount} + 1` },
-            }),
-        );
+      const missingRecords = await db.all<{ hash: number }>(
+        sql`SELECT q.hash FROM (${textHashesValues}) AS q
+          LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
+          WHERE ${textsTable.textHash} IS NULL`,
+      );
+      const missingTextHashSet = new Set(missingRecords.map(({ hash }) => hash));
+
+      const texts: (typeof textsTable.$inferInsert)[] = [];
+      const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
+      const expenseTexts: (typeof expenseTextsTable.$inferInsert)[] = [];
+      const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
+
+      for (const { text, sourceId, context } of newSearchables) {
+        if (!blacklistSearchableText.has(text)) continue;
+        const textHash = searchableHashes.get(text)!;
+        if (missingTextHashSet.has(textHash)) {
+          texts.push({ textHash, userId, text });
+          textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
+        }
+        if (context) {
+          const ctxTextHash = searchableHashes.get(context);
+          if (ctxTextHash) {
+            textsContexts.push({ textHash, ctxTextHash });
+          }
+        }
+        expenseTexts.push({ textHash, sourceId, expenseId: input.expenseId });
       }
+
+      batchItems.push(
+        ...splitArray(texts, 30).map(values => db.insert(textsTable).values(values).onConflictDoNothing()),
+        ...splitArray(textChunks, 30).map(values => db.insert(textChunksTable).values(values).onConflictDoNothing()),
+        ...splitArray(textsContexts, 30).map(values =>
+          db.insert(textsContextsTable).values(values).onConflictDoNothing(),
+        ),
+        ...splitArray(expenseTexts, 30).map(values =>
+          db.insert(expenseTextsTable).values(values).onConflictDoNothing(),
+        ),
+      );
     }
 
     // @ts-ignore
@@ -421,12 +461,13 @@ const listExpenseProcedure = protectedProcedure
     ];
 
     const itemCount = count(expenseItemsTable.id);
-    const itemOne = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
-    const itemTwo = max(caseWhen(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
+    const itemOne = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
+    const itemTwo = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
     const expenses = await db
       .select({
         id: expensesTable.id,
+        itemCount,
         description: caseWhen(eq(itemCount, sql.raw('1')), itemOne)
           .whenThen(eq(itemCount, sql.raw('2')), concat(itemOne, sql.raw("' and '"), itemTwo))
           .else(concat(itemOne, sql.raw("' and '"), sql`(${itemCount} - 1)`, sql.raw("' items'"))),
@@ -463,7 +504,7 @@ const listExpenseProcedure = protectedProcedure
 const getSuggestionsProcedure = protectedProcedure
   .input(
     z.object({
-      type: z.enum(['shopName', 'shopMall', 'itemName', 'refundSource']),
+      scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
       search: z.string(),
       context: z.string().optional(),
     }),
@@ -478,142 +519,173 @@ const getSuggestionsProcedure = protectedProcedure
       return { suggestions: [] as string[] };
     }
 
-    const trigrams = search && getTrigrams(search);
+    const where: SQL[] = [];
+    let having: SQL | undefined;
 
-    const condition = and(
-      eq(searchTable.userId, userId),
-      eq(searchTable.type, input.type),
-      trigrams ? inArray(searchTable.chunk, trigrams) : undefined,
-      context ? eq(searchTable.context, context) : undefined,
-    );
+    const orderBy: SQL[] = [desc(count(expenseTextsTable.sourceId))]; // By frequency
+    const hashQuery = db
+      .select({
+        textHash: expenseTextsTable.textHash.as('text_hash'),
+        sourceId: min(expenseTextsTable.sourceId).as('source_id'),
+      })
+      .from(expenseTextsTable);
 
-    const descLikelyness = desc(max(caseWhen(like(searchTable.text, search + '%'), sql.raw('1')).else(sql.raw('0'))));
-    const descMatchCount = desc(max(searchTable.usageCount));
-    const descPopularity = desc(count(searchTable.chunk));
+    let joinedHashQuery: ReturnType<typeof hashQuery.innerJoin> | undefined;
 
-    let query = db.select({ value: searchTable.text }).from(searchTable).where(condition).groupBy(searchTable.text);
+    if (search) {
+      // search by chunks
+      const trigrams = getTrigrams(search);
+      joinedHashQuery = hashQuery.innerJoin(textChunksTable, eq(expenseTextsTable.textHash, textChunksTable.textHash));
+      where.push(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams));
 
-    if (trigrams.length > 5) {
-      // @ts-expect-error query with having cant be assigned back to query
-      query = query.having(gte(searchTable.usageCount, trigrams.length - 5));
+      if (trigrams.length > 5) {
+        // If there is more than 5 chunks for searching, remove those with less matches
+        having = gte(count(textChunksTable.chunk), trigrams.length - 5);
+      }
+
+      if (!context) {
+        orderBy.unshift(desc(count(textChunksTable.chunk)));
+      }
     }
 
-    if (context && search) {
-      const hasMatchingContext = max(
-        caseWhen(eq(searchTable.context, context), sql.raw('0'))
-          .whenThen(isNull(searchTable.context), sql.raw('1'))
-          .else(sql.raw('2')),
-      );
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(hasMatchingContext, descLikelyness, descMatchCount, descPopularity);
-    } else if (search) {
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(descLikelyness, descMatchCount, descPopularity);
-    } else {
-      // @ts-expect-error query with orderBy cant be assigned back to query
-      query = query.orderBy(descMatchCount, descPopularity);
+    if (context) {
+      const contextHash = await getTextHash(userId, context);
+      if (search) {
+        // contextual sort, since it will be filtered by chunks
+        joinedHashQuery = hashQuery.leftJoin(
+          textsContextsTable,
+          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
+        );
+        const hasMatchingContext = caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
+        const relevance = sql`${max(hasMatchingContext)} + ${count(textChunksTable.chunk)}`;
+        orderBy.unshift(desc(relevance));
+      } else {
+        // contextual search, filtering by context
+        joinedHashQuery = hashQuery.innerJoin(
+          textsContextsTable,
+          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
+        );
+        where.push(eq(textsContextsTable.ctxTextHash, contextHash));
+      }
     }
 
-    const suggestions = await query;
-    return { suggestions: suggestions.map(({ value }) => value) };
+    if (!joinedHashQuery) {
+      return { suggestions: [] };
+    }
+
+    const groupedHashQuery = hashQuery.where(and(...where)).groupBy(expenseTextsTable.textHash);
+    const topHashesSubquery = (having ? groupedHashQuery.having(having) : groupedHashQuery)
+      .orderBy(...orderBy)
+      .limit(15)
+      .as('top_hashes');
+
+    let textColumn: AnySQLiteColumn<{ data: string }>;
+    let sourceTable: typeof expensesTable | typeof expenseItemsTable | typeof expenseAdjustmentsTable;
+    switch (input.scope) {
+      case 'shopName':
+        textColumn = expensesTable.shopName;
+        sourceTable = expensesTable;
+        break;
+      case 'shopMall':
+        textColumn = expensesTable.shopMall;
+        sourceTable = expensesTable;
+        break;
+      case 'itemName':
+        textColumn = expenseItemsTable.name;
+        sourceTable = expenseItemsTable;
+        break;
+      case 'adjName':
+        textColumn = expenseAdjustmentsTable.name;
+        sourceTable = expenseAdjustmentsTable;
+        break;
+    }
+
+    const result = await db
+      .select({ text: textColumn })
+      .from(topHashesSubquery)
+      .innerJoin(sourceTable, eq(topHashesSubquery.sourceId, sourceTable.id))
+      .where(isNotNull(textColumn));
+
+    return { suggestions: result.map(({ text }) => text!) };
   });
 
-const inferShopDetailsProcedure = protectedProcedure
-  .input(
-    z.object({
-      latitude: z.number().nullish(),
-      longitude: z.number().nullish(),
-
-      shopName: z.string().nullish(),
-
-      itemNames: z.array(z.string()).optional(),
-    }),
-  )
+const suggestShopByLocationProcedure = protectedProcedure
+  .input(z.object({ latitude: z.number(), longitude: z.number() }))
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
+    const queryBoxIds = getLocationBoxId(input);
+    const data = await db
+      .select({
+        shopName: sql<string>`${expensesTable.shopName}`,
+        shopMalls: jsonGroupArray(expensesTable.shopMall, { distinct: true }),
+      })
+      .from(expensesTable)
+      .where(
+        and(
+          isNotNull(expensesTable.shopName),
+          eq(expensesTable.userId, userId),
+          inArray(expensesTable.boxId, queryBoxIds),
+        ),
+      )
+      .groupBy(expensesTable.shopName);
 
-    const itemNames =
-      input.itemNames?.reduce((acc, name) => {
-        const trimmed = name.trim();
-        if (trimmed.length) acc.push(trimmed.toUpperCase());
-        return acc;
-      }, [] as string[]) ?? [];
+    return data;
+  });
 
-    // Infer shop / mall and shopdetails by coordinate
-    if (!input.shopName && input.latitude && input.longitude) {
-      const boxIds = getLocationBoxId({ latitude: input.latitude, longitude: input.longitude }, true);
+const getShopDetailProcedure = protectedProcedure
+  .input(z.object({ shopName: z.string() }))
+  .mutation(async ({ input, ctx }) => {
+    const { db, userId } = ctx;
+    const shopNameHash = await getTextHash(userId, input.shopName);
+    const expenseIdCte = db.$with('expense_id_cte').as(
+      db
+        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
+        .from(expenseTextsTable)
+        .where(eq(expenseTextsTable.textHash, shopNameHash)),
+    );
 
-      const nearbyShopsColumns = {
-        shopName: expensesTable.shopName,
-        shopMall: expensesTable.shopMall,
-        additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-        isGstExcluded: expensesTable.isGstExcluded,
-        categoryId: expensesTable.categoryId,
+    const data = await db
+      .with(expenseIdCte)
+      .selectDistinct({
         accountId: expensesTable.accountId,
-      } as const;
-      const nearbyShopsCondition = and(eq(expensesTable.userId, userId), inArray(expensesTable.boxId, boxIds));
+        categoryId: expensesTable.categoryId,
+        isGstExcluded: max(caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`)),
+        serviceChargeBps: max(
+          caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+        ),
+      })
+      .from(expenseIdCte)
+      .innerJoin(expensesTable, eq(expenseIdCte.expenseId, expensesTable.id))
+      .leftJoin(expenseAdjustmentsTable, eq(expenseIdCte.expenseId, expenseAdjustmentsTable.expenseId))
+      .groupBy(expenseAdjustmentsTable.expenseId);
 
-      const distance = sql<number>`min((${expensesTable.latitude} - ${input.latitude}) * (${expensesTable.latitude} - ${input.latitude})
-                    + (${expensesTable.longitude} - ${input.longitude}) * (${expensesTable.longitude} - ${input.longitude}))`;
-
-      const groupByColumns = [
-        nearbyShopsColumns.shopName,
-        nearbyShopsColumns.categoryId,
-        nearbyShopsColumns.accountId,
-      ] as const;
-
-      if (itemNames.length === 0) {
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      } else {
-        const hasMatchingItems = sql<number>`MIN(CASE WHEN ${inArray(expenseItemsTable.name, itemNames)} THEN 0 ELSE 1 END)`;
-        return await db
-          .select(nearbyShopsColumns)
-          .from(expensesTable)
-          .leftJoin(expenseItemsTable, eq(expensesTable.id, expenseItemsTable.expenseId))
-          .where(nearbyShopsCondition)
-          .groupBy(...groupByColumns)
-          .orderBy(hasMatchingItems, distance, desc(max(expensesTable.billedAt)))
-          .limit(5);
-      }
-    } else if (input.shopName) {
-      // Infer shop detail by shop name
-      return await db
-        .selectDistinct({
-          additionalServiceChargePercent: expensesTable.additionalServiceChargePercent,
-          isGstExcluded: expensesTable.isGstExcluded,
-          categoryId: expensesTable.categoryId,
-          accountId: expensesTable.accountId,
-        })
-        .from(expensesTable)
-        .where(and(eq(expensesTable.userId, userId), eq(expensesTable.shopName, input.shopName.trim().toUpperCase())))
-        .orderBy(desc(expensesTable.billedAt))
-        .limit(5);
-    }
-    throw new TRPCError({ code: 'BAD_REQUEST' });
+    return data;
   });
 
 const inferItemPricesProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
-  .mutation(({ input, ctx }) => {
+  .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
-    const itemName = input.itemName.trim().toUpperCase();
+
+    const texts = [input.itemName];
+    if (input.shopName) {
+      texts.push(input.shopName);
+    }
+
+    const hashes = await getTextsHashes(userId, texts);
+    const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
+    if (input.shopName) {
+      where.push(eq(textsContextsTable.ctxTextHash, hashes.get(input.shopName)!));
+    } else {
+      where.push(isNull(textsContextsTable.ctxTextHash));
+    }
     return db
       .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
-      .from(expenseItemsTable)
+      .from(expenseTextsTable)
+      .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .where(
-        and(
-          eq(expensesTable.userId, userId),
-          eq(expenseItemsTable.name, itemName),
-          input.shopName ? eq(expensesTable.shopName, input.shopName.trim().toUpperCase()) : undefined,
-        ),
-      )
+      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
+      .where(and(...where))
       .groupBy(expenseItemsTable.priceCents)
       .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
       .limit(1);
@@ -653,7 +725,8 @@ export const expenseProcedures = {
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
-  inferShopDetail: inferShopDetailsProcedure,
+  suggestShopByLocation: suggestShopByLocationProcedure,
+  getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
 };

@@ -1,12 +1,12 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../../../trpc';
+import { handleFormMutateAsync, queryClient, trpc } from '#client/trpc';
 import { startRegistration, type PublicKeyCredentialCreationOptionsJSON } from '@simplewebauthn/browser';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
-import { PageHeader } from '../../../../components/PageHeader';
+import { PageHeader } from '#components/PageHeader';
 import { CircleCheck, CircleX, Pencil, Trash } from 'lucide-react';
-import { monthDayFormat } from '../../../../utils';
+import { monthDayFormat } from '#client/utils';
 import { useRef } from 'react';
-import { useAppForm } from '../../../../components/Form';
+import { useAppForm } from '#components/Form';
 
 export const Route = createFileRoute('/_authenticated/settings/_elevated/passkey')({
   component: RouteComponent,

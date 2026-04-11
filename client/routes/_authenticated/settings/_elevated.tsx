@@ -1,7 +1,7 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
 import { Outlet } from '@tanstack/react-router';
-import { queryClient } from '../../../trpc';
-import { whoamiQueryOptions } from '../../../queryOptions';
+import { queryClient } from '#client/trpc';
+import { whoamiQueryOptions } from '#client/queryOptions';
 
 export const Route = createFileRoute('/_authenticated/settings/_elevated')({
   component: Outlet,

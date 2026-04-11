@@ -1,11 +1,11 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { invalidateAndRedirectBackToList, useExpenseForm } from './-expense.common';
+import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useStore } from '@tanstack/react-form';
-import { currencyNumberFormat, dateFormat } from '../../../../utils';
-import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
+import { currencyNumberFormat, dateFormat } from '#client/utils';
 import { useMutation } from '@tanstack/react-query';
 import { useRef } from 'react';
-import { trpc } from '../../../../trpc';
+import { trpc } from '#client/trpc';
+import { BillTotal } from './-common/BillTotal';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -20,12 +20,11 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
-  const { ui, geolocation, items, account, category, isDeleted, additionalServiceChargePercent } = expense;
-  const { baseAmount, grossAmount, expectedRefundSum, amount, gst, serviceCharge } = ui.calculateResult;
+  const { geolocation, items, account, category, isDeleted, billedAt } = expense;
 
   return (
     <div className='mx-auto grid max-w-md auto-cols-min auto-rows-auto grid-cols-1 gap-1 p-4'>
-      <div className='border-base-300 col-span-2 grid grid-cols-2 space-y-1 border-b pb-2'>
+      <div className='col-span-2 grid grid-cols-2 space-y-1 pb-2'>
         <h1 className='col-span-2 text-lg font-bold'>
           {geolocation ? (
             <Link
@@ -45,11 +44,14 @@ function RouteComponent() {
         <p className='text-sm opacity-60'>Category: {category?.label ?? 'Unspecified'}</p>
         <p className='text-sm opacity-60'>Account: {account?.label ?? 'Unspecified'}</p>
       </div>
-      <span>Items</span>
-      <span>Amount</span>
-
+      {items.length > 0 && (
+        <>
+          <div className='border-base-300 col-span-2 border-b' />
+          <span>Items</span>
+          <span>Amount</span>
+        </>
+      )}
       {items.map(item => {
-        const { grossAmount, amount, minRefundCents, grossAmountCents } = calculateExpenseItem(item, expense);
         return (
           <div
             key={item.id}
@@ -58,65 +60,19 @@ function RouteComponent() {
             <span className='font-medium'>
               {item.name} ({formatCents(item.priceCents)}) × {item.quantity}
             </span>
-            <span className={amount === 0 ? 'line-through' : ''}>{currencyNumberFormat.format(grossAmount)}</span>
-            {item.expenseRefund && (
-              <>
-                <span className='text-secondary ml-2 text-sm'>
-                  {(item.expenseRefund.actualAmountCents == null
-                    ? 'Pending refund '
-                    : minRefundCents < grossAmountCents
-                      ? 'Partially refunded '
-                      : 'Fully refunded ') + `(${item.expenseRefund.source})`}
-                </span>
-                {item.expenseRefund.actualAmountCents && (
-                  <span className='text-secondary text-sm'>-{formatCents(item.expenseRefund.actualAmountCents)}</span>
-                )}
-              </>
-            )}
           </div>
         );
       })}
 
-      <div className='border-t-base-content/20 col-span-2 grid grid-cols-subgrid border-t pt-4 *:even:text-right'>
-        {baseAmount < grossAmount && (
-          <>
-            <span>Subtotal:</span>
-            <span>{currencyNumberFormat.format(baseAmount)}</span>
-          </>
-        )}
-        {serviceCharge > 0 && (
-          <>
-            <span>Service charge ({additionalServiceChargePercent}%):</span>
-            <span>{currencyNumberFormat.format(serviceCharge)}</span>
-          </>
-        )}
-        {gst > 0 && (
-          <>
-            <span>Excl GST (9%):</span>
-            <span>{currencyNumberFormat.format(gst)}</span>
-          </>
-        )}
-      </div>
-      <div className='col-span-2 grid grid-cols-subgrid text-xl *:odd:font-bold *:even:text-right'>
-        <span>Gross amount:</span>
-        <span>{currencyNumberFormat.format(grossAmount)}</span>
-        {expectedRefundSum > 0 && (
-          <>
-            <span>Expected total:</span>
-            <span>{currencyNumberFormat.format(grossAmount - expectedRefundSum)}</span>
-          </>
-        )}
-        <span>Total paid:</span>
-        <span>{currencyNumberFormat.format(amount)}</span>
-      </div>
+      <BillTotal className='col-span-2' />
 
-      <ActionSection isDeleted={isDeleted} />
+      <ActionSection isDeleted={isDeleted} billedAt={billedAt} />
     </div>
   );
 }
 
-function ActionSection(props: { isDeleted: boolean }) {
-  const { isDeleted } = props;
+function ActionSection(props: { isDeleted: boolean; billedAt: Date }) {
+  const { isDeleted, billedAt } = props;
   const confirmModalRef = useRef<HTMLDialogElement>(null);
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -129,7 +85,7 @@ function ActionSection(props: { isDeleted: boolean }) {
           expenseId,
           navigate,
           optionsCreated: false,
-          billedAt: form.getFieldValue('billedAt'),
+          billedAt,
         });
       },
     }),
@@ -164,6 +120,14 @@ function ActionSection(props: { isDeleted: boolean }) {
           Duplicate
         </button>
       </div>
+
+      <Link
+        to='/expenses'
+        className='btn col-span-2 mt-2 w-full'
+        search={{ month: billedAt.getMonth(), year: billedAt.getFullYear() }}
+      >
+        Back
+      </Link>
       <dialog className='modal' ref={confirmModalRef}>
         <div className='modal-box'>
           <h3 className='text-lg font-bold'>Confirm {deleteOrRestore}?</h3>

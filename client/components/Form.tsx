@@ -2,7 +2,7 @@ import { createFormHook, createFormHookContexts } from '@tanstack/react-form';
 import clsx from 'clsx';
 import type { ClassValue } from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { twMerge } from '../twMerge';
+import { twMerge } from '#client/twMerge';
 import { FieldError } from './FieldError';
 import { ChevronDown, Clipboard, TriangleAlert } from 'lucide-react';
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
@@ -17,7 +17,7 @@ const NumericTransformers = {
   },
   percentage: {
     transform: v => Math.round(v * 100),
-    revert: v => Math.round(v) / 100,
+    revert: v => Math.round(v) / 100_00,
   },
 } satisfies Record<string, { transform: (v: number) => number; revert: (v: number) => number }>;
 
@@ -32,6 +32,7 @@ type NumericInputProps = {
   transformFor?: 'default' | 'formatOnly';
   numberFormat?: Intl.NumberFormat;
   additionalSuffix?: string;
+  hideError?: boolean;
 
   min?: number;
   max?: number;
@@ -52,6 +53,7 @@ function NumericInput(props: NumericInputProps) {
     transformFor = 'default',
     numberFormat,
     additionalSuffix,
+    hideError,
     ...inputProps
   } = props;
   const formatOptions = useMemo(() => numberFormat?.resolvedOptions(), [numberFormat]);
@@ -154,7 +156,7 @@ function NumericInput(props: NumericInputProps) {
     <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
       <span className={labelCn}>{label}</span>
       {inputEl}
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }
@@ -175,10 +177,11 @@ type TextInputProps = {
   transforms?: (keyof typeof TextTransformers)[];
   nullIfEmpty?: boolean;
   autoComplete?: string;
+  hideError?: boolean;
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete } = props;
+  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete, hideError } = props;
   const field = useFieldContext<string | null>();
 
   let transforms = props.transform
@@ -206,7 +209,7 @@ function TextInput(props: TextInputProps) {
           }
         }}
       />
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }
@@ -319,8 +322,8 @@ export type Option = {
   value: string;
 };
 
-type ComboBoxProps = {
-  label: string;
+export type ComboBoxProps = {
+  label?: string;
   options: (Option | string)[];
   maxMenuHeight?: number;
   containerCn?: string;
@@ -329,6 +332,8 @@ type ComboBoxProps = {
   suggestionMode?: boolean;
   readOnly?: boolean;
   triggerChangeOnFocus?: boolean;
+  hideError?: boolean;
+  onSuggestionSelected?: (suggestion: string) => void;
 };
 
 function ComboBox({
@@ -341,6 +346,8 @@ function ComboBox({
   suggestionMode = false,
   readOnly = false,
   triggerChangeOnFocus = false,
+  hideError,
+  onSuggestionSelected,
 }: ComboBoxProps) {
   const [query, setQuery] = useState('');
   const field = useFieldContext<Option | string | undefined>();
@@ -369,7 +376,7 @@ function ComboBox({
 
   return (
     <label className={cn('floating-label mt-0', containerCn)}>
-      <span className={labelCn}>{label}</span>
+      {label && <span className={labelCn}>{label}</span>}
 
       <Combobox
         value={comboboxValue}
@@ -377,8 +384,12 @@ function ComboBox({
           if (!option) return;
           const opt = option as Option | string;
           if (suggestionMode) {
-            field.handleChange(typeof opt === 'string' ? opt : opt.label); // or .label
-            field.handleBlur();
+            const suggestion = typeof opt === 'string' ? opt : opt.label; // or .label
+            if (onSuggestionSelected) {
+              onSuggestionSelected(suggestion);
+            } else {
+              field.handleChange(suggestion);
+            }
           } else {
             field.handleChange(option); // store Option object
             setQuery(option.label);
@@ -437,7 +448,7 @@ function ComboBox({
         </div>
       </Combobox>
 
-      <FieldError field={field} />
+      {!hideError && <FieldError field={field} />}
     </label>
   );
 }
@@ -538,6 +549,31 @@ function SubmitButton(props: SubmitButtonProps) {
   );
 }
 
+type ResetButtonProps = {
+  label?: string;
+  buttonCn?: string;
+};
+
+function ResetButton(props: ResetButtonProps) {
+  const { label = 'Reset', buttonCn } = props;
+  const form = useFormContext();
+
+  return (
+    <form.Subscribe selector={state => [!state.isDirty]}>
+      {([isClean]) => (
+        <button
+          type='button'
+          className={cn('btn btn-primary btn-lg btn-block mt-8', buttonCn)}
+          disabled={isClean}
+          onClick={() => form.reset()}
+        >
+          {label}
+        </button>
+      )}
+    </form.Subscribe>
+  );
+}
+
 type StatusMessageProps = {
   takeOne?: boolean;
 };
@@ -587,6 +623,7 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
   fieldContext,
   formComponents: {
     SubmitButton,
+    ResetButton,
     StatusMessage,
   },
   fieldComponents: {

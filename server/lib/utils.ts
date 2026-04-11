@@ -1,20 +1,26 @@
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export const getTrigrams = (input: string) =>
-  input
+export function getTrigrams(input: string) {
+  const phrases = input
     .trim()
-    .split(/\s+/)
-    .flatMap(phrase =>
-      phrase.length < 3
-        ? phrase.toLowerCase()
-        : Array.from({ length: Math.min(phrase.length, 10) }).map((_, i) =>
-            phrase.slice(Math.max(i - 2, 0), i + 1).toLowerCase(),
-          ),
-    );
+    .toLowerCase()
+    .split(/[^a-zA-Z0-9'-]+/);
+  const chunks: string[] = [];
+  for (const phrase of phrases) {
+    if (!phrase) continue;
+    const numChunk = Math.min(phrase.length, 10);
+    for (let idx = 0; idx < numChunk; idx++) {
+      chunks.push(phrase.slice(Math.max(idx - 2, 0), idx + 1));
+    }
+  }
+
+  return chunks;
+}
 
 // Distance in deg for singapore
 export const GRID_SIZE = 0.002; // 222 meters
 export const BOUNDARY_THRESHOLD = 0.001; // 111 meters
+export const MAX_LON = 100_000;
 
 export function getLocationBoxId({ latitude, longitude }: { latitude: number; longitude: number }, withNearby = false) {
   const latIndex = Math.floor(latitude / GRID_SIZE);
@@ -34,10 +40,89 @@ export function getLocationBoxId({ latitude, longitude }: { latitude: number; lo
     else if (longInBox > GRID_SIZE - BOUNDARY_THRESHOLD) lonOffsets.push(1);
   }
 
-  return latOffsets.flatMap(oLat =>
-    lonOffsets.map(oLon => {
-      // Bit-Shift: Move Latitude 16 bits left, place Longitude in the lower 16 bits
-      return ((latIndex + oLat) << 16) | (lonIndex + oLon);
+  return latOffsets.flatMap(oLat => lonOffsets.map(oLon => (latIndex + oLat) * MAX_LON + (lonIndex + oLon)));
+}
+
+const hashTextInternal = async (userId: string, text: string, encoder: TextEncoder) => {
+  const data = encoder.encode(userId + text);
+  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+  const bytes = new Uint8Array(hashBuffer);
+
+  let n = 0;
+  for (let i = 0; i < 6; i++) n = n * 256 + bytes[i];
+  n = n * 32 + (bytes[6] >> 3);
+  return n;
+};
+
+type UserIdTextPair = { userId: string; text: string };
+export const getMultiUserTextsHashes = async (pairs: IteratorObject<UserIdTextPair> | UserIdTextPair[]) => {
+  const encoder = new TextEncoder();
+  const resultPromiseMap = new Map<string, Map<string, Promise<number>>>();
+  await Promise.all(
+    pairs.map(({ userId, text }) => {
+      let userMap = resultPromiseMap.get(userId);
+      if (!userMap || !userMap.has(text)) {
+        if (!userMap) {
+          userMap = new Map<string, Promise<number>>();
+          resultPromiseMap.set(userId, userMap);
+        }
+        userMap.set(text, hashTextInternal(userId, text, encoder));
+      }
     }),
   );
-}
+
+  const finalMap = new Map<string, Map<string, number>>();
+  for (const [userId, texts] of resultPromiseMap) {
+    const resolvedTexts = new Map<string, number>();
+    for (const [text, promise] of texts) {
+      resolvedTexts.set(text, await promise);
+    }
+    finalMap.set(userId, resolvedTexts);
+  }
+
+  return Object.assign(finalMap, {
+    getHash(this: typeof finalMap, userId: string, text: string) {
+      return this.get(userId)?.get(text);
+    },
+    getAllHash(this: typeof finalMap) {
+      return this.values().flatMap(m => m.values());
+    },
+  });
+};
+
+export const getTextsHashes = async (userId: string, texts: IteratorObject<string> | string[]) => {
+  const encoder = new TextEncoder();
+  const resultMap = new Map<string, number>();
+  await Promise.all(
+    texts.map(async text => {
+      const hash = await hashTextInternal(userId, text, encoder);
+      resultMap.set(text, hash);
+    }),
+  );
+  return resultMap;
+};
+
+export const getTextHash = (userId: string, text: string) => {
+  const encoder = new TextEncoder();
+  return hashTextInternal(userId, text, encoder);
+};
+
+export const splitArray = <T>(items: T[], maxSize: number): T[][] => {
+  if (maxSize <= 0) return [];
+
+  const result: T[][] = [];
+  const len = items.length;
+
+  let i = 0;
+  while (i < len) {
+    const end = Math.min(i + maxSize, len);
+    const chunk: T[] = new Array(end - i);
+    for (let j = 0; j < end - i; j++) {
+      chunk[j] = items[i + j];
+    }
+    result.push(chunk);
+    i = end;
+  }
+
+  return result;
+};

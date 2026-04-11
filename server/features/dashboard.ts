@@ -38,6 +38,7 @@ const getInsightsProcedure = protectedProcedure.query(async ({ ctx }) => {
   const counts = [0, 0, 0];
 
   for (const { rangeId, expensesSum, expensesCount } of segmentResult) {
+    if (!rangeId) continue;
     sums[rangeId] = expensesSum;
     counts[rangeId] = expensesCount;
   }

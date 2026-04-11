@@ -1,11 +1,11 @@
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { Link, linkOptions, Outlet } from '@tanstack/react-router';
 import { ChartLine, Plus, ScrollText, Settings } from 'lucide-react';
-import { queryClient } from '../trpc';
-import { whoamiQueryOptions } from '../queryOptions';
+import { queryClient } from '#client/trpc';
+import { whoamiQueryOptions } from '#client/queryOptions';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
 import { useEffect } from 'react';
-import { PageHeader } from '../components/PageHeader';
+import { PageHeader } from '#components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
