@@ -102,7 +102,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
 
         const adjAmount = Math.round(adjCentBps / 100_00);
         const adjRateBps = Math.round((adjAmount / itemResult.netTotalCents) * 100_00);
-        itemsAdjustmentResults[expenseItemId] = { amountCents: adjCentBps, rateBps: adjRateBps };
+        itemsAdjustmentResults[expenseItemId] = { amountCents: adjAmount, rateBps: adjRateBps };
 
         itemResult.netTotalCents += adjAmount;
       }
@@ -113,7 +113,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
 
         const adjAmount = Math.round(adjCentBps / 100_00);
         const adjRateBps = Math.round((adjAmount / expenseNetTotal) * 100_00);
-        itemsAdjustmentResults[itemId] = { amountCents: adjCentBps, rateBps: adjRateBps };
+        itemsAdjustmentResults[itemId] = { amountCents: adjAmount, rateBps: adjRateBps };
         itemResult.netTotalCents += adjAmount;
       }
     }
