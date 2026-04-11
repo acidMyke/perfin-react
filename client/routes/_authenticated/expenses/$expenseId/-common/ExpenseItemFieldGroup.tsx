@@ -6,12 +6,22 @@ import { useStore } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '#client/trpc';
+import { useState } from 'react';
 
 const ItemResult = ({ itemId }: { itemId: string }) => {
   const form = useExpenseForm();
   return (
     <form.Subscribe selector={state => [state.values.ui.calculateResult.itemResults[itemId]]}>
-      {([itemResult]) => <p className='col-span-2 text-lg'>{formatCents(itemResult?.grossTotalCents ?? 0)}</p>}
+      {([itemResult]) => {
+        const { grossTotalCents = 0, netTotalCents = 0 } = itemResult ?? {};
+        const [showNet, setShowNet] = useState(true);
+        return (
+          <button className='btn btn-ghost col-span-2' onClick={() => setShowNet(v => !v)}>
+            {showNet ? 'N: ' : 'G: '}
+            {formatCents(showNet ? netTotalCents : grossTotalCents)}
+          </button>
+        );
+      }}
     </form.Subscribe>
   );
 };
