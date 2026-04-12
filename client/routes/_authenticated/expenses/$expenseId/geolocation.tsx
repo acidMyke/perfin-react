@@ -1,6 +1,6 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { setCurrentLocation, useExpenseForm } from './-expense.common';
-import { coordinateFormat, SG_CENTER } from '../../../../utils';
+import { createFileRoute, Link } from '@tanstack/react-router';
+import { setCurrentLocation, useExpenseForm } from './-common';
+import { coordinateFormat, SG_CENTER } from '#client/utils';
 import { APIProvider, ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/geolocation')({
@@ -17,6 +17,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/geoloc
 
 function RouteComponent() {
   const { readOnly = false } = Route.useSearch();
+  const { expenseId } = Route.useParams();
   const form = useExpenseForm();
 
   return (
@@ -36,7 +37,12 @@ function RouteComponent() {
           <button className='btn-primary btn' onClick={() => setCurrentLocation(form)}>
             Use my location
           </button>
-          <button className='btn-warning btn' onClick={() => form.setFieldValue('geolocation', undefined)}>
+          <button
+            className='btn-warning btn'
+            onClick={() =>
+              form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false })
+            }
+          >
             Clear
           </button>
         </>
@@ -44,22 +50,29 @@ function RouteComponent() {
 
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
         <Map
-          className='col-span-2 mt-4 h-100'
+          className='col-span-2 my-4 h-100'
           gestureHandling='greedy'
           disableDefaultUI={false}
           zoomControl
           mapTypeControl={false}
           fullscreenControl={false}
           streetViewControl={false}
+          colorScheme='DARK'
+          reuseMaps
           defaultCenter={{
             lat: form.getFieldValue('geolocation.latitude') ?? SG_CENTER.lat,
             lng: form.getFieldValue('geolocation.longitude') ?? SG_CENTER.lng,
           }}
-          defaultZoom={14}
+          defaultZoom={16}
           onClick={e => {
             const latLng = e.detail.latLng;
             if (!latLng || readOnly) return;
-            form.setFieldValue('geolocation', { accuracy: 0, latitude: latLng.lat, longitude: latLng.lng });
+            form.setFieldValue('geolocation', {
+              accuracy: null,
+              latitude: latLng.lat,
+              longitude: latLng.lng,
+              isError: false,
+            });
           }}
           options={{
             zoomControlOptions: {
@@ -72,16 +85,17 @@ function RouteComponent() {
               field.state.value && (
                 <Marker
                   position={{ lat: field.state.value.latitude, lng: field.state.value.longitude }}
-                  draggable
+                  draggable={readOnly}
                   onDragEnd={e => {
                     const lat = e.latLng?.lat();
                     const lng = e.latLng?.lng();
                     if (!lat || !lng) return;
 
                     field.handleChange({
-                      accuracy: 0,
+                      accuracy: null,
                       latitude: lat,
                       longitude: lng,
+                      isError: false,
                     });
                   }}
                 />
@@ -90,6 +104,16 @@ function RouteComponent() {
           </form.AppField>
         </Map>
       </APIProvider>
+
+      {readOnly ? (
+        <Link className='btn col-span-full w-full' to='/expenses/$expenseId/view' params={{ expenseId }} replace>
+          Back
+        </Link>
+      ) : (
+        <Link className='btn col-span-full w-full' to='/expenses/$expenseId' params={{ expenseId }} replace>
+          Back
+        </Link>
+      )}
     </div>
   );
 }

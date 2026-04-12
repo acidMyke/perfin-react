@@ -1,8 +1,8 @@
 import { createFileRoute, notFound, redirect } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../../trpc';
+import { handleFormMutateAsync, queryClient, trpc } from '#client/trpc';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
-import { useAppForm } from '../../../components/Form';
-import { PageHeader } from '../../../components/PageHeader';
+import { useAppForm } from '#components/Form';
+import { PageHeader } from '#components/PageHeader';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/settings/manage-subjects')({

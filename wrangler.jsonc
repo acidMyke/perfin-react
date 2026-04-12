@@ -32,6 +32,13 @@
       "persist": true,
     },
   },
+  "workflows": [
+    {
+      "name": "perfin-v2-data-migrator",
+      "binding": "V2_MIGRATOR",
+      "class_name": "VersionTwoDataMigrator",
+    },
+  ],
   "vars": {
     "TOKEN_EXPIRE_DAYS": 30,
     "TOKEN_COOKIE_NAME": "token",
@@ -63,6 +70,13 @@
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
         "ALLOW_SIGNUP": "false",
       },
+      "workflows": [
+        {
+          "name": "perfin-v2-data-migrator",
+          "binding": "V2_MIGRATOR",
+          "class_name": "VersionTwoDataMigrator",
+        },
+      ],
     },
     "staging": {
       "name": "perfin-staging",
@@ -84,6 +98,13 @@
         "PASSKEYS_RP_ID": "perfin-staging.acidmyke.link",
         "ALLOW_SIGNUP": "true",
       },
+      "workflows": [
+        {
+          "name": "perfin-staging-v2-data-migrator",
+          "binding": "V2_MIGRATOR",
+          "class_name": "VersionTwoDataMigrator",
+        },
+      ],
     },
   },
 }

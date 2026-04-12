@@ -1,6 +1,17 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { sql } from 'drizzle-orm';
-import { sqliteTable, text, blob, integer, real, primaryKey, index, customType } from 'drizzle-orm/sqlite-core';
+import { isNotNull, sql } from 'drizzle-orm';
+import {
+  sqliteTable,
+  text,
+  blob,
+  integer,
+  real,
+  primaryKey,
+  index,
+  customType,
+  unique,
+  type ReferenceConfig,
+} from 'drizzle-orm/sqlite-core';
 import { nanoid } from 'nanoid';
 
 export const generateId = () => nanoid();
@@ -145,10 +156,12 @@ export const expensesTable = sqliteTable(
   {
     ...baseColumns(),
     amountCents: centsColumn(),
+    specifiedAmountCents: centsColumn(),
     billedAt: dateColumn(),
     userId: idColumn(),
     accountId: nullableIdColumn(),
     categoryId: nullableIdColumn(),
+    type: text({ enum: ['online', 'physical'] }).notNull(),
     updatedBy: idColumn(),
     latitude: real(),
     longitude: real(),
@@ -156,21 +169,18 @@ export const expensesTable = sqliteTable(
     boxId: integer(),
     shopName: citext(),
     shopMall: citext(),
+    /** @deprecated normalized to expenseAdjustmentsTable*/
     additionalServiceChargePercent: integer(),
+    /** @deprecated normalized to expenseAdjustmentsTable*/
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
   t => [
-    index('idx_expenses_user_billed').on(t.userId, t.billedAt, t.isDeleted),
-    index('idx_expenses_user_box_id_active')
-      .on(t.userId, t.boxId)
-      .where(sql`${t.isDeleted} = 0`),
-    index('idx_expenses_user_shopName_active')
-      .on(t.userId, t.billedAt, t.shopName)
-      .where(sql`${t.isDeleted} = 0`),
-    index('idx_expenses_user_shopMall_active')
-      .on(t.userId, t.billedAt, t.shopMall)
-      .where(sql`${t.isDeleted} = 0`),
+    index('idx_expenses_partial_user_box_shop')
+      .on(t.userId, t.boxId, t.shopName, t.shopMall)
+      .where(isNotNull(t.shopName)), // Used by getShopDetailByLocationProcedure
+    index('idx_expenses_id_account_category').on(t.id, t.accountId, t.categoryId),
+    index('idx_expenses_user_billedAt').on(t.userId, t.billedAt),
   ],
 );
 
@@ -183,13 +193,16 @@ export const expenseItemsTable = sqliteTable(
     quantity: integer().default(1).notNull(),
     priceCents: centsColumn(),
     expenseId: idColumn(),
+    /** @deprecated unused, will be deleted */
     categoryId: nullableIdColumn(),
+    /** @deprecated refund is deprecated */
     expenseRefundId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [index('idx_expense_items_expense_id').on(t.expenseId), index('idx_expense_items_name').on(t.name)],
+  t => [index('idx_expense_items_expense_id').on(t.expenseId)],
 );
 
+/** @deprecated use expenseAdjustmentsTable instead*/
 export const expenseRefundsTable = sqliteTable(
   'expense_refunds',
   {
@@ -211,6 +224,28 @@ export const expenseRefundsTable = sqliteTable(
   ],
 );
 
+export const expenseAdjustmentsTable = sqliteTable(
+  'expense_adjustments',
+  {
+    ...baseColumns(),
+    sequence: integer().notNull(),
+    name: citext().notNull(),
+    amountCents: integer('amount_cents').notNull(),
+    rateBps: integer('rate_bps'),
+    expenseId: idColumn(),
+    expenseItemId: nullableIdColumn(),
+    isDeleted: boolean().notNull().default(false),
+    isInferable: boolean().notNull().default(false),
+  },
+  t => [
+    index('idx_expense_adjustments_expense_id').on(t.expenseId),
+    index('idx_expense_adjustments_inferrable')
+      .on(t.expenseId, t.name, t.rateBps)
+      .where(sql`${t.isInferable} = 1`),
+  ],
+);
+
+/** @deprecated replaced by v2_search */
 export const searchTable = sqliteTable(
   'search',
   {
@@ -225,5 +260,65 @@ export const searchTable = sqliteTable(
     primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
     index('idx_search_chunk').on(t.userId, t.type, t.chunk),
     index('idx_search_context').on(t.userId, t.type, t.context),
+  ],
+);
+
+export const textsTable = sqliteTable(
+  'texts',
+  {
+    textHash: integer().primaryKey({ onConflict: 'ignore' }),
+    userId: idColumn(),
+    text: text().notNull(),
+  },
+  t => [unique('uq_texts_userId').on(t.userId, t.text)],
+);
+
+const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
+  integer()
+    .notNull()
+    .references(() => textsTable.textHash, { onDelete, onUpdate });
+
+export const textChunksTable = sqliteTable(
+  'texts_chunks',
+  {
+    userId: idColumn(),
+    /** Use getTrigrams() to create chunks for texts*/
+    chunk: text().notNull(),
+    /** Use getTextHash() to calculate this value */
+    textHash: textHashColumn(),
+  },
+  t => [
+    // textHash includes userId in hashing
+    primaryKey({ columns: [t.textHash, t.chunk] }),
+    // covering index to quickly lookup textHash with provided userId & chunk
+    index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
+  ],
+);
+
+export const textsContextsTable = sqliteTable(
+  'texts_contexts',
+  {
+    textHash: textHashColumn(),
+    ctxTextHash: textHashColumn(),
+  },
+  t => [
+    primaryKey({ columns: [t.textHash, t.ctxTextHash] }),
+    index('idx_texts_contexts_ctxTextHash_textHash').on(t.ctxTextHash, t.textHash),
+  ],
+);
+
+export const expenseTextsTable = sqliteTable(
+  'expenses_texts',
+  {
+    expenseId: idColumn(),
+    /** Use getTextHash() to calculate this value */
+    textHash: textHashColumn(),
+    /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
+    sourceId: idColumn(),
+  },
+  t => [
+    primaryKey({ columns: [t.textHash, t.sourceId] }),
+    index('idx_expenses_texts_sourceId').on(t.sourceId),
+    index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
   ],
 );

@@ -1,8 +1,8 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { handleFormMutateAsync, queryClient, trpc } from '../../trpc';
-import { whoamiQueryOptions } from '../../queryOptions';
+import { handleFormMutateAsync, queryClient, trpc } from '#client/trpc';
+import { whoamiQueryOptions } from '#client/queryOptions';
 import { useMutation } from '@tanstack/react-query';
-import { useAppForm } from '../../components/Form';
+import { useAppForm } from '#components/Form';
 import z from 'zod';
 import { ChevronRight } from 'lucide-react';
 

@@ -1,22 +1,28 @@
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import { queryClient, trpc } from '../../../../trpc';
+import { trpc } from '#client/trpc';
 import {
   calculateExpenseForm,
   createEditExpenseFormOptions,
-  defaultExpenseItem,
+  useItemCallbacks,
+  MAX_ITEMS_IN_MAIN,
+  useAdjustmentCallbacks,
   useExpenseForm,
-} from './-expense.common';
+  setCurrentLocation,
+} from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
-import { FieldError } from '../../../../components/FieldError';
-import { withForm } from '../../../../components/Form';
+import { FieldError } from '#components/FieldError';
+import { withForm } from '#components/Form';
 import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
-import { ItemDetailFieldGroup } from './-ExpenseItemFieldGroup';
-import { calculateExpenseItem } from '../../../../../server/lib/expenseHelper';
-import { currencyNumberFormat, percentageNumberFormat } from '../../../../utils';
-import { useCallback } from 'react';
+import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
+import { BillTotal } from './-common/BillTotal';
+import { currencyNumberFormat, formatCents } from '#client/utils';
+import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -24,6 +30,7 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
 
 function RouteComponent() {
   const form = useExpenseForm();
+  const { expenseId } = Route.useParams();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
 
@@ -33,7 +40,7 @@ function RouteComponent() {
       <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
-          <label htmlFor={field.name} className='floating-label col-span-8 mt-2'>
+          <label htmlFor={field.name} className='floating-label col-span-8 mt-4'>
             <span>Date</span>
             <input
               type='datetime-local'
@@ -63,25 +70,8 @@ function RouteComponent() {
       <form.AppField name='account'>
         {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
       </form.AppField>
-      <form.AppField name='ui.calculateResult'>
-        {field => {
-          const { grossAmount, expectedRefundSum, amount } = field.state.value;
-          return (
-            <div className='border-t-base-content/20 col-span-full mt-6 grid grid-cols-2 border-t pt-4 text-xl *:odd:font-bold *:even:text-right'>
-              <p>Gross amount:</p>
-              <p>{currencyNumberFormat.format(grossAmount)}</p>
-              {expectedRefundSum > 0 && (
-                <>
-                  <p>Expected total:</p>
-                  <p>{currencyNumberFormat.format(grossAmount - expectedRefundSum)}</p>
-                </>
-              )}
-              <p>Total paid:</p>
-              <p>{currencyNumberFormat.format(amount)}</p>
-            </div>
-          );
-        }}
-      </form.AppField>
+      <AdjustmentsDetailsSubForm form={form} />
+      <BillTotal className='col-span-8' />
       <form.StatusMessage />
       <form.SubmitButton
         buttonCn='col-span-full mb-4'
@@ -89,6 +79,21 @@ function RouteComponent() {
         doneLabel='Submitted'
         inProgressLabel='Submitting...'
       />
+      {expenseId === 'create' ? (
+        <Link className='btn col-span-4 w-full' to='/expenses'>
+          Cancel
+        </Link>
+      ) : (
+        <Link
+          className='btn col-span-4 w-full'
+          to='/expenses/$expenseId/view'
+          params={{ expenseId }}
+          onClick={() => form.reset()}
+        >
+          Cancel
+        </Link>
+      )}
+      <form.ResetButton buttonCn='col-span-4 mt-0 btn-md btn-warning' />
     </div>
   );
 }
@@ -96,83 +101,88 @@ function RouteComponent() {
 const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
-    const isItemsSubpage = useStore(form.store, state => state.values.ui.isItemsSubpage);
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
-    const onRemoveClick = useCallback(
-      (itemIndex: number, length: number) => {
-        if (length <= 3) {
-          form.setFieldValue('ui.isItemsSubpage', false);
-        }
-
-        form.removeFieldValue('items', itemIndex);
-      },
-      [form],
-    );
-    const onAddClick = useCallback(
-      (length: number) => {
-        form.pushFieldValue('items', defaultExpenseItem());
-        if (length >= 2) {
-          form.setFieldValue('ui.isItemsSubpage', true);
-
-          navigate({
-            to: '/expenses/$expenseId/items/$indexStr',
-            params: { expenseId, indexStr: length.toString() },
-          });
-        }
-      },
-      [form],
-    );
+    const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
+    const { createAdjustment } = useAdjustmentCallbacks(form);
 
     return (
       <form.Field name='items' mode='array'>
         {field =>
-          isItemsSubpage ? (
-            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 items-center gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
-              {field.state.value.map((item, itemIndex) => {
-                const { name, quantity, expenseRefund } = item;
-                const { grossAmount } = calculateExpenseItem(item, {
-                  additionalServiceChargePercent: form.getFieldValue('additionalServiceChargePercent'),
-                  isGstExcluded: form.getFieldValue('isGstExcluded'),
-                });
+          field.state.value.length == 0 ? (
+            <form.AppField name='specifiedAmountCents' listeners={{ onChange: () => calculateExpenseForm(form) }}>
+              {({ NumericInput }) => (
+                <>
+                  <button
+                    className='btn-soft btn-lg btn-primary btn col-span-4 mt-2 w-full justify-start'
+                    onClick={() => createItem(field.state.value.length)}
+                  >
+                    <Plus />
+                    Specify items
+                  </button>
+                  <NumericInput
+                    label='Total amount'
+                    transforms={['amountInCents']}
+                    numberFormat={currencyNumberFormat}
+                    containerCn='mt-2 col-span-4'
+                    inputCn='input-lg'
+                  />
+                </>
+              )}
+            </form.AppField>
+          ) : field.state.value.length > MAX_ITEMS_IN_MAIN ? (
+            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-auto grid-cols-1 items-center gap-3 overflow-y-scroll py-2 pr-2 pl-4'>
+              <form.Subscribe selector={state => state.values.ui.calculateResult.itemResults}>
+                {itemResults => {
+                  const [showNet, setShowNet] = useState(true);
 
-                return (
-                  <>
-                    <span className='col-start-1 w-full'>
-                      {name} {quantity > 1 && <span>x{quantity}</span>}
-                    </span>
+                  return (
+                    <>
+                      <span>Name</span>
+                      <button className='btn btn-ghost col-start-3' onClick={() => setShowNet(v => !v)}>
+                        {showNet ? 'Net' : 'Gross'}
+                      </button>
+                      <span className='col-start-4 col-end-5'>Actions</span>
+                      {field.state.value.map((item, itemIndex) => {
+                        const { id, name, quantity } = item;
+                        const { grossTotalCents = 0, netTotalCents = 0 } = itemResults[id] ?? {};
 
-                    {expenseRefund && (
-                      <div className='badge badge-sm badge-neutral col-start-2'>
-                        {expenseRefund.actualAmountCents !== 0 ? 'Refunded' : 'Pend refund'}
-                      </div>
-                    )}
+                        return (
+                          <>
+                            <span className='col-start-1 w-full'>{name}</span>
 
-                    <span className='col-start-3 self-center justify-self-end'>
-                      {currencyNumberFormat.format(grossAmount)}
-                    </span>
-                    <Link
-                      className='btn btn-sm btn-primary col-start-4'
-                      to='/expenses/$expenseId/items/$indexStr'
-                      params={{ expenseId, indexStr: itemIndex.toString() }}
-                    >
-                      Edit
-                    </Link>
+                            {quantity > 1 && <span>x{quantity}</span>}
 
-                    <button
-                      className='btn-link btn btn-sm col-start-5 p-0'
-                      onClick={() => onRemoveClick(itemIndex, field.state.value.length)}
-                    >
-                      <X />
-                    </button>
-                  </>
-                );
-              })}
+                            <span className='col-start-3 text-right'>
+                              {formatCents(showNet ? netTotalCents : grossTotalCents)}
+                            </span>
+
+                            <Link
+                              className='btn btn-sm btn-primary col-start-4'
+                              to='/expenses/$expenseId/items/$indexStr'
+                              params={{ expenseId, indexStr: itemIndex.toString() }}
+                            >
+                              Edit
+                            </Link>
+
+                            <button
+                              className='btn-link btn btn-sm col-start-5 p-0'
+                              onClick={() => removeItem(itemIndex, field.state.value.length)}
+                            >
+                              <X />
+                            </button>
+                          </>
+                        );
+                      })}
+                    </>
+                  );
+                }}
+              </form.Subscribe>
 
               <li key='Create' className='col-start-1 col-end-4'>
                 <button
                   className='btn-soft btn-primary btn w-full justify-start'
-                  onClick={() => onAddClick(field.state.value.length)}
+                  onClick={() => createItem(field.state.value.length)}
                 >
                   <Plus />
                   Add item
@@ -181,24 +191,24 @@ const ItemsDetailsSubForm = withForm({
             </ul>
           ) : (
             <ul className='col-span-full mt-4 flex max-h-96 flex-col gap-y-2 overflow-y-scroll py-2 pr-2 pl-4'>
-              {field.state.value.map((_, itemIndex) => {
+              {field.state.value.map(({ id }, itemIndex) => {
                 return (
                   <ItemDetailFieldGroup
-                    key={itemIndex}
+                    key={id}
                     form={form}
                     fields={`items[${itemIndex}]`}
-                    disableRemoveButton={field.state.value.length < 2}
-                    onRemoveClick={() => onRemoveClick(itemIndex, field.state.value.length)}
+                    onRemoveClick={() => removeItem(itemIndex, field.state.value.length)}
                     itemIndex={itemIndex}
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
+                    createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
                   />
                 );
               })}
               <li key='Create'>
                 <button
                   className='btn-soft btn-primary btn w-2/3 justify-start'
-                  onClick={() => onAddClick(field.state.value.length)}
+                  onClick={() => createItem(field.state.value.length)}
                 >
                   <Plus />
                   Add item
@@ -215,10 +225,35 @@ const ItemsDetailsSubForm = withForm({
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
+    const isCreate = useStore(form.store, state => state.values.ui.isCreate);
     const { expenseId } = Route.useParams();
-    const shopNameSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const shopMallSuggestionMutation = useMutation(trpc.expense.getSuggestions.mutationOptions());
-    const isCurrentLocationError = useStore(form.store, state => state.values.ui.isCurrentLocationError);
+
+    if (!isPhysical) {
+      return (
+        <>
+          <button
+            className='btn btn-link col-span-8'
+            onClick={() => {
+              form.setFieldValue('type', 'physical');
+              if (isCreate) setCurrentLocation(form);
+            }}
+          >
+            Convert to physical
+          </button>
+          <ExpenseSuggestableField
+            form={form}
+            fields={{ text: 'shopName' }}
+            scope='shopName'
+            getContext={() => form.getFieldValue('shopMall')}
+            label='Shop name'
+            containerCn='col-span-8 mt-2'
+            triggerChangeOnFocus
+            hideError
+          />
+        </>
+      );
+    }
 
     return (
       <>
@@ -226,115 +261,116 @@ const ShopDetailSubForm = withForm({
           {field => {
             const geolocation = field.state.value;
             return (
-              <>
-                <p className='col-span-6 mt-2 mb-4'>
-                  Coordinate:{' '}
-                  {geolocation
-                    ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
-                    : isCurrentLocationError
-                      ? 'Unable to retrieve location'
-                      : 'Unspecified'}
-                </p>
-                <Link
-                  className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
-                  to='/expenses/$expenseId/geolocation'
-                  params={{ expenseId }}
-                >
-                  View / Edit
-                </Link>
-              </>
+              <p className='col-span-5 mt-2 mb-4'>
+                Coordinate:{' '}
+                {geolocation.latitude && geolocation.longitude
+                  ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
+                  : geolocation.isError
+                    ? 'Unable to retrieve location'
+                    : 'Unspecified'}
+              </p>
             );
           }}
         </form.AppField>
-        <form.AppField
-          name='shopName'
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 2) {
-                shopNameSuggestionMutation.mutateAsync({
-                  type: 'shopName',
-                  search: value,
-                });
-              }
-            },
+        <button
+          className='btn btn-link btn-secondary'
+          onClick={() => {
+            form.setFieldValue('type', 'online');
+            form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false });
           }}
         >
-          {field => (
-            <field.ComboBox
-              suggestionMode
-              label='Shop name'
-              containerCn='col-span-4 mt-2'
-              options={shopNameSuggestionMutation.data?.suggestions ?? []}
-            />
-          )}
-        </form.AppField>
-        <form.AppField
-          name='shopMall'
-          validators={{
-            onChangeAsyncDebounceMs: 500,
-            onChangeAsync: ({ value, signal, fieldApi }) => {
-              if (fieldApi.form.state.isSubmitting) return;
-              signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-              if (value && value.length > 2) {
-                shopMallSuggestionMutation.mutateAsync({
-                  type: 'shopMall',
-                  search: value,
-                });
-              }
-            },
-          }}
+          Online
+        </button>
+        <Link
+          className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
+          to='/expenses/$expenseId/geolocation'
+          params={{ expenseId }}
         >
-          {field => (
-            <field.ComboBox
-              suggestionMode
-              label='Mall'
-              containerCn='col-span-4 mt-2'
-              options={shopMallSuggestionMutation.data?.suggestions ?? []}
-            />
-          )}
-        </form.AppField>
-        <form.AppField
-          name='additionalServiceChargePercent'
-          listeners={{
-            onChange: () => {
-              form.setFieldValue('isGstExcluded', true);
-              calculateExpenseForm(form);
-            },
-          }}
-        >
-          {field => (
-            <div className='col-span-full my-2 flex flex-row justify-between gap-4'>
-              <field.BooleanInput
-                labelCn='justify-between mr-8 w-78'
-                label='Service charge'
-                nullIfFalse
-                transformValue={v => (v === true ? 10 : v)}
-              />
-              <field.NumericInput
-                label={null}
-                containerCn='inline-block w-20'
-                inputCn='input-md'
-                disabled={field.state.value === null}
-                numberFormat={percentageNumberFormat}
-                transforms={['percentage']}
-                transformFor='formatOnly'
-              />
-            </div>
-          )}
-        </form.AppField>
-
-        <form.AppField name='isGstExcluded' listeners={{ onChange: () => calculateExpenseForm(form) }}>
-          {field => (
-            <field.BooleanInput
-              labelCn='justify-between col-span-full my-2 w-78'
-              label={`GST (${field.state.value ? 'Exclusive' : 'Inclusive'})`}
-            />
-          )}
-        </form.AppField>
+          View / Edit
+        </Link>
+        <ExpenseSuggestableField
+          form={form}
+          fields={{ text: 'shopName' }}
+          scope='shopName'
+          getContext={() => form.getFieldValue('shopMall')}
+          label='Shop name'
+          containerCn='col-span-4 mt-2'
+          triggerChangeOnFocus
+          hideError
+        />
+        <ExpenseSuggestableField
+          form={form}
+          fields={{ text: 'shopMall' }}
+          scope='shopMall'
+          label='Mall'
+          containerCn='col-span-4 mt-2'
+          triggerChangeOnFocus
+          hideError
+        />
       </>
+    );
+  },
+});
+
+const AdjustmentsDetailsSubForm = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const { removeAdjustment, createAdjustment, toggleAdjustmentType } = useAdjustmentCallbacks(form);
+    return (
+      <form.Field name='adjustments' mode='array'>
+        {field => {
+          let hasGst = false;
+          let hasServiceCharge = false;
+          return (
+            <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pl-2'>
+              {field.state.value.map(({ id, name }, adjIndex) => {
+                hasGst ||= name === GST_NAME;
+                hasServiceCharge ||= name === SERVICE_CHARGE_NAME;
+                return (
+                  <AdjustmentDetailFieldGroup
+                    key={id}
+                    form={form}
+                    adjIndex={adjIndex}
+                    fields={`adjustments[${adjIndex}]`}
+                    onRemoveClick={adjIndex => removeAdjustment(adjIndex)}
+                    getFormField={form.getFieldValue.bind(form)}
+                    onPricingChange={() => calculateExpenseForm(form)}
+                    toggleAdjustmentType={(adjIndex, itemId) => toggleAdjustmentType(adjIndex, itemId)}
+                    onSwapClick={adjIndex => {
+                      field.swapValues(adjIndex, adjIndex + (adjIndex == 0 ? 1 : -1));
+                      calculateExpenseForm(form);
+                    }}
+                  />
+                );
+              })}
+              <li key='add' className='flex w-full flex-row items-start gap-2'>
+                {!hasServiceCharge && (
+                  <button
+                    className='btn-soft btn-primary btn'
+                    onClick={() => createAdjustment({ special: SERVICE_CHARGE_NAME })}
+                  >
+                    <Plus />
+                    Service charge
+                  </button>
+                )}
+                {!hasGst && (
+                  <button
+                    className='btn-soft btn-secondary btn'
+                    onClick={() => createAdjustment({ special: GST_NAME })}
+                  >
+                    <Plus />
+                    GST
+                  </button>
+                )}
+                <button className='btn-soft btn-primary btn' onClick={() => createAdjustment()}>
+                  <Plus />
+                  Adjustment
+                </button>
+              </li>
+            </ul>
+          );
+        }}
+      </form.Field>
     );
   },
 });

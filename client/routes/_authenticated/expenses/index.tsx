@@ -1,15 +1,15 @@
 import { createFileRoute, Link, useNavigate, useRouter } from '@tanstack/react-router';
-import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '../../../trpc';
+import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
 import { ChevronRight, SearchX } from 'lucide-react';
-import { abbreviatedMonthValues } from '../../../constants';
-import { PageHeader } from '../../../components/PageHeader';
-import { currencyNumberFormat } from '../../../utils';
+import { abbreviatedMonthValues } from '#client/constants';
+import { PageHeader } from '#components/PageHeader';
+import { currencyNumberFormat } from '#client/utils';
 import { useMemo } from 'react';
 import { formOptions } from '@tanstack/react-form';
-import { useAppForm, type Option } from '../../../components/Form';
+import { useAppForm, type Option } from '#components/Form';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -45,7 +45,7 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
 
 function MonthSelector() {
   const router = useRouter();
-  const navigate = useNavigate({ from: '/expenses' });
+  const navigate = useNavigate({ from: '/expenses/' });
   const loaderDeps = Route.useLoaderDeps();
   const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
 
@@ -291,23 +291,27 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
                 key={expense.id}
                 to='/expenses/$expenseId/view'
                 params={{ expenseId: expense.id }}
-                className='bg-base-200/25 border-b-base-300 grid auto-cols-auto grid-flow-row auto-rows-auto data-[deleted=true]:line-through'
+                className='bg-base-200/25 border-b-base-300 grid grid-flow-row auto-rows-auto grid-cols-[min] data-[deleted=true]:line-through'
                 data-deleted={expense.isDeleted}
               >
-                <p className='col-span-2 overflow-visible text-2xl'>{expense.description}</p>
-                <p className='text-base-content/80 col-span-2 row-start-2 text-sm'>
-                  At: {expense.shopDetail ?? 'Unspecified'}
-                </p>
+                {!expense.itemCount ? (
+                  <p className='overflow-visible text-2xl'>{expense.shopDetail ?? 'Unspecified'}</p>
+                ) : (
+                  <>
+                    <p className='overflow-visible text-2xl'>{expense.description}</p>
+                    <p className='text-base-content/80 col-span-2 text-sm'>At: {expense.shopDetail ?? 'Unspecified'}</p>
+                  </>
+                )}
+                <ChevronRight className='col-start-2 row-start-1 self-start justify-self-end' size={40} />
 
-                <p className='text-base-content/80 col-span-2 row-start-3 text-sm'>
+                <p className='text-base-content/80 col-start-1 text-sm'>
                   Account: {expense.account?.name ?? 'Unspecified'}
                 </p>
-                <p className='text-base-content/80 col-span-2 row-start-4 text-sm'>
-                  Category: {expense.category?.name ?? 'Unspecified'}
-                </p>
-                <ChevronRight className='col-start-3 row-span-2 row-start-1 self-start justify-self-end' size={40} />
-                <p className='col-span-1 col-start-3 row-span-2 row-start-3 self-end pr-2 pb-2 text-right text-xl'>
+                <p className='col-start-2 row-span-2 self-end pr-2 pb-2 text-right text-xl'>
                   ${expense.amount.toFixed(2)}
+                </p>
+                <p className='text-base-content/80 col-start-1 text-sm'>
+                  Category: {expense.category?.name ?? 'Unspecified'}
                 </p>
               </Link>
             ))}
