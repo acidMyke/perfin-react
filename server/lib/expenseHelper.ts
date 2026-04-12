@@ -74,9 +74,14 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
 
     if (rateBps == null) {
       // Flat adjustment
-      const rateBasedOn = (expenseItemId ? itemResultsMap.get(expenseItemId)?.netTotalCents : null) ?? expenseNetTotal;
+      let rateBasedOn = expenseNetTotal;
+      const itemResult = expenseItemId && itemResultsMap.get(expenseItemId);
+      if (itemResult) rateBasedOn = itemResult.netTotalCents;
       const rateBps = Math.round((amountCents / rateBasedOn) * 100_00);
-      adjustmentResults.push([id, { amountCents, rateBps }, {}]);
+      const adjRes = { amountCents, rateBps };
+      const itemizedAdj: Record<string, AdjustmentResult> = {};
+      if (expenseItemId) itemizedAdj[expenseItemId] = adjRes;
+      adjustmentResults.push([id, adjRes, itemizedAdj]);
       expenseNetTotal += amountCents;
       continue;
     }
