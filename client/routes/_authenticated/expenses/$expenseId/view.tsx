@@ -64,7 +64,7 @@ function RouteComponent() {
         );
       })}
 
-      <BillTotal className='col-span-2' />
+      <BillTotal className='col-span-2' isView />
 
       <ActionSection isDeleted={isDeleted} billedAt={billedAt} />
     </div>
