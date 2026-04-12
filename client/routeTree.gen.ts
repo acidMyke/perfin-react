@@ -137,9 +137,10 @@ export interface FileRoutesByFullPath {
   '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
-  '/settings': typeof AuthenticatedSettingsIndexRoute
+  '/settings': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
-  '/expenses': typeof AuthenticatedExpensesIndexRoute
+  '/expenses/': typeof AuthenticatedExpensesIndexRoute
+  '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   '/expenses/$expenseId/view': typeof AuthenticatedExpensesExpenseIdViewRoute
   '/settings/passkey': typeof AuthenticatedSettingsElevatedPasskeyRoute
@@ -196,7 +197,8 @@ export interface FileRouteTypes {
     | '/expenses/$expenseId'
     | '/settings'
     | '/settings/manage-subjects'
-    | '/expenses'
+    | '/expenses/'
+    | '/settings/'
     | '/expenses/$expenseId/geolocation'
     | '/expenses/$expenseId/view'
     | '/settings/passkey'
@@ -267,7 +269,7 @@ declare module '@tanstack/react-router' {
     '/_authenticated': {
       id: '/_authenticated'
       path: ''
-      fullPath: ''
+      fullPath: '/'
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
@@ -309,14 +311,14 @@ declare module '@tanstack/react-router' {
     '/_authenticated/settings/': {
       id: '/_authenticated/settings/'
       path: '/settings'
-      fullPath: '/settings'
+      fullPath: '/settings/'
       preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/expenses/': {
       id: '/_authenticated/expenses/'
       path: '/expenses'
-      fullPath: '/expenses'
+      fullPath: '/expenses/'
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
       parentRoute: typeof AuthenticatedRoute
     }

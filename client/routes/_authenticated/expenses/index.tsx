@@ -45,7 +45,7 @@ export const Route = createFileRoute('/_authenticated/expenses/')({
 
 function MonthSelector() {
   const router = useRouter();
-  const navigate = useNavigate({ from: '/expenses' });
+  const navigate = useNavigate({ from: '/expenses/' });
   const loaderDeps = Route.useLoaderDeps();
   const selectedDate = new Date(loaderDeps.year, loaderDeps.month);
 
