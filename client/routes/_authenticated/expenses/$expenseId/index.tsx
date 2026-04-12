@@ -83,7 +83,12 @@ function RouteComponent() {
           Cancel
         </Link>
       ) : (
-        <Link className='btn col-span-4 w-full' to='/expenses/$expenseId/view' params={{ expenseId }}>
+        <Link
+          className='btn col-span-4 w-full'
+          to='/expenses/$expenseId/view'
+          params={{ expenseId }}
+          onClick={() => form.reset()}
+        >
           Cancel
         </Link>
       )}
