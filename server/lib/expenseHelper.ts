@@ -80,8 +80,12 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       const rateBps = Math.round((amountCents / rateBasedOn) * 100_00);
       const adjRes = { amountCents, rateBps };
       const itemizedAdj: Record<string, AdjustmentResult> = {};
-      if (expenseItemId) itemizedAdj[expenseItemId] = adjRes;
+      if (itemResult) {
+        itemizedAdj[expenseItemId] = adjRes;
+        itemResult.netTotalCents += amountCents;
+      }
       adjustmentResults.push([id, adjRes, itemizedAdj]);
+
       expenseNetTotal += amountCents;
       continue;
     }

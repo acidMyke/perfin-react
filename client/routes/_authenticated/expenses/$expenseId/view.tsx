@@ -90,6 +90,10 @@ function RouteComponent() {
                   </Fragment>
                 );
               })}
+
+              {itemResult && itemResult.netTotalCents !== itemResult.grossTotalCents && (
+                <span className='col-start-4 text-right font-semibold'>{formatCents(itemResult.netTotalCents)}</span>
+              )}
             </Fragment>
           );
         })}
