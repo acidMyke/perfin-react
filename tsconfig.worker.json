@@ -22,9 +22,8 @@
     "types": ["vite/client", "@types/node"],
 
     /* Path Alias */
-    "baseUrl": "./",
     "paths": {
-      "#server/*": ["server/*"]
+      "#server/*": ["./server/*"]
     }
   },
   "include": ["server", "db/schema.ts"]
