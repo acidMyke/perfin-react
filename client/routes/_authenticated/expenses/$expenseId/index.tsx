@@ -18,10 +18,11 @@ import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { BillTotal } from './-common/BillTotal';
-import { currencyNumberFormat } from '#client/utils';
+import { currencyNumberFormat, formatCents } from '#client/utils';
 import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
+import { useState } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -130,33 +131,53 @@ const ItemsDetailsSubForm = withForm({
               )}
             </form.AppField>
           ) : field.state.value.length > MAX_ITEMS_IN_MAIN ? (
-            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-fr grid-cols-1 items-center gap-2 overflow-y-scroll py-2 pr-2 pl-4'>
-              {field.state.value.map((item, itemIndex) => {
-                const { name, quantity } = item;
+            <ul className='col-span-full mt-4 grid max-h-96 auto-cols-min auto-rows-auto grid-cols-1 items-center gap-3 overflow-y-scroll py-2 pr-2 pl-4'>
+              <form.Subscribe selector={state => state.values.ui.calculateResult.itemResults}>
+                {itemResults => {
+                  const [showNet, setShowNet] = useState(true);
 
-                return (
-                  <>
-                    <span className='col-start-1 w-full'>
-                      {name} {quantity > 1 && <span>x{quantity}</span>}
-                    </span>
+                  return (
+                    <>
+                      <span>Name</span>
+                      <button className='btn btn-ghost col-start-3' onClick={() => setShowNet(v => !v)}>
+                        {showNet ? 'Net' : 'Gross'}
+                      </button>
+                      <span className='col-start-4 col-end-5'>Actions</span>
+                      {field.state.value.map((item, itemIndex) => {
+                        const { id, name, quantity } = item;
+                        const { grossTotalCents = 0, netTotalCents = 0 } = itemResults[id] ?? {};
 
-                    <Link
-                      className='btn btn-sm btn-primary col-start-4'
-                      to='/expenses/$expenseId/items/$indexStr'
-                      params={{ expenseId, indexStr: itemIndex.toString() }}
-                    >
-                      Edit
-                    </Link>
+                        return (
+                          <>
+                            <span className='col-start-1 w-full'>{name}</span>
 
-                    <button
-                      className='btn-link btn btn-sm col-start-5 p-0'
-                      onClick={() => removeItem(itemIndex, field.state.value.length)}
-                    >
-                      <X />
-                    </button>
-                  </>
-                );
-              })}
+                            {quantity > 1 && <span>x{quantity}</span>}
+
+                            <span className='col-start-3 text-right'>
+                              {formatCents(showNet ? netTotalCents : grossTotalCents)}
+                            </span>
+
+                            <Link
+                              className='btn btn-sm btn-primary col-start-4'
+                              to='/expenses/$expenseId/items/$indexStr'
+                              params={{ expenseId, indexStr: itemIndex.toString() }}
+                            >
+                              Edit
+                            </Link>
+
+                            <button
+                              className='btn-link btn btn-sm col-start-5 p-0'
+                              onClick={() => removeItem(itemIndex, field.state.value.length)}
+                            >
+                              <X />
+                            </button>
+                          </>
+                        );
+                      })}
+                    </>
+                  );
+                }}
+              </form.Subscribe>
 
               <li key='Create' className='col-start-1 col-end-4'>
                 <button
