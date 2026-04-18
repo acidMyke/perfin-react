@@ -118,7 +118,7 @@ const saveExpenseProcedure = protectedProcedure
       geoAccuracy: z.number().nullish(),
       shopName: z.string().trim().nullish(),
       shopMall: z.string().trim().nullish(),
-      type: z.enum(['online', 'physical']).default('physical'),
+      type: z.enum(['online', 'physical']),
       specifiedAmountCents: z.int().min(0, { error: 'Must be non-negative value' }),
       items: z.array(
         z.object({
@@ -222,6 +222,8 @@ const saveExpenseProcedure = protectedProcedure
         newSearchables.push(shopNameSearchable);
         existingSearchableSet.add(input.shopName);
       }
+    } else {
+      input.shopName = null;
     }
 
     if (input.shopMall) {
@@ -231,6 +233,8 @@ const saveExpenseProcedure = protectedProcedure
         newSearchables.push({ text: input.shopMall, sourceId: input.expenseId });
         existingSearchableSet.add(input.shopMall);
       }
+    } else {
+      input.shopMall = null;
     }
 
     const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
