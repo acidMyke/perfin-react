@@ -10,7 +10,6 @@ import {
   mapExpenseDetailToForm,
   type ExpenseFormData,
   useAdjustmentCallbacks,
-  setCurrentLocation,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
@@ -143,7 +142,6 @@ function RouteComponent() {
   useEffect(() => {
     if (isCreate) {
       form.setFieldValue('billedAt', new Date());
-      setCurrentLocation(form);
     }
   }, [isCreate, form]);
 
