@@ -222,6 +222,8 @@ const saveExpenseProcedure = protectedProcedure
         newSearchables.push(shopNameSearchable);
         existingSearchableSet.add(input.shopName);
       }
+    } else {
+      input.shopName = null;
     }
 
     if (input.shopMall) {
@@ -231,6 +233,8 @@ const saveExpenseProcedure = protectedProcedure
         newSearchables.push({ text: input.shopMall, sourceId: input.expenseId });
         existingSearchableSet.add(input.shopMall);
       }
+    } else {
+      input.shopMall = null;
     }
 
     const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
