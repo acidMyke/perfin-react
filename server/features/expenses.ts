@@ -414,7 +414,7 @@ const saveExpenseProcedure = protectedProcedure
       const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
 
       for (const { text, sourceId, context } of newSearchables) {
-        if (!blacklistSearchableText.has(text)) continue;
+        if (blacklistSearchableText.has(text)) continue;
         const textHash = searchableHashes.get(text)!;
         if (missingTextHashSet.has(textHash)) {
           texts.push({ textHash, userId, text });
