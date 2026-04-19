@@ -1,0 +1,80 @@
+name: Hotfix Pipeline
+
+on:
+  push:
+    branches:
+      - 'releases/*'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # 1. Deploy & Tag Production
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Safety Check - Prevent Rollbacks
+        run: |
+          # Fetch all tags so we know exactly where prod-latest is
+          git fetch --tags
+          
+          # Check if prod-latest is an ancestor of the commit we are deploying
+          if ! git merge-base --is-ancestor prod-latest ${{ github.sha }}; then
+            echo "🚨 ERROR: Deployment Blocked!"
+            echo "The 'prod-latest' tag is NOT in the history of this branch."
+            echo ""
+            echo "This means either:"
+            echo "  1. A newer release is already in production (rollback attempt)"
+            echo "  2. Another hotfix was deployed in parallel (rebase required)"
+            echo ""
+            echo "Current branch: ${{ github.ref_name }}"
+            echo "Current SHA: ${{ github.sha }}"
+            exit 1
+          fi
+          echo "✅ Verified: This branch contains the current production release."
+
+      - name: Deploy to Production
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env production
+      - name: Tag Production Release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f prod-latest
+          git push origin prod-latest --force
+
+  # 2. Create Back-merge PR
+  back-merge-pr:
+    needs: deploy-production
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write # Required permission to let GitHub Actions create a PR
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Create Pull Request to Main
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Check if a PR already exists to avoid duplication errors
+          PR_EXISTS=$(gh pr list --base main --head ${{ github.ref_name }} --json url --jq 'length')
+          
+          if [ "$PR_EXISTS" -eq "0" ]; then
+            gh pr create \
+              --title "🚀 Back-merge hotfix: ${{ github.ref_name }} into main" \
+              --body "Automated PR to back-merge hotfix changes from \`${{ github.ref_name }}\` into \`main\`. Please review and merge to keep the main branch updated." \
+              --base main \
+              --head ${{ github.ref_name }}
+            echo "✅ PR Created successfully."
+          else
+            echo "ℹ️ PR already exists for this branch. Skipping creation."
+          fi
