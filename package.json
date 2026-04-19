@@ -31,7 +31,7 @@
     "@vis.gl/react-google-maps": "^1.8.3",
     "clsx": "^2.1.1",
     "date-fns": "^4.1.0",
-    "drizzle-orm": "1.0.0-beta.4-4605abe",
+    "drizzle-orm": "1.0.0-beta.20",
     "itty-router": "^5.0.23",
     "lucide-react": "^1.8.0",
     "nanoid": "^5.1.7",
