@@ -10,7 +10,6 @@ import {
   mapExpenseDetailToForm,
   type ExpenseFormData,
   useAdjustmentCallbacks,
-  setCurrentLocation,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
@@ -82,7 +81,7 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ui, type, ...otherValues } = value;
+        const { billedAt, geolocation, ui, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
@@ -143,7 +142,6 @@ function RouteComponent() {
   useEffect(() => {
     if (isCreate) {
       form.setFieldValue('billedAt', new Date());
-      setCurrentLocation(form);
     }
   }, [isCreate, form]);
 
