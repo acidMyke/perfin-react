@@ -55,7 +55,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: d1 migrations apply --env staging --remote
+          command: d1 migrations apply perfin-staging --env staging --remote
       
       - name: Deploy to Staging
         uses: cloudflare/wrangler-action@v3
@@ -99,7 +99,7 @@ jobs:
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: d1 migrations apply --env production --remote
+          command: d1 migrations apply perfin --env production --remote
       
       - name: Deploy to Production
         uses: cloudflare/wrangler-action@v3
