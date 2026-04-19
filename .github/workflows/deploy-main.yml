@@ -1,0 +1,72 @@
+name: Main Pipeline
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: write
+
+concurrency:
+  group: deploy-main
+  cancel-in-progress: true
+
+jobs:
+  # 1. Update Tags
+  tag-version:
+    runs-on: ubuntu-latest
+    outputs:
+      new_version: ${{ steps.tag.outputs.new_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - id: tag
+        uses: mathieudutour/github-tag-action@v6.2
+        with:
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+
+  # 2. Deploy & Tag Staging
+  deploy-staging:
+    needs: tag-version
+    runs-on: ubuntu-latest
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Deploy to Staging
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env staging
+      - name: Tag Staging Release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f staging-latest
+          git push origin staging-latest --force
+
+  # 3. Deploy Production, Tag, & Create Release Branch
+  deploy-production:
+    needs: [tag-version, deploy-staging]
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }
+      - name: Deploy to Production
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: deploy --env production
+      - name: Tag Production Release
+        run: |
+          git config user.name "github-actions"
+          git config user.email "github-actions@github.com"
+          git tag -f prod-latest
+          git push origin prod-latest --force
+      - name: Create Release Branch
+        run: |
+          VERSION=${{ needs.tag-version.outputs.new_version }}
+          git checkout -b "releases/v${VERSION}"
+          git push origin "releases/v${VERSION}"
