@@ -49,10 +49,15 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Build
+        env:
+          CLOUDFLARE_ENV: staging
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: pnpm build
       
       - name: Run D1 Migrations (Staging)
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_ENV: staging
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: d1 migrations apply perfin-staging --env staging --remote
@@ -60,6 +65,8 @@ jobs:
       
       - name: Deploy to Staging
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_ENV: staging
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --env staging
@@ -95,10 +102,15 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Build
+        env:
+          CLOUDFLARE_ENV: production
+          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
         run: pnpm build
       
       - name: Run D1 Migrations (Production)
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_ENV: production
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: d1 migrations apply perfin --env production --remote
@@ -106,6 +118,8 @@ jobs:
       
       - name: Deploy to Production
         uses: cloudflare/wrangler-action@v3
+        env:
+          CLOUDFLARE_ENV: production
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --env production
