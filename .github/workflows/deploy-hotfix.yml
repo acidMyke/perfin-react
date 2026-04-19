@@ -22,7 +22,6 @@ jobs:
         with: { fetch-depth: 0 }
       - name: Safety Check - Prevent Rollbacks
         run: |
-          # Fetch all tags so we know exactly where prod-latest is
           git fetch --tags
           
           # Check if prod-latest is an ancestor of the commit we are deploying
@@ -39,12 +38,34 @@ jobs:
             exit 1
           fi
           echo "✅ Verified: This branch contains the current production release."
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: latest
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'pnpm'
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm build
+      
+      - name: Run D1 Migrations (Production)
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          command: d1 migrations apply --env production --remote
 
       - name: Deploy to Production
         uses: cloudflare/wrangler-action@v3
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --env production
+      
       - name: Tag Production Release
         run: |
           git config user.name "github-actions"
