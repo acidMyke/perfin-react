@@ -51,6 +51,7 @@
   },
   "env": {
     "production": {
+      "name": "perfin",
       "d1_databases": [
         {
           "binding": "db",
