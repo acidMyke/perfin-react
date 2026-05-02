@@ -38,7 +38,7 @@ jobs:
       - name: Setup & Build
         uses: ./.github/actions/build
         env: 
-          CLOUDFLARE_ENV: production
+          CLOUDFLARE_ENV: staging
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       
       - name: Run D1 Migrations (Staging)
@@ -78,7 +78,7 @@ jobs:
       - name: Setup & Build
         uses: ./.github/actions/build
         env: 
-          CLOUDFLARE_ENV: staging
+          CLOUDFLARE_ENV: production
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
 
       - name: Run D1 Migrations (Production)
