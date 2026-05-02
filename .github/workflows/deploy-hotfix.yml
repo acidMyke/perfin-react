@@ -3,13 +3,13 @@ name: Hotfix Pipeline
 on:
   push:
     branches:
-      - 'releases/*'
+      - 'production'
 
 permissions:
   contents: write
 
 concurrency:
-  group: deploy-${{ github.ref }}
+  group: hotfix-production
   cancel-in-progress: true
 
 jobs:
@@ -19,43 +19,15 @@ jobs:
     environment: production
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - name: Safety Check - Prevent Rollbacks
-        run: |
-          git fetch --tags
-          
-          # Check if prod-latest is an ancestor of the commit we are deploying
-          if ! git merge-base --is-ancestor prod-latest ${{ github.sha }}; then
-            echo "🚨 ERROR: Deployment Blocked!"
-            echo "The 'prod-latest' tag is NOT in the history of this branch."
-            echo ""
-            echo "This means either:"
-            echo "  1. A newer release is already in production (rollback attempt)"
-            echo "  2. Another hotfix was deployed in parallel (rebase required)"
-            echo ""
-            echo "Current branch: ${{ github.ref_name }}"
-            echo "Current SHA: ${{ github.sha }}"
-            exit 1
-          fi
-          echo "✅ Verified: This branch contains the current production release."
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v3
-        with:
-          version: latest
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-          cache: 'pnpm'
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Build
-        env:
+        with: 
+          fetch-depth: 0
+          ref: production
+
+      - name: Setup & Build
+        uses: ./.github/actions/build
+        env: 
           CLOUDFLARE_ENV: production
-          VITE_GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
-        run: pnpm build
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       
       - name: Run D1 Migrations (Production)
         uses: cloudflare/wrangler-action@v3
@@ -82,29 +54,22 @@ jobs:
           git tag -f prod-latest
           git push origin prod-latest --force
 
-  # 2. Create Back-merge PR
-  back-merge-pr:
+  # 2. Create Back-merge
+  back-merge:
     needs: deploy-production
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: write # Required permission to let GitHub Actions create a PR
     steps:
       - uses: actions/checkout@v4
-        with: { fetch-depth: 0 }
-      - name: Create Pull Request to Main
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          fetch-depth: 0
+          ref: main
+      - name: Configure git
         run: |
-          # Check if a PR already exists to avoid duplication errors
-          PR_EXISTS=$(gh pr list --base main --head ${{ github.ref_name }} --json url --jq 'length')
-          
-          if [ "$PR_EXISTS" -eq "0" ]; then
-            gh pr create \
-              --title "🚀 Back-merge hotfix: ${{ github.ref_name }} into main" \
-              --body "Automated PR to back-merge hotfix changes from \`${{ github.ref_name }}\` into \`main\`. Please review and merge to keep the main branch updated." \
-              --base main \
-              --head ${{ github.ref_name }}
-            echo "✅ PR Created successfully."
-          else
-            echo "ℹ️ PR already exists for this branch. Skipping creation."
-          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+      - name: Merge into main
+        run: |
+          git fetch origin production
+          git merge origin/production --ff-only
+      - name: Push to origin
+        run: git push origin main
