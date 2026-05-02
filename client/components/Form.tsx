@@ -357,7 +357,7 @@ function ComboBox({
     ? typeof field.state.value === 'string'
       ? field.state.value
       : ''
-    : query !== ''
+    : query !== '' || field.state.value === undefined || field.state.value === null
       ? query
       : (field.state.value as Option)?.label || '';
 
@@ -373,6 +373,13 @@ function ComboBox({
             ? opt.toLowerCase().includes(query.toLowerCase())
             : opt.label.toLowerCase().includes(query.toLowerCase());
         });
+
+  const showCreateOption =
+    query.length > 0 &&
+    !displayOption.some(opt => {
+      const label = typeof opt === 'string' ? opt : opt.label;
+      return label.toLowerCase() === query.toLowerCase();
+    });
 
   return (
     <label className={cn('floating-label mt-0', containerCn)}>
@@ -408,6 +415,7 @@ function ComboBox({
               if (suggestionMode) {
                 field.handleChange(val);
               } else {
+                field.handleChange(undefined);
                 setQuery(val);
               }
             }}
@@ -427,7 +435,7 @@ function ComboBox({
             className='bg-base-100 absolute z-10 mt-1 w-full overflow-auto rounded-lg shadow-lg'
             style={{ maxHeight: maxMenuHeight }}
           >
-            {query.length > 0 && (
+            {showCreateOption && (
               <ComboboxOption
                 value={{ label: query, value: 'create' } satisfies Option}
                 className='data-focus:bg-base-200 data-selected:bg-base-300 cursor-pointer rounded px-3 py-2'
