@@ -17,10 +17,12 @@ runs:
       with:
         node-version: '24'
 
+    - name: Enable Corepack
+      run: corepack enable
+      shell: bash
+
     - name: Setup pnpm
       uses: pnpm/action-setup@v5
-      with:
-        version: 10
 
     - name: Get pnpm store path
       run: echo "PNPM_STORE_PATH=$(pnpm store path)" >> $GITHUB_ENV
