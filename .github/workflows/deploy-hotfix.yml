@@ -25,7 +25,7 @@ jobs:
 
       - name: Setup & Build
         uses: ./.github/actions/build
-        env: 
+        with: 
           CLOUDFLARE_ENV: production
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
       
@@ -44,7 +44,7 @@ jobs:
           CLOUDFLARE_ENV: production
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --env production --message "${{ github.event.head_commit.message }}"
+          command: deploy --env production
           environment: production
       
       - name: Tag Production Release
