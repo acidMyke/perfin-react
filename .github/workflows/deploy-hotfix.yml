@@ -44,7 +44,7 @@ jobs:
           CLOUDFLARE_ENV: production
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --env production
+          command: deploy --env production --message ${{ github.event.head_commit.message }}
           environment: production
       
       - name: Tag Production Release
