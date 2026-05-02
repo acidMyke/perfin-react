@@ -56,7 +56,7 @@ jobs:
           CLOUDFLARE_ENV: staging
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --env staging --tag ${{ needs.tag-version.outputs.new_version }} --message ${{ github.event.head_commit.message }}
+          command: deploy --env staging --tag ${{ needs.tag-version.outputs.new_version }} --message "${{ github.event.head_commit.message }}"
           environment: staging
       
       - name: Tag Staging Release
@@ -96,7 +96,7 @@ jobs:
           CLOUDFLARE_ENV: production
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          command: deploy --env production --tag ${{ needs.tag-version.outputs.new_version }} --message ${{ github.event.head_commit.message }}
+          command: deploy --env production --tag ${{ needs.tag-version.outputs.new_version }} --message "${{ github.event.head_commit.message }}"
           environment: production
       
       - name: Tag Production Release
