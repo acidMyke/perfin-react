@@ -52,20 +52,13 @@ async function createAndSaveToken(
   const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
 
-  await db.batch([
-    db.insert(sessionsTable).values({
-      token,
-      expiresAt,
-      userId,
-      loginAttemptId,
-      deviceId,
-    }),
-    db.insert(userDevicesTable).values({
-      deviceId,
-      userId,
-      lastUsedAt: new Date(),
-    }),
-  ]);
+  await db.insert(sessionsTable).values({
+    token,
+    expiresAt,
+    userId,
+    loginAttemptId,
+    deviceId,
+  });
   setTokenCookie(env, resHeaders, tokenParam);
 }
 
@@ -123,7 +116,7 @@ const hasUserDevice = async (db: AppDatabase, deviceId: string, userId: string) 
 async function create(ctx: Context, user: { id: string; name: string; email: string }) {
   const { db, env, resHeaders, deviceId } = ctx;
   const loginAttempt = await saveLoginAttempt(ctx, true, user.id);
-  const loggedInBefore = hasUserDevice(db, deviceId, user.id);
+  const loggedInBefore = await hasUserDevice(db, deviceId, user.id);
   const { ip, city, country, userAgent } = loginAttempt;
   const alertEmail = signInAlertEmail(
     user.name,
