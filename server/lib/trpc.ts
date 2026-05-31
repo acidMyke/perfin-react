@@ -107,7 +107,6 @@ const t = initTRPC.context<Context>().create({
 export const router = t.router;
 export const publicProcedure = t.procedure.use(async opts => {
   const result = await opts.next();
-  console.log();
   if (!result.ok) {
     // result.error is TRPCError
     const { cause: innerCause, code, message } = result.error;

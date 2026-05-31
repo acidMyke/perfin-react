@@ -1,15 +1,18 @@
 import type { Context, ProtectedContext } from './trpc';
-import { addDays } from 'date-fns/addDays';
-import { and, eq, gt } from 'drizzle-orm';
-import { differenceInDays } from 'date-fns/differenceInDays';
-import { addMinutes } from 'date-fns/addMinutes';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { UAParser } from 'ua-parser-js';
-import type { AppDatabase } from './db';
+import { type AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
-import { differenceInMinutes } from 'date-fns';
-import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
+import { differenceInMinutes, addMinutes, differenceInDays, addDays, differenceInHours } from 'date-fns';
+import { loginAttemptsTable, sessionsTable, userDevicesTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
 import { nanoid } from 'nanoid';
+import { millisecondsInDay, secondsInDay } from 'date-fns/constants';
+
+export const COOKIE_NAME = {
+  CSRF: 'csrf',
+  DEVICE: 'device',
+} as const;
 
 export function generateTokenParam(env: Env) {
   const DAYS_TOKEN_EXPIRE = env.TOKEN_EXPIRE_DAYS;
@@ -44,6 +47,7 @@ async function createAndSaveToken(
   resHeaders: CookieHeaders,
   userId: string,
   loginAttemptId: string,
+  deviceId: string,
 ) {
   const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
@@ -52,8 +56,8 @@ async function createAndSaveToken(
     token,
     expiresAt,
     userId,
-    lastUsedAt: new Date(),
     loginAttemptId,
+    deviceId,
   });
   setTokenCookie(env, resHeaders, tokenParam);
 }
@@ -78,12 +82,14 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   const ua = headers.get('user-agent') ?? '';
   const parsedUa = new UAParser(ua).getResult();
   const userAgent = `${parsedUa.browser.name} ${parsedUa.browser.version} / ${parsedUa.os.name} ${parsedUa.os.version}`;
-
-  const attempt: typeof loginAttemptsTable.$inferInsert = {
+  const id = nanoid();
+  const attempt: typeof loginAttemptsTable.$inferInsert & { id: string } = {
+    id,
     ip: headers.get('cf-connecting-ip') ?? '',
     userAgent,
     isSuccess,
     attemptedForId,
+    deviceId: ctx.deviceId,
   };
 
   const cfKeys = ['asn', 'city', 'region', 'country', 'colo'];
@@ -94,17 +100,23 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
     }
   }
 
-  const [{ id: loginAttemptId }] = await db
-    .insert(loginAttemptsTable)
-    .values(attempt)
-    .returning({ id: loginAttemptsTable.id });
+  await db.insert(loginAttemptsTable).values(attempt);
 
-  return { ...attempt, id: loginAttemptId };
+  return attempt;
 }
 
+const hasUserDevice = async (db: AppDatabase, deviceId: string, userId: string) =>
+  db
+    .select({ exist: sql<number>`1`.mapWith(Boolean) })
+    .from(userDevicesTable)
+    .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId)))
+    .limit(1)
+    .then(([{ exist = false } = {}]) => exist);
+
 async function create(ctx: Context, user: { id: string; name: string; email: string }) {
-  const { db, env, resHeaders } = ctx;
+  const { db, env, resHeaders, deviceId } = ctx;
   const loginAttempt = await saveLoginAttempt(ctx, true, user.id);
+  const loggedInBefore = await hasUserDevice(db, deviceId, user.id);
   const { ip, city, country, userAgent } = loginAttempt;
   const alertEmail = signInAlertEmail(
     user.name,
@@ -114,7 +126,15 @@ async function create(ctx: Context, user: { id: string; name: string; email: str
     userAgent ?? 'unknown',
   ).addRecipient(user.email, user.name);
 
-  await Promise.all([createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id), alertEmail.send(ctx)]);
+  const promises: Promise<any>[] = [createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, deviceId)];
+  if (!loggedInBefore) {
+    promises.push(alertEmail.send(ctx));
+    promises.push(
+      db.insert(userDevicesTable).values({ deviceId, userId: user.id, lastUsedAt: new Date() }).onConflictDoNothing(),
+    );
+  }
+
+  await Promise.all(promises);
 }
 
 async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
@@ -125,6 +145,34 @@ async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
   await revokeToken(db, userId, otherSessionId ?? session.id);
 }
 
+function processDeviceToken(deviceCookieValue: string | undefined, resHeaders: CookieHeaders) {
+  const currentDay = Math.trunc(Date.now() / millisecondsInDay);
+  let deviceId: string | undefined;
+  let creationDaystamp: string | undefined;
+  if (deviceCookieValue) {
+    [deviceId, creationDaystamp] = deviceCookieValue.split('|');
+    if (deviceId && deviceId.length === 21 && creationDaystamp) {
+      const creationDay = parseInt(creationDaystamp);
+      if (Number.isFinite(creationDay)) {
+        const age = currentDay - creationDay;
+        if (age < 200) return { deviceId };
+      } else deviceId = undefined;
+    } else deviceId = undefined;
+  }
+  deviceId ??= nanoid();
+  creationDaystamp = currentDay.toString();
+  const cookieValue = `${deviceId}|${creationDaystamp}`;
+  resHeaders.setCookie(COOKIE_NAME.DEVICE, cookieValue, {
+    secure: !import.meta.env.DEV,
+    httpOnly: true,
+    path: '/',
+    maxAge: 400 * secondsInDay,
+    sameSite: 'Strict',
+  });
+
+  return { deviceId };
+}
+
 async function check(
   db: AppDatabase,
   req: Request,
@@ -133,11 +181,13 @@ async function check(
   reqCookie: Record<string, string | undefined>,
 ) {
   const authToken = reqCookie[env.TOKEN_COOKIE_NAME];
-  const csrfToken = reqCookie['csrf'];
+  const csrfToken = reqCookie[COOKIE_NAME.CSRF];
+  const deviceToken = reqCookie[COOKIE_NAME.DEVICE];
+  const { deviceId } = processDeviceToken(deviceToken, resHeaders);
 
   if (!csrfToken) {
     const { expiresAt, maxAge, token } = generateTokenParam(env);
-    resHeaders.setCookie('csrf', token, {
+    resHeaders.setCookie(COOKIE_NAME.CSRF, token, {
       secure: !import.meta.env.DEV,
       path: '/',
       expires: expiresAt,
@@ -148,6 +198,7 @@ async function check(
 
   if (!authToken) {
     return {
+      deviceId,
       isAuthenticated: false as const,
       authFailureReason: 'Missing token',
     };
@@ -158,6 +209,7 @@ async function check(
       id: sessionsTable.id,
       createdAt: sessionsTable.createdAt,
       expiresAt: sessionsTable.expiresAt,
+      deviceLastUsed: userDevicesTable.lastUsedAt,
 
       user: {
         id: usersTable.id,
@@ -172,12 +224,23 @@ async function check(
     .from(sessionsTable)
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
     .innerJoin(loginAttemptsTable, eq(sessionsTable.loginAttemptId, loginAttemptsTable.id))
-    .where(and(eq(sessionsTable.token, authToken), gt(sessionsTable.expiresAt, new Date())))
+    .innerJoin(
+      userDevicesTable,
+      and(eq(sessionsTable.deviceId, userDevicesTable.deviceId), eq(sessionsTable.userId, userDevicesTable.userId)),
+    )
+    .where(
+      and(
+        eq(sessionsTable.token, authToken),
+        eq(sessionsTable.deviceId, deviceId),
+        gt(sessionsTable.expiresAt, new Date()),
+      ),
+    )
     .limit(1);
 
   if (!session) {
     resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
     return {
+      deviceId,
       isAuthenticated: false as const,
       authFailureReason: 'Unable to find token',
     };
@@ -187,7 +250,7 @@ async function check(
 
   // if the token is older then 2 days, refresh it
   if (differenceInDays(new Date(), session.createdAt) > 2) {
-    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id);
+    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id, deviceId);
     await revokeToken(db, userId, session.id, true);
   }
 
@@ -198,7 +261,16 @@ async function check(
 
   const isAllowElevated = differenceInMinutes(new Date(), session.loginAttempt.timestamp) < 5;
 
+  // dont always update db, once every 4 hr is sufficient
+  if (differenceInHours(new Date(), session.deviceLastUsed) > 4) {
+    await db
+      .update(userDevicesTable)
+      .set({ lastUsedAt: new Date() })
+      .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId)));
+  }
+
   return {
+    deviceId,
     isCsrfValid,
     isAuthenticated: true as const,
     session,

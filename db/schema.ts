@@ -65,6 +65,7 @@ export const loginAttemptsTable = sqliteTable(
     timestamp: createdAtColumn(),
     attemptedForId: nullableIdColumn(),
     isSuccess: integer({ mode: 'boolean' }).notNull(),
+    deviceId: idColumn(),
 
     ip: text().notNull(),
     asn: integer(),
@@ -109,13 +110,25 @@ export const passkeysTable = sqliteTable(
   t => [index('idx_passkeys_user_id').on(t.userId)],
 );
 
+export const userDevicesTable = sqliteTable(
+  'user_devices',
+  {
+    deviceId: idColumn(),
+    userId: idColumn(),
+    lastUsedAt: dateColumn(),
+    nickname: text(),
+  },
+  t => [primaryKey({ columns: [t.deviceId, t.userId] })],
+);
+
 export const sessionsTable = sqliteTable(
   'sessions',
   {
-    ...baseColumns(),
+    id: pkIdColumn(),
+    createdAt: createdAtColumn(),
     token: idColumn(),
     userId: idColumn(),
-    lastUsedAt: dateColumn(),
+    deviceId: idColumn(),
     expiresAt: dateColumn(),
     loginAttemptId: idColumn(),
   },

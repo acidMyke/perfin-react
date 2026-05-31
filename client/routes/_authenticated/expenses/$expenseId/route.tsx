@@ -15,6 +15,7 @@ import type { DeepKeys } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
+import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -141,7 +142,7 @@ function RouteComponent() {
 
   useEffect(() => {
     if (isCreate) {
-      form.setFieldValue('billedAt', new Date());
+      form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true });
     }
   }, [isCreate, form]);
 
@@ -196,6 +197,7 @@ function RouteComponent() {
             form.setFieldValue('ui.shopDetailSource', 'autocomplete');
           }}
         />
+        <DirtyFormBlockModel mainRouteId={Route.id} />
       </form.AppForm>
     </div>
   );
