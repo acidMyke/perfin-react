@@ -65,6 +65,7 @@ export const loginAttemptsTable = sqliteTable(
     timestamp: createdAtColumn(),
     attemptedForId: nullableIdColumn(),
     isSuccess: integer({ mode: 'boolean' }).notNull(),
+    deviceId: idColumn(),
 
     ip: text().notNull(),
     asn: integer(),
@@ -105,8 +106,20 @@ export const passkeysTable = sqliteTable(
     backedUp: boolean().notNull(),
     transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
     nickname: text(),
+    deviceId: nullableIdColumn(),
   },
   t => [index('idx_passkeys_user_id').on(t.userId)],
+);
+
+export const userDevicesTable = sqliteTable(
+  'user_devices',
+  {
+    id: idColumn(),
+    userId: idColumn(),
+    lastUsedAt: dateColumn(),
+    nickname: text(),
+  },
+  t => [primaryKey({ columns: [t.id, t.userId] })],
 );
 
 export const sessionsTable = sqliteTable(
@@ -115,7 +128,7 @@ export const sessionsTable = sqliteTable(
     ...baseColumns(),
     token: idColumn(),
     userId: idColumn(),
-    lastUsedAt: dateColumn(),
+    deviceId: idColumn(),
     expiresAt: dateColumn(),
     loginAttemptId: idColumn(),
   },
