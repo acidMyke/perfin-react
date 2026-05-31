@@ -124,7 +124,8 @@ export const userDevicesTable = sqliteTable(
 export const sessionsTable = sqliteTable(
   'sessions',
   {
-    ...baseColumns(),
+    id: pkIdColumn(),
+    createdAt: createdAtColumn(),
     token: idColumn(),
     userId: idColumn(),
     deviceId: idColumn(),

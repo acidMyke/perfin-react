@@ -3,7 +3,7 @@ import { and, eq, gt, sql } from 'drizzle-orm';
 import { UAParser } from 'ua-parser-js';
 import { type AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
-import { differenceInMinutes, addMinutes, differenceInDays, addDays } from 'date-fns';
+import { differenceInMinutes, addMinutes, differenceInDays, addDays, differenceInHours } from 'date-fns';
 import { loginAttemptsTable, sessionsTable, userDevicesTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
 import { nanoid } from 'nanoid';
@@ -52,13 +52,20 @@ async function createAndSaveToken(
   const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
 
-  await db.insert(sessionsTable).values({
-    token,
-    expiresAt,
-    userId,
-    loginAttemptId,
-    deviceId,
-  });
+  await db.batch([
+    db.insert(sessionsTable).values({
+      token,
+      expiresAt,
+      userId,
+      loginAttemptId,
+      deviceId,
+    }),
+    db.insert(userDevicesTable).values({
+      deviceId,
+      userId,
+      lastUsedAt: new Date(),
+    }),
+  ]);
   setTokenCookie(env, resHeaders, tokenParam);
 }
 
@@ -209,6 +216,7 @@ async function check(
       id: sessionsTable.id,
       createdAt: sessionsTable.createdAt,
       expiresAt: sessionsTable.expiresAt,
+      deviceLastUsed: userDevicesTable.lastUsedAt,
 
       user: {
         id: usersTable.id,
@@ -223,6 +231,10 @@ async function check(
     .from(sessionsTable)
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
     .innerJoin(loginAttemptsTable, eq(sessionsTable.loginAttemptId, loginAttemptsTable.id))
+    .innerJoin(
+      userDevicesTable,
+      and(eq(sessionsTable.deviceId, userDevicesTable.deviceId), eq(sessionsTable.userId, userDevicesTable.userId)),
+    )
     .where(
       and(
         eq(sessionsTable.token, authToken),
@@ -255,6 +267,14 @@ async function check(
   }
 
   const isAllowElevated = differenceInMinutes(new Date(), session.loginAttempt.timestamp) < 5;
+
+  // dont always update db, once every 4 hr is sufficient
+  if (differenceInHours(new Date(), session.deviceLastUsed) > 4) {
+    await db
+      .update(userDevicesTable)
+      .set({ lastUsedAt: new Date() })
+      .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId)));
+  }
 
   return {
     deviceId,
