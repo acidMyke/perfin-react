@@ -1,0 +1,34 @@
+name: Setup perfin build env
+description: setup perfin build env
+
+runs:
+  using: "composite"
+  steps:
+    - name: Setup Node
+      id: node
+      uses: actions/setup-node@v6
+      with:
+        node-version: '24'
+
+    - name: Enable Corepack
+      run: corepack enable
+      shell: bash
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v5
+
+    - name: Get pnpm store path
+      run: echo "PNPM_STORE_PATH=$(pnpm store path)" >> $GITHUB_ENV
+      shell: bash
+
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.PNPM_STORE_PATH }}
+        key: ${{ runner.os }}-node-${{ steps.node.outputs.node-version }}-pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-
+
+    - name: Install dependencies
+      run: pnpm install --frozen-lockfile --prefer-offline --ignore-scripts
+      shell: bash

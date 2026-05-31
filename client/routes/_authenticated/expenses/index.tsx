@@ -9,7 +9,7 @@ import { PageHeader } from '#components/PageHeader';
 import { currencyNumberFormat } from '#client/utils';
 import { useMemo } from 'react';
 import { useAppForm } from '#components/Form';
-import { expenseListOptions, useExpenseContext, type ExpenseListOptions } from './-context';
+import { useExpenseContext, type ExpenseListOptions } from './-context';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,

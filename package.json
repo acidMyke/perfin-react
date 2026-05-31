@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "tsbuild": "tsc -p tsconfig.app.json",
     "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
     "cftypes": "wrangler types server/cloudflare.d.ts && prettier -w server/cloudflare.d.ts",
