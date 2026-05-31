@@ -1,0 +1,22 @@
+name: Build pull request
+
+on:
+  pull_request:
+    branches: [ main ]
+
+
+jobs:
+  deploy-production:
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+        with: 
+          fetch-depth: 0
+          ref: production
+
+      - name: Setup build env
+        uses: ./.github/actions/setup
+
+      - name: Typescript lint
+        run: pnpm tslint
