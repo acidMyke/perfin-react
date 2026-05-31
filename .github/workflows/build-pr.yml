@@ -14,5 +14,5 @@ jobs:
       - name: Setup build env
         uses: ./.github/actions/setup
 
-      - name: Typescript lint
+      - name: Typescript Build
         run: pnpm tsbuild
