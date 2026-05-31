@@ -8,8 +8,8 @@ import { abbreviatedMonthValues } from '#client/constants';
 import { PageHeader } from '#components/PageHeader';
 import { currencyNumberFormat } from '#client/utils';
 import { useMemo } from 'react';
-import { formOptions } from '@tanstack/react-form';
-import { useAppForm, type Option } from '#components/Form';
+import { useAppForm } from '#components/Form';
+import { expenseListOptions, useExpenseContext, type ExpenseListOptions } from './-context';
 
 export const Route = createFileRoute('/_authenticated/expenses/')({
   pendingComponent: RoutePendingComponent,
@@ -126,15 +126,6 @@ function RoutePendingComponent() {
 }
 
 const unspecifiedOption = { label: '(Unspecified)', value: '--unspecified--' };
-const expenseListOptions = formOptions({
-  defaultValues: {
-    showDeleted: false,
-    accountIds: [] as Option[],
-    categoryIds: [] as Option[],
-  },
-});
-
-type ExpenseListOptions = (typeof expenseListOptions)['defaultValues'];
 
 function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expenses'], options: ExpenseListOptions) {
   const { showDeleted, accountIds, categoryIds } = options;
@@ -200,10 +191,14 @@ function NoRecordsFound({ dueToFilter }: { dueToFilter?: boolean }) {
 
 function RouteComponent() {
   const loaderDeps = Route.useLoaderDeps();
+  const { listOptionsRef } = useExpenseContext();
   const {
     data: { expenses },
   } = useSuspenseQuery(trpc.expense.list.queryOptions(loaderDeps));
-  const form = useAppForm({ ...expenseListOptions });
+  const form = useAppForm({
+    defaultValues: listOptionsRef.current,
+    listeners: { onChange: ({ formApi }) => (listOptionsRef.current = formApi.state.values) },
+  });
   const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const accountOptions = useMemo(() => [unspecifiedOption, ...options.accountOptions], [options]);
   const categoryOptions = useMemo(() => [unspecifiedOption, ...options.categoryOptions], [options]);
