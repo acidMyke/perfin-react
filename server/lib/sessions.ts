@@ -1,15 +1,18 @@
 import type { Context, ProtectedContext } from './trpc';
-import { addDays } from 'date-fns/addDays';
 import { and, eq, gt } from 'drizzle-orm';
-import { differenceInDays } from 'date-fns/differenceInDays';
-import { addMinutes } from 'date-fns/addMinutes';
 import { UAParser } from 'ua-parser-js';
 import type { AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
-import { differenceInMinutes } from 'date-fns';
+import { differenceInMinutes, addMinutes, differenceInDays, addDays } from 'date-fns';
 import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
 import { nanoid } from 'nanoid';
+import { millisecondsInDay, secondsInDay } from 'date-fns/constants';
+
+export const COOKIE_NAME = {
+  CSRF: 'csrf',
+  DEVICE: 'device',
+} as const;
 
 export function generateTokenParam(env: Env) {
   const DAYS_TOKEN_EXPIRE = env.TOKEN_EXPIRE_DAYS;
@@ -125,6 +128,34 @@ async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
   await revokeToken(db, userId, otherSessionId ?? session.id);
 }
 
+function processDeviceToken(deviceCookieValue: string | undefined, resHeaders: CookieHeaders) {
+  const currentDay = Math.trunc(Date.now() / millisecondsInDay);
+  let deviceId: string | undefined;
+  let creationDaystamp: string | undefined;
+  if (deviceCookieValue) {
+    [deviceId, creationDaystamp] = deviceCookieValue.split('|');
+    if (deviceId && deviceId.length === 21 && creationDaystamp) {
+      const creationDay = parseInt(creationDaystamp);
+      if (Number.isFinite(creationDay)) {
+        const age = currentDay - creationDay;
+        if (age < 200) return { deviceId };
+      } else deviceId = undefined;
+    } else deviceId = undefined;
+  }
+  deviceId ??= nanoid();
+  creationDaystamp = currentDay.toString();
+  const cookieValue = `${deviceId}|${creationDaystamp}`;
+  resHeaders.setCookie(COOKIE_NAME.DEVICE, cookieValue, {
+    secure: !import.meta.env.DEV,
+    httpOnly: true,
+    path: '/',
+    maxAge: 400 * secondsInDay,
+    sameSite: 'Strict',
+  });
+
+  return { deviceId };
+}
+
 async function check(
   db: AppDatabase,
   req: Request,
@@ -133,11 +164,13 @@ async function check(
   reqCookie: Record<string, string | undefined>,
 ) {
   const authToken = reqCookie[env.TOKEN_COOKIE_NAME];
-  const csrfToken = reqCookie['csrf'];
+  const csrfToken = reqCookie[COOKIE_NAME.CSRF];
+  const deviceToken = reqCookie[COOKIE_NAME.DEVICE];
+  const { deviceId } = processDeviceToken(deviceToken, resHeaders);
 
   if (!csrfToken) {
     const { expiresAt, maxAge, token } = generateTokenParam(env);
-    resHeaders.setCookie('csrf', token, {
+    resHeaders.setCookie(COOKIE_NAME.CSRF, token, {
       secure: !import.meta.env.DEV,
       path: '/',
       expires: expiresAt,
