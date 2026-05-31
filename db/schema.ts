@@ -106,7 +106,6 @@ export const passkeysTable = sqliteTable(
     backedUp: boolean().notNull(),
     transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
     nickname: text(),
-    deviceId: nullableIdColumn(),
   },
   t => [index('idx_passkeys_user_id').on(t.userId)],
 );
@@ -114,12 +113,12 @@ export const passkeysTable = sqliteTable(
 export const userDevicesTable = sqliteTable(
   'user_devices',
   {
-    id: idColumn(),
+    deviceId: idColumn(),
     userId: idColumn(),
     lastUsedAt: dateColumn(),
     nickname: text(),
   },
-  t => [primaryKey({ columns: [t.id, t.userId] })],
+  t => [primaryKey({ columns: [t.deviceId, t.userId] })],
 );
 
 export const sessionsTable = sqliteTable(

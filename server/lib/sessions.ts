@@ -1,10 +1,10 @@
 import type { Context, ProtectedContext } from './trpc';
-import { and, eq, gt } from 'drizzle-orm';
+import { and, eq, gt, sql } from 'drizzle-orm';
 import { UAParser } from 'ua-parser-js';
-import type { AppDatabase } from './db';
+import { type AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
 import { differenceInMinutes, addMinutes, differenceInDays, addDays } from 'date-fns';
-import { loginAttemptsTable, sessionsTable, usersTable } from '../../db/schema';
+import { loginAttemptsTable, sessionsTable, userDevicesTable, usersTable } from '../../db/schema';
 import { signInAlertEmail } from './email';
 import { nanoid } from 'nanoid';
 import { millisecondsInDay, secondsInDay } from 'date-fns/constants';
@@ -82,8 +82,9 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
   const ua = headers.get('user-agent') ?? '';
   const parsedUa = new UAParser(ua).getResult();
   const userAgent = `${parsedUa.browser.name} ${parsedUa.browser.version} / ${parsedUa.os.name} ${parsedUa.os.version}`;
-
-  const attempt: typeof loginAttemptsTable.$inferInsert = {
+  const id = nanoid();
+  const attempt: typeof loginAttemptsTable.$inferInsert & { id: string } = {
+    id,
     ip: headers.get('cf-connecting-ip') ?? '',
     userAgent,
     isSuccess,
@@ -99,17 +100,23 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
     }
   }
 
-  const [{ id: loginAttemptId }] = await db
-    .insert(loginAttemptsTable)
-    .values(attempt)
-    .returning({ id: loginAttemptsTable.id });
+  await db.insert(loginAttemptsTable).values(attempt);
 
-  return { ...attempt, id: loginAttemptId };
+  return attempt;
 }
 
+const hasUserDevice = async (db: AppDatabase, deviceId: string, userId: string) =>
+  db
+    .select({ exist: sql<number>`1`.mapWith(Boolean) })
+    .from(userDevicesTable)
+    .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId)))
+    .limit(1)
+    .then(([{ exist = false } = {}]) => exist);
+
 async function create(ctx: Context, user: { id: string; name: string; email: string }) {
-  const { db, env, resHeaders } = ctx;
+  const { db, env, resHeaders, deviceId } = ctx;
   const loginAttempt = await saveLoginAttempt(ctx, true, user.id);
+  const loggedInBefore = hasUserDevice(db, deviceId, user.id);
   const { ip, city, country, userAgent } = loginAttempt;
   const alertEmail = signInAlertEmail(
     user.name,
@@ -119,10 +126,15 @@ async function create(ctx: Context, user: { id: string; name: string; email: str
     userAgent ?? 'unknown',
   ).addRecipient(user.email, user.name);
 
-  await Promise.all([
-    createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, ctx.deviceId),
-    alertEmail.send(ctx),
-  ]);
+  const promises: Promise<any>[] = [createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, deviceId)];
+  if (!loggedInBefore) {
+    promises.push(alertEmail.send(ctx));
+    promises.push(
+      db.insert(userDevicesTable).values({ deviceId, userId: user.id, lastUsedAt: new Date() }).onConflictDoNothing(),
+    );
+  }
+
+  await Promise.all(promises);
 }
 
 async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
@@ -211,7 +223,13 @@ async function check(
     .from(sessionsTable)
     .innerJoin(usersTable, eq(sessionsTable.userId, usersTable.id))
     .innerJoin(loginAttemptsTable, eq(sessionsTable.loginAttemptId, loginAttemptsTable.id))
-    .where(and(eq(sessionsTable.token, authToken), gt(sessionsTable.expiresAt, new Date())))
+    .where(
+      and(
+        eq(sessionsTable.token, authToken),
+        eq(sessionsTable.deviceId, deviceId),
+        gt(sessionsTable.expiresAt, new Date()),
+      ),
+    )
     .limit(1);
 
   if (!session) {
