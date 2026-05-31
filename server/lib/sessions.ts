@@ -47,6 +47,7 @@ async function createAndSaveToken(
   resHeaders: CookieHeaders,
   userId: string,
   loginAttemptId: string,
+  deviceId: string,
 ) {
   const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
@@ -55,8 +56,8 @@ async function createAndSaveToken(
     token,
     expiresAt,
     userId,
-    lastUsedAt: new Date(),
     loginAttemptId,
+    deviceId,
   });
   setTokenCookie(env, resHeaders, tokenParam);
 }
@@ -87,6 +88,7 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
     userAgent,
     isSuccess,
     attemptedForId,
+    deviceId: ctx.deviceId,
   };
 
   const cfKeys = ['asn', 'city', 'region', 'country', 'colo'];
@@ -117,7 +119,10 @@ async function create(ctx: Context, user: { id: string; name: string; email: str
     userAgent ?? 'unknown',
   ).addRecipient(user.email, user.name);
 
-  await Promise.all([createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id), alertEmail.send(ctx)]);
+  await Promise.all([
+    createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, ctx.deviceId),
+    alertEmail.send(ctx),
+  ]);
 }
 
 async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
@@ -181,6 +186,7 @@ async function check(
 
   if (!authToken) {
     return {
+      deviceId,
       isAuthenticated: false as const,
       authFailureReason: 'Missing token',
     };
@@ -211,6 +217,7 @@ async function check(
   if (!session) {
     resHeaders.deleteCookie(env.TOKEN_COOKIE_NAME);
     return {
+      deviceId,
       isAuthenticated: false as const,
       authFailureReason: 'Unable to find token',
     };
@@ -220,7 +227,7 @@ async function check(
 
   // if the token is older then 2 days, refresh it
   if (differenceInDays(new Date(), session.createdAt) > 2) {
-    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id);
+    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id, deviceId);
     await revokeToken(db, userId, session.id, true);
   }
 
@@ -232,6 +239,7 @@ async function check(
   const isAllowElevated = differenceInMinutes(new Date(), session.loginAttempt.timestamp) < 5;
 
   return {
+    deviceId,
     isCsrfValid,
     isAuthenticated: true as const,
     session,
