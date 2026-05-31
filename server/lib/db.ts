@@ -102,7 +102,6 @@ export function max<T extends ExtractableData>(data: T) {
 export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,
-    casing: 'snake_case',
     relations: defineRelations(schema),
   });
 }

@@ -1,7 +1,7 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
 import { isNotNull, sql } from 'drizzle-orm';
 import {
-  sqliteTable,
+  snakeCase,
   text,
   blob,
   integer,
@@ -46,7 +46,7 @@ const baseColumns = () => ({
 
 export type BaseColumns = keyof ReturnType<typeof baseColumns>;
 
-export const emailCodesTable = sqliteTable(
+export const emailCodesTable = snakeCase.table(
   'email_codes',
   {
     ...baseColumns(),
@@ -58,7 +58,7 @@ export const emailCodesTable = sqliteTable(
   t => [index('idx_email_codes_code').on(t.code), index('idx_email_codes_email_valid_until').on(t.email, t.validUntil)],
 );
 
-export const loginAttemptsTable = sqliteTable(
+export const loginAttemptsTable = snakeCase.table(
   'login_attempts',
   {
     id: pkIdColumn(),
@@ -81,7 +81,7 @@ export const loginAttemptsTable = sqliteTable(
   ],
 );
 
-export const usersTable = sqliteTable('users', {
+export const usersTable = snakeCase.table('users', {
   ...baseColumns(),
   name: citext().unique().notNull(),
   email: citext().unique().notNull(),
@@ -91,7 +91,7 @@ export const usersTable = sqliteTable('users', {
   releasedAfter: integer({ mode: 'timestamp' }),
 });
 
-export const passkeysTable = sqliteTable(
+export const passkeysTable = snakeCase.table(
   'passkeys',
   {
     createdAt: createdAtColumn(),
@@ -110,7 +110,7 @@ export const passkeysTable = sqliteTable(
   t => [index('idx_passkeys_user_id').on(t.userId)],
 );
 
-export const userDevicesTable = sqliteTable(
+export const userDevicesTable = snakeCase.table(
   'user_devices',
   {
     deviceId: idColumn(),
@@ -121,7 +121,7 @@ export const userDevicesTable = sqliteTable(
   t => [primaryKey({ columns: [t.deviceId, t.userId] })],
 );
 
-export const sessionsTable = sqliteTable(
+export const sessionsTable = snakeCase.table(
   'sessions',
   {
     id: pkIdColumn(),
@@ -138,7 +138,7 @@ export const sessionsTable = sqliteTable(
   ],
 );
 
-export const accountsTable = sqliteTable(
+export const accountsTable = snakeCase.table(
   'accounts',
   {
     ...baseColumns(),
@@ -151,7 +151,7 @@ export const accountsTable = sqliteTable(
   t => [index('idx_accounts_user_seq').on(t.userId, t.sequence, t.createdAt)],
 );
 
-export const categoriesTable = sqliteTable(
+export const categoriesTable = snakeCase.table(
   'categories',
   {
     ...baseColumns(),
@@ -164,7 +164,7 @@ export const categoriesTable = sqliteTable(
   t => [index('idx_categories_user_seq').on(t.userId, t.sequence, t.createdAt)],
 );
 
-export const expensesTable = sqliteTable(
+export const expensesTable = snakeCase.table(
   'expenses',
   {
     ...baseColumns(),
@@ -197,7 +197,7 @@ export const expensesTable = sqliteTable(
   ],
 );
 
-export const expenseItemsTable = sqliteTable(
+export const expenseItemsTable = snakeCase.table(
   'expense_items',
   {
     ...baseColumns(),
@@ -216,7 +216,7 @@ export const expenseItemsTable = sqliteTable(
 );
 
 /** @deprecated use expenseAdjustmentsTable instead*/
-export const expenseRefundsTable = sqliteTable(
+export const expenseRefundsTable = snakeCase.table(
   'expense_refunds',
   {
     ...baseColumns(),
@@ -237,7 +237,7 @@ export const expenseRefundsTable = sqliteTable(
   ],
 );
 
-export const expenseAdjustmentsTable = sqliteTable(
+export const expenseAdjustmentsTable = snakeCase.table(
   'expense_adjustments',
   {
     ...baseColumns(),
@@ -259,7 +259,7 @@ export const expenseAdjustmentsTable = sqliteTable(
 );
 
 /** @deprecated replaced by v2_search */
-export const searchTable = sqliteTable(
+export const searchTable = snakeCase.table(
   'search',
   {
     chunk: text().notNull(),
@@ -276,7 +276,7 @@ export const searchTable = sqliteTable(
   ],
 );
 
-export const textsTable = sqliteTable(
+export const textsTable = snakeCase.table(
   'texts',
   {
     textHash: integer().primaryKey({ onConflict: 'ignore' }),
@@ -291,7 +291,7 @@ const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: Referenc
     .notNull()
     .references(() => textsTable.textHash, { onDelete, onUpdate });
 
-export const textChunksTable = sqliteTable(
+export const textChunksTable = snakeCase.table(
   'texts_chunks',
   {
     userId: idColumn(),
@@ -308,7 +308,7 @@ export const textChunksTable = sqliteTable(
   ],
 );
 
-export const textsContextsTable = sqliteTable(
+export const textsContextsTable = snakeCase.table(
   'texts_contexts',
   {
     textHash: textHashColumn(),
@@ -320,7 +320,7 @@ export const textsContextsTable = sqliteTable(
   ],
 );
 
-export const expenseTextsTable = sqliteTable(
+export const expenseTextsTable = snakeCase.table(
   'expenses_texts',
   {
     expenseId: idColumn(),
