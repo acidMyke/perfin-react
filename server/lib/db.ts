@@ -113,11 +113,35 @@ export type AppDatabase = ReturnType<typeof createDatabase>;
 export class BatchCollector {
   private queue: { query: any; name: string }[] = [];
 
+  private inferQueryName(query: any): string | undefined {
+    if (!query || typeof query.toSQL !== 'function') {
+      return undefined;
+    }
+
+    try {
+      const { sql } = query.toSQL();
+      const normalizedSql = sql.trim().replace(/\s+/g, ' ') as string;
+
+      const insertMatch = normalizedSql.match(/^insert into ["`]?([^"` ]+)["`]?/i);
+      if (insertMatch) return `INSERT_${insertMatch[1]}`;
+
+      const updateMatch = normalizedSql.match(/^update ["`]?([^"` ]+)["`]?/i);
+      if (updateMatch) return `UPDATE_${updateMatch[1]}`;
+
+      const deleteMatch = normalizedSql.match(/^delete from ["`]?([^"` ]+)["`]?/i);
+      if (deleteMatch) return `DELETE_${deleteMatch[1]}`;
+
+      return undefined;
+    } catch (e) {
+      return undefined;
+    }
+  }
+
   /**
    * Pushes a Drizzle query into the batch queue.
    */
   push(query: BatchItem<'sqlite'>, name?: string) {
-    const fallbackName = `Index_${this.queue.length}`;
+    const fallbackName = this.inferQueryName(query) ?? `Index_${this.queue.length}`;
     this.queue.push({
       query,
       name: name ?? fallbackName,
@@ -157,13 +181,12 @@ export class BatchCollector {
       return mappedResults;
     } catch (error: any) {
       const batchContextMap = this.queue.map((item, index) => `  [${index}] ${item.name}`).join('\n');
-
       const errorMessage =
         `D1 Batch Execution Failed.\n` +
         `Queries in this batch:\n${batchContextMap}\n` +
         `Original Error: ${error.message}`;
-
-      throw new Error(errorMessage, { cause: error });
+      console.error(errorMessage);
+      throw error;
     }
   }
 }
