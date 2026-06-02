@@ -167,3 +167,13 @@ export class BatchCollector {
     }
   }
 }
+
+export function maybeBatch<Q extends BatchItem<'sqlite'>>(
+  collector: BatchCollector | undefined,
+  query: Q,
+  name?: string,
+) {
+  if (!collector) return query;
+  collector.push(query, name);
+  return Promise.resolve();
+}

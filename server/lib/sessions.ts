@@ -1,7 +1,7 @@
 import type { Context, ProtectedContext } from './trpc';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { UAParser } from 'ua-parser-js';
-import { type AppDatabase } from './db';
+import { BatchCollector, maybeBatch, type AppDatabase } from './db';
 import type { CookieHeaders } from './CookieHeaders';
 import { differenceInMinutes, addMinutes, differenceInDays, addDays, differenceInHours } from 'date-fns';
 import { loginAttemptsTable, sessionsTable, userDevicesTable, usersTable } from '../../db/schema';
@@ -48,34 +48,51 @@ async function createAndSaveToken(
   userId: string,
   loginAttemptId: string,
   deviceId: string,
+  collector?: BatchCollector,
 ) {
   const tokenParam = generateTokenParam(env);
   const { token, expiresAt } = tokenParam;
 
-  await db.insert(sessionsTable).values({
-    token,
-    expiresAt,
-    userId,
-    loginAttemptId,
-    deviceId,
-  });
+  await maybeBatch(
+    collector,
+    db.insert(sessionsTable).values({
+      token,
+      expiresAt,
+      userId,
+      loginAttemptId,
+      deviceId,
+    }),
+  );
   setTokenCookie(env, resHeaders, tokenParam);
 }
 
-async function revokeToken(db: AppDatabase, userId: string, sessionId: string, revokeLater = false) {
+async function revokeToken(
+  db: AppDatabase,
+  userId: string,
+  sessionId: string,
+  revokeLater = false,
+  collector?: BatchCollector,
+) {
   let expiresAt = new Date();
   if (revokeLater) {
     expiresAt = addMinutes(expiresAt, 2);
   }
-  const result = await db
-    .update(sessionsTable)
-    .set({ expiresAt })
-    .where(and(eq(sessionsTable.id, sessionId), eq(sessionsTable.userId, userId)));
 
-  console.log('revoke_token', { result: result.meta });
+  await maybeBatch(
+    collector,
+    db
+      .update(sessionsTable)
+      .set({ expiresAt })
+      .where(and(eq(sessionsTable.id, sessionId), eq(sessionsTable.userId, userId))),
+  );
 }
 
-async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId: string | null = null) {
+async function saveLoginAttempt(
+  ctx: Context,
+  isSuccess: boolean,
+  attemptedForId: string | null = null,
+  collector?: BatchCollector,
+) {
   const { db, req } = ctx;
   const cf = req.cf;
   const headers = req.headers;
@@ -100,7 +117,7 @@ async function saveLoginAttempt(ctx: Context, isSuccess: boolean, attemptedForId
     }
   }
 
-  await db.insert(loginAttemptsTable).values(attempt);
+  await maybeBatch(collector, db.insert(loginAttemptsTable).values(attempt));
 
   return attempt;
 }
@@ -125,15 +142,21 @@ async function create(ctx: Context, user: { id: string; name: string; email: str
     new Date().toISOString(),
     userAgent ?? 'unknown',
   ).addRecipient(user.email, user.name);
-
-  const promises: Promise<any>[] = [createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, deviceId)];
+  const collector = new BatchCollector();
+  const promises: Promise<any>[] = [
+    createAndSaveToken(db, env, resHeaders, user.id, loginAttempt.id, deviceId, collector),
+  ];
   if (!loggedInBefore) {
     promises.push(alertEmail.send(ctx));
     promises.push(
-      db.insert(userDevicesTable).values({ deviceId, userId: user.id, lastUsedAt: new Date() }).onConflictDoNothing(),
+      maybeBatch(
+        collector,
+        db.insert(userDevicesTable).values({ deviceId, userId: user.id, lastUsedAt: new Date() }).onConflictDoNothing(),
+      ),
     );
   }
 
+  promises.push(collector.executeBatch(db));
   await Promise.all(promises);
 }
 
@@ -142,7 +165,7 @@ async function revoke(ctx: ProtectedContext, otherSessionId?: string) {
   if (!otherSessionId) {
     unsetTokenCookie(ctx.env, ctx.resHeaders);
   }
-  await revokeToken(db, userId, otherSessionId ?? session.id);
+  await revokeToken(db, userId, otherSessionId ?? session.id, undefined);
 }
 
 function processDeviceToken(deviceCookieValue: string | undefined, resHeaders: CookieHeaders) {
@@ -245,14 +268,7 @@ async function check(
       authFailureReason: 'Unable to find token',
     };
   }
-
   const userId = session.user.id;
-
-  // if the token is older then 2 days, refresh it
-  if (differenceInDays(new Date(), session.createdAt) > 2) {
-    await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id, deviceId);
-    await revokeToken(db, userId, session.id, true);
-  }
 
   let isCsrfValid = false;
   if (csrfToken) {
@@ -261,12 +277,31 @@ async function check(
 
   const isAllowElevated = differenceInMinutes(new Date(), session.loginAttempt.timestamp) < 5;
 
-  // dont always update db, once every 4 hr is sufficient
-  if (differenceInHours(new Date(), session.deviceLastUsed) > 4) {
-    await db
-      .update(userDevicesTable)
-      .set({ lastUsedAt: new Date() })
-      .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId)));
+  // dont always update db
+  const isOldSession = differenceInDays(new Date(), session.createdAt) > 1;
+  const isOldLastUsed = differenceInHours(new Date(), session.deviceLastUsed) > 4;
+  if (isOldLastUsed || isOldSession) {
+    let collector: BatchCollector | undefined = undefined;
+
+    // if the token is old, refresh it
+    if (isOldSession) {
+      collector = new BatchCollector();
+      await createAndSaveToken(db, env, resHeaders, userId, session.loginAttempt.id, deviceId, collector);
+      await revokeToken(db, userId, session.id, true, collector);
+    }
+
+    // if last used is old
+    if (isOldLastUsed) {
+      await maybeBatch(
+        collector,
+        db
+          .update(userDevicesTable)
+          .set({ lastUsedAt: new Date() })
+          .where(and(eq(userDevicesTable.deviceId, deviceId), eq(userDevicesTable.userId, userId))),
+      );
+    }
+
+    await collector?.executeBatch(db);
   }
 
   return {
