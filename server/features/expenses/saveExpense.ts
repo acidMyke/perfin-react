@@ -10,11 +10,14 @@ import {
   expensesTable,
   expenseTextsTable,
   generateId,
+  textChunksTable,
+  textsContextsTable,
+  textsTable,
 } from '../../../db/schema';
-import { and, eq } from 'drizzle-orm';
+import { and, eq, inArray, sql } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { getLocationBoxId } from '#server/lib/utils';
-import { calculateExpense } from '#server/lib/expenseHelper';
+import { getLocationBoxId, getTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
+import { blacklistSearchableText, calculateExpense } from '#server/lib/expenseHelper';
 
 export const saveExpenseInputSchema = z.object({
   expenseId: z.string(),
@@ -82,20 +85,18 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const extgSearchTextHash = new Set<number>();
 
   if (expenseId !== CREATE_ID) {
-    await verifyExpenseVersion(db, userId, input.expenseId, input.version);
-    await getExistingChildrenData(db, input.expenseId, extgSearchTextHash, extgItemIds, extgAdjustmentIds);
+    await verifyExpenseVersion(db, userId, expenseId, input.version);
+    await getExistingChildrenData(db, expenseId, extgSearchTextHash, extgItemIds, extgAdjustmentIds);
   } else {
     expenseId = generateId();
   }
 
   const collector = new BatchCollector();
-  const { accountId, categoryId } = prepareAccountAndCategory(db, userId, input.account, input.category, collector);
-
-  prepareMainExpenseRecord(db, userId, input, accountId, categoryId, collector);
-  prepareExpenseItems(db, input.expenseId, input.items, extgItemIds, collector);
-  prepareExpenseAdjustments(db, input.expenseId, input.adjustments, extgAdjustmentIds, collector);
-
-  await prepareSearchIndexes(db, userId, input, extgSearchTextHash, collector);
+  const { accountId, categoryId } = prepareQueueAccountCategory(collector, db, userId, input.account, input.category);
+  queueMainExpenseRecord(collector, db, userId, input, accountId, categoryId);
+  queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
+  queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjustmentIds);
+  await queueSearchIndexes(collector, db, userId, expenseId, input, extgSearchTextHash);
 
   collector.executeBatch(db, true);
 }
@@ -154,15 +155,12 @@ export async function getExistingChildrenData(
   return { extgItemIds, extgAdjustmentIds, extgSearchTextHash };
 }
 
-type AccountInput = SaveExpenseInput['account'];
-type CategoryInput = SaveExpenseInput['category'];
-
-export function prepareAccountAndCategory(
+export function prepareQueueAccountCategory(
+  collector: BatchCollector,
   db: AppDatabase,
   userId: string,
-  accountInput: AccountInput,
-  categoryInput: CategoryInput,
-  collector: BatchCollector,
+  accountInput: SaveExpenseInput['account'],
+  categoryInput: SaveExpenseInput['category'],
 ) {
   let accountId: string | null = null;
   let categoryId: string | null = null;
@@ -180,13 +178,13 @@ export function prepareAccountAndCategory(
   return { accountId, categoryId };
 }
 
-export function prepareMainExpenseRecord(
+export function queueMainExpenseRecord(
+  collector: BatchCollector,
   db: AppDatabase,
   userId: string,
   input: SaveExpenseInput,
   accountId: string | null,
   categoryId: string | null,
-  collector: BatchCollector,
 ) {
   const { netTotalCents } = calculateExpense(input);
   const [boxId] =
@@ -218,5 +216,218 @@ export function prepareMainExpenseRecord(
         target: expensesTable.id,
         set: excludedAll(expensesTable, ['userId']),
       }),
+  );
+}
+
+export function queueExpenseItems(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expenseId: string,
+  items: SaveExpenseInput['items'],
+  extgItemIds: Set<string>,
+) {
+  const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
+  const removedItemIds = new Set(extgItemIds);
+  for (const item of items) {
+    if (item.isDeleted) continue;
+    if (item.id === CREATE_ID) item.id = generateId();
+    removedItemIds.delete(item.id);
+    itemsRecords.push({ ...item, expenseId, sequence: itemsRecords.length });
+  }
+
+  if (itemsRecords.length > 0) {
+    collector.push(
+      db
+        .insert(expenseItemsTable)
+        .values(itemsRecords)
+        .onConflictDoUpdate({
+          target: expenseItemsTable.id,
+          set: excludedAll(expenseItemsTable),
+        }),
+    );
+  }
+
+  if (removedItemIds.size > 0) {
+    collector.push(
+      db
+        .update(expenseItemsTable)
+        .set({ isDeleted: true })
+        .where(
+          and(eq(expenseItemsTable.expenseId, expenseId), inArray(expenseItemsTable.id, Array.from(removedItemIds))),
+        ),
+    );
+  }
+}
+
+export function queueExpenseAdjustments(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expenseId: string,
+  adjustments: SaveExpenseInput['adjustments'],
+  extgAdjustmentIds: Set<string>,
+) {
+  const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
+  const removedAdjustmentIds = new Set(extgAdjustmentIds);
+  for (const adj of adjustments) {
+    if (adj.isDeleted) continue;
+    if (adj.id === CREATE_ID) adj.id = generateId();
+    removedAdjustmentIds.delete(adj.id);
+    adjustmentsRecords.push({ ...adj, expenseId, sequence: adjustmentsRecords.length });
+  }
+
+  if (adjustmentsRecords.length > 0) {
+    collector.push(
+      db
+        .insert(expenseAdjustmentsTable)
+        .values(adjustmentsRecords)
+        .onConflictDoUpdate({
+          target: expenseAdjustmentsTable.id,
+          set: excludedAll(expenseAdjustmentsTable),
+        }),
+    );
+  }
+
+  if (removedAdjustmentIds.size > 0) {
+    collector.push(
+      db
+        .update(expenseAdjustmentsTable)
+        .set({ isDeleted: true })
+        .where(
+          and(
+            eq(expenseAdjustmentsTable.expenseId, expenseId),
+            inArray(expenseAdjustmentsTable.id, Array.from(removedAdjustmentIds)),
+          ),
+        ),
+    );
+  }
+}
+
+type SearchableInfo = { text: string; context?: string | null; sourceId: string };
+
+export async function queueSearchIndexes(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  input: SaveExpenseInput,
+  extgSearchTextHash: Set<number>,
+) {
+  const inputSearchables: SearchableInfo[] = gatherInputSearchables(input, expenseId);
+
+  const inputSearchableTexts = inputSearchables
+    .map(({ text }) => text)
+    .filter(text => !blacklistSearchableText.has(text));
+  const inputSearchTextHashMapping = await getTextsHashes(userId, inputSearchableTexts);
+  const inputSearchTextHash = new Set(inputSearchTextHashMapping.values());
+
+  const removedSearchTextHash = extgSearchTextHash.difference(inputSearchTextHash);
+  const newSearchTextHash = inputSearchTextHash.difference(extgSearchTextHash);
+
+  if (removedSearchTextHash.size > 0) {
+    collector.push(
+      db
+        .delete(expenseTextsTable)
+        .where(
+          and(
+            inArray(expenseTextsTable.textHash, Array.from(removedSearchTextHash)),
+            eq(expenseTextsTable.expenseId, expenseId),
+          ),
+        ),
+    );
+  }
+
+  if (newSearchTextHash.size > 0) {
+    const missingTextHashes = await getMissingTextHashes(db, newSearchTextHash);
+    queueNewSearchables(
+      collector,
+      db,
+      userId,
+      expenseId,
+      inputSearchables,
+      inputSearchTextHashMapping,
+      newSearchTextHash,
+      missingTextHashes,
+    );
+  }
+}
+
+function gatherInputSearchables(input: SaveExpenseInput, expenseId: string) {
+  const inputSearchables: SearchableInfo[] = [];
+
+  if (input.shopName) {
+    inputSearchables.push({ text: input.shopName, context: input.shopMall, sourceId: expenseId });
+  }
+
+  if (input.shopMall) {
+    inputSearchables.push({ text: input.shopMall, sourceId: expenseId });
+  }
+
+  for (const item of input.items) {
+    if (item.isDeleted) continue;
+    inputSearchables.push({ text: item.name, context: input.shopName, sourceId: item.id });
+  }
+
+  for (const adj of input.adjustments) {
+    if (adj.isDeleted) continue;
+    inputSearchables.push({ text: adj.name, context: input.shopName, sourceId: adj.id });
+  }
+  return inputSearchables;
+}
+
+export async function getMissingTextHashes(db: AppDatabase, searchTextHashes: Set<number>) {
+  const textHashesValues = sql.join(
+    searchTextHashes
+      .values()
+      .map((hash, i) => (i === 0 ? sql`SELECT ${hash} AS hash` : sql`UNION ALL SELECT ${hash}`))
+      .toArray(),
+    sql` `,
+  );
+
+  const missingRecords = await db.all<{ hash: number }>(
+    sql`SELECT q.hash FROM (${textHashesValues}) AS q
+          LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
+          WHERE ${textsTable.textHash} IS NULL`,
+  );
+
+  return new Set(missingRecords.map(({ hash }) => hash));
+}
+
+function queueNewSearchables(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  inputSearchables: SearchableInfo[],
+  inputSearchTextHashMapping: Map<string, number>,
+  newSearchTextHash: Set<number>,
+  missingTextHashes: Set<number>,
+) {
+  const texts: (typeof textsTable.$inferInsert)[] = [];
+  const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
+  const expenseTexts: (typeof expenseTextsTable.$inferInsert)[] = [];
+  const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
+
+  for (const { text, sourceId, context } of inputSearchables) {
+    const textHash = inputSearchTextHashMapping.get(text);
+    if (!textHash) continue;
+    if (!newSearchTextHash.has(textHash)) continue;
+    if (missingTextHashes.has(textHash)) {
+      texts.push({ textHash, userId, text });
+      textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
+    }
+    if (context) {
+      const ctxTextHash = inputSearchTextHashMapping.get(context);
+      if (ctxTextHash) {
+        textsContexts.push({ textHash, ctxTextHash });
+      }
+    }
+    expenseTexts.push({ textHash, sourceId, expenseId });
+  }
+
+  collector.pushAll(
+    ...splitArray(texts, 30).map(values => db.insert(textsTable).values(values).onConflictDoNothing()),
+    ...splitArray(textChunks, 30).map(values => db.insert(textChunksTable).values(values).onConflictDoNothing()),
+    ...splitArray(textsContexts, 30).map(values => db.insert(textsContextsTable).values(values).onConflictDoNothing()),
+    ...splitArray(expenseTexts, 30).map(values => db.insert(expenseTextsTable).values(values).onConflictDoNothing()),
   );
 }

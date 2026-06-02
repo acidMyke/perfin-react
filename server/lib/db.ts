@@ -148,6 +148,10 @@ export class BatchCollector {
     });
   }
 
+  pushAll(...queries: BatchItem<'sqlite'>[]) {
+    queries.forEach(query => this.push(query));
+  }
+
   get hasPending(): boolean {
     return this.queue.length > 0;
   }
