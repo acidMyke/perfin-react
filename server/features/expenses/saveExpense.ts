@@ -98,7 +98,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjustmentIds);
   await queueSearchIndexes(collector, db, userId, expenseId, input, extgSearchTextHash);
 
-  collector.executeBatch(db, true);
+  await collector.executeBatch(db, true);
 }
 
 export async function verifyExpenseVersion(db: AppDatabase, userId: string, expenseId: string, inputVersion: number) {
