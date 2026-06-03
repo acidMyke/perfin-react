@@ -364,10 +364,10 @@ export async function checkDbTextHashes(db: AppDatabase, expenseId: string, sear
   );
 
   const [missingRecords, textHashes] = await db.batch([
-    db.all<{ hash: number }>(
-      sql`SELECT q.hash FROM (${textHashesValues}) AS q
-          LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
-          WHERE ${textsTable.textHash} IS NULL`,
+    db.select({ hash: sql<number>`sub.hash`.as('hash') }).from(
+      sql`(SELECT q.hash FROM (${textHashesValues}) AS q
+           LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
+           WHERE ${textsTable.textHash} IS NULL) AS sub`,
     ),
     db
       .select({ textHash: expenseTextsTable.textHash })
