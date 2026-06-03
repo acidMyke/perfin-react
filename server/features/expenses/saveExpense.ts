@@ -308,27 +308,23 @@ export async function processSearchIndex(
     .filter(text => !blacklistSearchableText.has(text));
   const inputSearchTextHashMapping = await getTextsHashes(userId, inputSearchableTexts);
   const inputSearchTextHash = new Set(inputSearchTextHashMapping.values());
-  const { missingHash, extgHash } = await checkDbTextHashes(db, expenseId, inputSearchTextHash);
+  const { missingHash, extgHash, extgHashCtx } = await checkDbTextHashes(db, expenseId, inputSearchTextHash);
 
   const removedSearchTextHash = extgHash.difference(inputSearchTextHash);
   const newSearchTextHash = inputSearchTextHash.difference(extgHash);
 
-  if (removedSearchTextHash.size > 0) {
-    queueRemovedSearchables(collector, db, expenseId, removedSearchTextHash);
-  }
-
-  if (newSearchTextHash.size > 0) {
-    queueNewSearchables(
-      collector,
-      db,
-      userId,
-      expenseId,
-      inputSearchables,
-      inputSearchTextHashMapping,
-      newSearchTextHash,
-      missingHash,
-    );
-  }
+  queueRemovedSearchables(collector, db, expenseId, removedSearchTextHash);
+  queueNewSearchables(
+    collector,
+    db,
+    userId,
+    expenseId,
+    inputSearchables,
+    inputSearchTextHashMapping,
+    newSearchTextHash,
+    missingHash,
+    extgHashCtx,
+  );
 }
 
 function gatherInputSearchables(input: SaveExpenseInput, expenseId: string) {
@@ -370,19 +366,28 @@ export async function checkDbTextHashes(db: AppDatabase, expenseId: string, sear
            WHERE ${textsTable.textHash} IS NULL) AS sub`,
     ),
     db
-      .select({ textHash: expenseTextsTable.textHash })
+      .select({ textHash: expenseTextsTable.textHash, ctxTextHash: textsContextsTable.ctxTextHash })
       .from(expenseTextsTable)
+      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
       .where(eq(expenseTextsTable.expenseId, expenseId)),
   ]);
 
   const missingHash = new Set(missingRecords.map(({ hash }) => hash));
   const extgHash = new Set<number>();
+  const extgHashCtx = new Map<number, Set<number>>();
 
-  for (const { textHash } of textHashes) {
+  for (const { textHash, ctxTextHash } of textHashes) {
     extgHash.add(textHash);
+    if (ctxTextHash) {
+      if (extgHashCtx.has(textHash)) {
+        extgHashCtx.get(textHash)!.add(ctxTextHash);
+      } else {
+        extgHashCtx.set(textHash, new Set([ctxTextHash]));
+      }
+    }
   }
 
-  return { missingHash, extgHash };
+  return { missingHash, extgHash, extgHashCtx };
 }
 
 function queueRemovedSearchables(
@@ -391,6 +396,7 @@ function queueRemovedSearchables(
   expenseId: string,
   removedSearchTextHash: Set<number>,
 ) {
+  if (removedSearchTextHash.size == 0) return;
   collector.push(
     db
       .delete(expenseTextsTable)
@@ -412,6 +418,7 @@ function queueNewSearchables(
   inputSearchTextHashMapping: Map<string, number>,
   newSearchTextHash: Set<number>,
   missingHash: Set<number>,
+  extgHashCtx: Map<number, Set<number>>,
 ) {
   const texts: (typeof textsTable.$inferInsert)[] = [];
   const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
@@ -421,18 +428,22 @@ function queueNewSearchables(
   for (const { text, sourceId, context } of inputSearchables) {
     const textHash = inputSearchTextHashMapping.get(text);
     if (!textHash) continue;
-    if (!newSearchTextHash.has(textHash)) continue;
+    const isExtg = newSearchTextHash.has(textHash);
+    let isNewContext = false;
+    if (context) {
+      const ctxTextHash = inputSearchTextHashMapping.get(context);
+      if (ctxTextHash) {
+        isNewContext = !extgHashCtx.get(textHash)?.has(ctxTextHash);
+        if (isNewContext) textsContexts.push({ textHash, ctxTextHash });
+      }
+    }
+
+    if (isExtg && !isNewContext) continue;
     if (missingHash.has(textHash)) {
       texts.push({ textHash, userId, text });
       textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
     }
-    if (context) {
-      const ctxTextHash = inputSearchTextHashMapping.get(context);
-      if (ctxTextHash) {
-        textsContexts.push({ textHash, ctxTextHash });
-      }
-    }
-    expenseTexts.push({ textHash, sourceId, expenseId });
+    if (!isExtg) expenseTexts.push({ textHash, sourceId, expenseId });
   }
 
   collector.pushAll(
