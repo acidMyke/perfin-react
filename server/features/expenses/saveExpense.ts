@@ -82,11 +82,10 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   let expenseId = input.expenseId;
   const extgItemIds = new Set<string>();
   const extgAdjustmentIds = new Set<string>();
-  const extgSearchTextHash = new Set<number>();
 
   if (expenseId !== CREATE_ID) {
     await verifyExpenseVersion(db, userId, expenseId, input.version);
-    await getExistingChildrenData(db, expenseId, extgSearchTextHash, extgItemIds, extgAdjustmentIds);
+    await getExistingChildrenData(db, expenseId, extgItemIds, extgAdjustmentIds);
   } else {
     expenseId = generateId();
   }
@@ -96,7 +95,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   queueMainExpenseRecord(collector, db, userId, input, accountId, categoryId);
   queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
   queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjustmentIds);
-  await queueSearchIndexes(collector, db, userId, expenseId, input, extgSearchTextHash);
+  await processSearchIndex(collector, db, userId, expenseId, input);
 
   await collector.executeBatch(db, true);
 }
@@ -121,11 +120,10 @@ export async function verifyExpenseVersion(db: AppDatabase, userId: string, expe
 export async function getExistingChildrenData(
   db: AppDatabase,
   expenseId: string,
-  extgSearchTextHash: Set<number>,
   extgItemIds: Set<string>,
   extgAdjustmentIds: Set<string>,
 ) {
-  const [items, adjustments, textHashes] = await db.batch([
+  const [items, adjustments] = await db.batch([
     db
       .select({ id: expenseItemsTable.id })
       .from(expenseItemsTable)
@@ -134,10 +132,6 @@ export async function getExistingChildrenData(
       .select({ id: expenseAdjustmentsTable.id })
       .from(expenseAdjustmentsTable)
       .where(and(eq(expenseAdjustmentsTable.expenseId, expenseId), eq(expenseAdjustmentsTable.isDeleted, false))),
-    db
-      .select({ textHash: expenseTextsTable.textHash })
-      .from(expenseTextsTable)
-      .where(eq(expenseTextsTable.expenseId, expenseId)),
   ]);
 
   for (const { id } of items) {
@@ -148,11 +142,7 @@ export async function getExistingChildrenData(
     extgAdjustmentIds.add(id);
   }
 
-  for (const { textHash } of textHashes) {
-    extgSearchTextHash.add(textHash);
-  }
-
-  return { extgItemIds, extgAdjustmentIds, extgSearchTextHash };
+  return { extgItemIds, extgAdjustmentIds };
 }
 
 export function prepareQueueAccountCategory(
@@ -304,13 +294,12 @@ export function queueExpenseAdjustments(
 
 type SearchableInfo = { text: string; context?: string | null; sourceId: string };
 
-export async function queueSearchIndexes(
+export async function processSearchIndex(
   collector: BatchCollector,
   db: AppDatabase,
   userId: string,
   expenseId: string,
   input: SaveExpenseInput,
-  extgSearchTextHash: Set<number>,
 ) {
   const inputSearchables: SearchableInfo[] = gatherInputSearchables(input, expenseId);
 
@@ -319,25 +308,16 @@ export async function queueSearchIndexes(
     .filter(text => !blacklistSearchableText.has(text));
   const inputSearchTextHashMapping = await getTextsHashes(userId, inputSearchableTexts);
   const inputSearchTextHash = new Set(inputSearchTextHashMapping.values());
+  const { missingHash, extgHash } = await checkDbTextHashes(db, expenseId, inputSearchTextHash);
 
-  const removedSearchTextHash = extgSearchTextHash.difference(inputSearchTextHash);
-  const newSearchTextHash = inputSearchTextHash.difference(extgSearchTextHash);
+  const removedSearchTextHash = extgHash.difference(inputSearchTextHash);
+  const newSearchTextHash = inputSearchTextHash.difference(extgHash);
 
   if (removedSearchTextHash.size > 0) {
-    collector.push(
-      db
-        .delete(expenseTextsTable)
-        .where(
-          and(
-            inArray(expenseTextsTable.textHash, Array.from(removedSearchTextHash)),
-            eq(expenseTextsTable.expenseId, expenseId),
-          ),
-        ),
-    );
+    queueRemovedSearchables(collector, db, expenseId, removedSearchTextHash);
   }
 
   if (newSearchTextHash.size > 0) {
-    const missingTextHashes = await getMissingTextHashes(db, newSearchTextHash);
     queueNewSearchables(
       collector,
       db,
@@ -346,7 +326,7 @@ export async function queueSearchIndexes(
       inputSearchables,
       inputSearchTextHashMapping,
       newSearchTextHash,
-      missingTextHashes,
+      missingHash,
     );
   }
 }
@@ -374,7 +354,7 @@ function gatherInputSearchables(input: SaveExpenseInput, expenseId: string) {
   return inputSearchables;
 }
 
-export async function getMissingTextHashes(db: AppDatabase, searchTextHashes: Set<number>) {
+export async function checkDbTextHashes(db: AppDatabase, expenseId: string, searchTextHashes: Set<number>) {
   const textHashesValues = sql.join(
     searchTextHashes
       .values()
@@ -383,13 +363,44 @@ export async function getMissingTextHashes(db: AppDatabase, searchTextHashes: Se
     sql` `,
   );
 
-  const missingRecords = await db.all<{ hash: number }>(
-    sql`SELECT q.hash FROM (${textHashesValues}) AS q
+  const [missingRecords, textHashes] = await db.batch([
+    db.all<{ hash: number }>(
+      sql`SELECT q.hash FROM (${textHashesValues}) AS q
           LEFT JOIN ${textsTable} ON ${textsTable.textHash} = q.hash
           WHERE ${textsTable.textHash} IS NULL`,
-  );
+    ),
+    db
+      .select({ textHash: expenseTextsTable.textHash })
+      .from(expenseTextsTable)
+      .where(eq(expenseTextsTable.expenseId, expenseId)),
+  ]);
 
-  return new Set(missingRecords.map(({ hash }) => hash));
+  const missingHash = new Set(missingRecords.map(({ hash }) => hash));
+  const extgHash = new Set<number>();
+
+  for (const { textHash } of textHashes) {
+    extgHash.add(textHash);
+  }
+
+  return { missingHash, extgHash };
+}
+
+function queueRemovedSearchables(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expenseId: string,
+  removedSearchTextHash: Set<number>,
+) {
+  collector.push(
+    db
+      .delete(expenseTextsTable)
+      .where(
+        and(
+          inArray(expenseTextsTable.textHash, Array.from(removedSearchTextHash)),
+          eq(expenseTextsTable.expenseId, expenseId),
+        ),
+      ),
+  );
 }
 
 function queueNewSearchables(
@@ -400,7 +411,7 @@ function queueNewSearchables(
   inputSearchables: SearchableInfo[],
   inputSearchTextHashMapping: Map<string, number>,
   newSearchTextHash: Set<number>,
-  missingTextHashes: Set<number>,
+  missingHash: Set<number>,
 ) {
   const texts: (typeof textsTable.$inferInsert)[] = [];
   const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
@@ -411,7 +422,7 @@ function queueNewSearchables(
     const textHash = inputSearchTextHashMapping.get(text);
     if (!textHash) continue;
     if (!newSearchTextHash.has(textHash)) continue;
-    if (missingTextHashes.has(textHash)) {
+    if (missingHash.has(textHash)) {
       texts.push({ textHash, userId, text });
       textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
     }
