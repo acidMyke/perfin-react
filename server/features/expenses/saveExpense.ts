@@ -91,7 +91,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
 
   const collector = new BatchCollector();
   const { accountId, categoryId } = prepareQueueAccountCategory(collector, db, userId, input.account, input.category);
-  queueMainExpenseRecord(collector, db, userId, input, accountId, categoryId);
+  queueMainExpenseRecord(collector, db, userId, expenseId, input, accountId, categoryId);
   const { removedItemIds } = queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
   const { removedAdjIds } = queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds);
   await processSearchIndex(collector, db, userId, expenseId, input, removedItemIds, removedAdjIds);
@@ -171,6 +171,7 @@ export function queueMainExpenseRecord(
   collector: BatchCollector,
   db: AppDatabase,
   userId: string,
+  expenseId: string,
   input: SaveExpenseInput,
   accountId: string | null,
   categoryId: string | null,
@@ -185,7 +186,7 @@ export function queueMainExpenseRecord(
     db
       .insert(expensesTable)
       .values({
-        id: input.expenseId,
+        id: expenseId,
         amountCents: netTotalCents,
         billedAt: input.billedAt,
         userId: userId,
