@@ -308,6 +308,7 @@ export const textChunksTable = sqliteTable(
   ],
 );
 
+/** @deprecated use expenseTextsTable.ctxTextHash instead */
 export const textsContextsTable = sqliteTable(
   'texts_contexts',
   {
@@ -328,6 +329,7 @@ export const expenseTextsTable = sqliteTable(
     textHash: textHashColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
+    ctxTextHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
   },
   t => [
     primaryKey({ columns: [t.textHash, t.sourceId] }),

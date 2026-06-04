@@ -7,7 +7,6 @@ import {
   expensesTable,
   expenseTextsTable,
   textChunksTable,
-  textsContextsTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -208,20 +207,12 @@ const getSuggestionsProcedure = protectedProcedure
       const contextHash = await getTextHash(userId, context);
       if (search) {
         // contextual sort, since it will be filtered by chunks
-        joinedHashQuery = hashQuery.leftJoin(
-          textsContextsTable,
-          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
-        );
-        const hasMatchingContext = caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
+        const hasMatchingContext = caseWhen(eq(expenseTextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
         const relevance = sql`${max(hasMatchingContext)} + ${count(textChunksTable.chunk)}`;
         orderBy.unshift(desc(relevance));
       } else {
         // contextual search, filtering by context
-        joinedHashQuery = hashQuery.innerJoin(
-          textsContextsTable,
-          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
-        );
-        where.push(eq(textsContextsTable.ctxTextHash, contextHash));
+        where.push(eq(expenseTextsTable.ctxTextHash, contextHash));
       }
     }
 
@@ -331,16 +322,15 @@ const inferItemPricesProcedure = protectedProcedure
     const hashes = await getTextsHashes(userId, texts);
     const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
     if (input.shopName) {
-      where.push(eq(textsContextsTable.ctxTextHash, hashes.get(input.shopName)!));
+      where.push(eq(expenseTextsTable.ctxTextHash, hashes.get(input.shopName)!));
     } else {
-      where.push(isNull(textsContextsTable.ctxTextHash));
+      where.push(isNull(expenseTextsTable.ctxTextHash));
     }
     return db
       .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
       .from(expenseTextsTable)
       .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
       .where(and(...where))
       .groupBy(expenseItemsTable.priceCents)
       .orderBy(desc(max(expensesTable.billedAt)), desc(count()))

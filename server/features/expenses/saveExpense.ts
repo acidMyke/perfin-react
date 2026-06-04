@@ -366,9 +366,8 @@ export async function checkDbTextHashes(db: AppDatabase, expenseId: string, sear
            WHERE ${textsTable.textHash} IS NULL) AS sub`,
     ),
     db
-      .select({ textHash: expenseTextsTable.textHash, ctxTextHash: textsContextsTable.ctxTextHash })
+      .select({ textHash: expenseTextsTable.textHash, ctxTextHash: expenseTextsTable.ctxTextHash })
       .from(expenseTextsTable)
-      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
       .where(eq(expenseTextsTable.expenseId, expenseId)),
   ]);
 
@@ -423,18 +422,17 @@ function queueNewSearchables(
   const texts: (typeof textsTable.$inferInsert)[] = [];
   const textChunks: (typeof textChunksTable.$inferInsert)[] = [];
   const expenseTexts: (typeof expenseTextsTable.$inferInsert)[] = [];
-  const textsContexts: (typeof textsContextsTable.$inferInsert)[] = [];
 
   for (const { text, sourceId, context } of inputSearchables) {
     const textHash = inputSearchTextHashMapping.get(text);
     if (!textHash) continue;
     const isExtg = newSearchTextHash.has(textHash);
     let isNewContext = false;
+    let ctxTextHash: number | null = null;
     if (context) {
-      const ctxTextHash = inputSearchTextHashMapping.get(context);
+      ctxTextHash = inputSearchTextHashMapping.get(context) ?? null;
       if (ctxTextHash) {
         isNewContext = !extgHashCtx.get(textHash)?.has(ctxTextHash);
-        if (isNewContext) textsContexts.push({ textHash, ctxTextHash });
       }
     }
 
@@ -443,13 +441,12 @@ function queueNewSearchables(
       texts.push({ textHash, userId, text });
       textChunks.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash })));
     }
-    if (!isExtg) expenseTexts.push({ textHash, sourceId, expenseId });
+    expenseTexts.push({ textHash, sourceId, expenseId, ctxTextHash });
   }
 
   collector.pushAll(
     ...splitArray(texts, 30).map(values => db.insert(textsTable).values(values).onConflictDoNothing()),
     ...splitArray(textChunks, 30).map(values => db.insert(textChunksTable).values(values).onConflictDoNothing()),
-    ...splitArray(textsContexts, 30).map(values => db.insert(textsContextsTable).values(values).onConflictDoNothing()),
     ...splitArray(expenseTexts, 30).map(values => db.insert(expenseTextsTable).values(values).onConflictDoNothing()),
   );
 }
