@@ -8,12 +8,12 @@ import {
   expenseTextsTable,
   textChunksTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL, sum } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max } from '../lib/db';
+import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
@@ -372,24 +372,25 @@ const searchExpenseProcedure = protectedProcedure
     const search = input.search.trim();
     if (search.length < 3) return {};
 
-    const trigrams = getTrigrams(search, { excludeUnigrams: true });
+    const trigrams = getTrigrams(search, { unlimited: true });
 
     const chunkCte = db.$with('chunk_cte').as(
       db
         .select({
           textHash: textChunksTable.textHash.as('text_hash'),
-          chunkCount: count(textChunksTable.chunk).as('chunk_count'),
+          chunkCount: sql<number>`sum(length(${textChunksTable.chunk}) / 3.0)`.as('chunk_count'),
         })
         .from(textChunksTable)
         .groupBy(textChunksTable.textHash)
-        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams))),
+        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
+        .having(sql`chunk_count > 1`),
     );
 
     const matchCte = db.$with('match_cte').as(
       db
         .select({
           expenseId: expenseTextsTable.expenseId.as('expense_id'),
-          totalChunkCount: sum(chunkCte.chunkCount).as('total_chunk_count'),
+          totalChunkCount: sumAsNumber(chunkCte.chunkCount).as('total_chunk_count'),
           sourceMatches: jsonGroupObjectArray({
             chunkCount: chunkCte.chunkCount,
             matchItemName: expenseItemsTable.name,

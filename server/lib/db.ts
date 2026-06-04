@@ -123,6 +123,10 @@ export function max<T extends ExtractableData>(data: T) {
   return sql<ExtractType<T>>`max(${data})`;
 }
 
+export function sumAsNumber<T extends ExtractableData>(data: T) {
+  return sql<ExtractType<T>>`sum(${data})`.mapWith(Number);
+}
+
 export function createDatabase(env: Env) {
   return drizzle(env.db, {
     logger: import.meta.env.DEV,
