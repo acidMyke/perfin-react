@@ -11,7 +11,6 @@ import {
   expenseTextsTable,
   generateId,
   textChunksTable,
-  textsContextsTable,
   textsTable,
 } from '../../../db/schema';
 import { and, eq, inArray, sql } from 'drizzle-orm';
@@ -81,11 +80,11 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const userId = user.id;
   let expenseId = input.expenseId;
   const extgItemIds = new Set<string>();
-  const extgAdjustmentIds = new Set<string>();
+  const extgAdjIds = new Set<string>();
 
   if (expenseId !== CREATE_ID) {
     await verifyExpenseVersion(db, userId, expenseId, input.version);
-    await getExistingChildrenData(db, expenseId, extgItemIds, extgAdjustmentIds);
+    await getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds);
   } else {
     expenseId = generateId();
   }
@@ -93,9 +92,9 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const collector = new BatchCollector();
   const { accountId, categoryId } = prepareQueueAccountCategory(collector, db, userId, input.account, input.category);
   queueMainExpenseRecord(collector, db, userId, input, accountId, categoryId);
-  queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
-  queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjustmentIds);
-  await processSearchIndex(collector, db, userId, expenseId, input);
+  const { removedItemIds } = queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
+  const { removedAdjIds } = queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds);
+  await processSearchIndex(collector, db, userId, expenseId, input, removedItemIds, removedAdjIds);
 
   await collector.executeBatch(db, true);
 }
@@ -247,6 +246,8 @@ export function queueExpenseItems(
         ),
     );
   }
+
+  return { removedItemIds };
 }
 
 export function queueExpenseAdjustments(
@@ -257,11 +258,11 @@ export function queueExpenseAdjustments(
   extgAdjustmentIds: Set<string>,
 ) {
   const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
-  const removedAdjustmentIds = new Set(extgAdjustmentIds);
+  const removedAdjIds = new Set(extgAdjustmentIds);
   for (const adj of adjustments) {
     if (adj.isDeleted) continue;
     if (adj.id === CREATE_ID) adj.id = generateId();
-    removedAdjustmentIds.delete(adj.id);
+    removedAdjIds.delete(adj.id);
     adjustmentsRecords.push({ ...adj, expenseId, sequence: adjustmentsRecords.length });
   }
 
@@ -277,7 +278,7 @@ export function queueExpenseAdjustments(
     );
   }
 
-  if (removedAdjustmentIds.size > 0) {
+  if (removedAdjIds.size > 0) {
     collector.push(
       db
         .update(expenseAdjustmentsTable)
@@ -285,11 +286,13 @@ export function queueExpenseAdjustments(
         .where(
           and(
             eq(expenseAdjustmentsTable.expenseId, expenseId),
-            inArray(expenseAdjustmentsTable.id, Array.from(removedAdjustmentIds)),
+            inArray(expenseAdjustmentsTable.id, Array.from(removedAdjIds)),
           ),
         ),
     );
   }
+
+  return { removedAdjIds };
 }
 
 type SearchableInfo = { text: string; context?: string | null; sourceId: string };
@@ -300,6 +303,8 @@ export async function processSearchIndex(
   userId: string,
   expenseId: string,
   input: SaveExpenseInput,
+  removedItemIds: Set<string>,
+  removedAdjIds: Set<string>,
 ) {
   const inputSearchables: SearchableInfo[] = gatherInputSearchables(input, expenseId);
 
@@ -313,7 +318,7 @@ export async function processSearchIndex(
   const removedSearchTextHash = extgHash.difference(inputSearchTextHash);
   const newSearchTextHash = inputSearchTextHash.difference(extgHash);
 
-  queueRemovedSearchables(collector, db, expenseId, removedSearchTextHash);
+  queueRemovedSearchables(collector, db, expenseId, removedSearchTextHash, removedItemIds, removedAdjIds);
   queueNewSearchables(
     collector,
     db,
@@ -394,18 +399,33 @@ function queueRemovedSearchables(
   db: AppDatabase,
   expenseId: string,
   removedSearchTextHash: Set<number>,
+  removedItemIds: Set<string>,
+  removedAdjIds: Set<string>,
 ) {
-  if (removedSearchTextHash.size == 0) return;
-  collector.push(
-    db
-      .delete(expenseTextsTable)
-      .where(
-        and(
-          inArray(expenseTextsTable.textHash, Array.from(removedSearchTextHash)),
-          eq(expenseTextsTable.expenseId, expenseId),
+  if (removedSearchTextHash.size == 0) {
+    collector.push(
+      db
+        .delete(expenseTextsTable)
+        .where(
+          and(
+            inArray(expenseTextsTable.textHash, Array.from(removedSearchTextHash)),
+            eq(expenseTextsTable.expenseId, expenseId),
+          ),
         ),
-      ),
-  );
+    );
+  }
+  if (removedItemIds.size > 0 || removedAdjIds.size > 0) {
+    collector.push(
+      db
+        .delete(expenseTextsTable)
+        .where(
+          and(
+            inArray(expenseTextsTable.sourceId, Array.from(removedItemIds.union(removedAdjIds))),
+            eq(expenseTextsTable.expenseId, expenseId),
+          ),
+        ),
+    );
+  }
 }
 
 function queueNewSearchables(
