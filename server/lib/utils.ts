@@ -1,6 +1,6 @@
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-export function getTrigrams(input: string) {
+export function getTrigrams(input: string, { excludeUnigrams } = { excludeUnigrams: false }) {
   const phrases = input
     .trim()
     .toLowerCase()
@@ -8,8 +8,10 @@ export function getTrigrams(input: string) {
   const chunks: string[] = [];
   for (const phrase of phrases) {
     if (!phrase) continue;
-    const numChunk = Math.min(phrase.length, 10);
-    for (let idx = 0; idx < numChunk; idx++) {
+    const numChunk = Math.min(phrase.length, excludeUnigrams ? 11 : 10);
+    let idx = 0;
+    if (excludeUnigrams) idx++;
+    for (; idx < numChunk; idx++) {
       chunks.push(phrase.slice(Math.max(idx - 2, 0), idx + 1));
     }
   }

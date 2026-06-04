@@ -8,12 +8,12 @@ import {
   expenseTextsTable,
   textChunksTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL, sum } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, jsonGroupArray, max } from '../lib/db';
+import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
@@ -365,6 +365,60 @@ const setIsDeletedExpenseProcedure = protectedProcedure
     return { success: true };
   });
 
+const searchExpenseProcedure = protectedProcedure
+  .input(z.object({ search: z.string(), cursor: z.string().nullish() }))
+  .query(async ({ ctx, input }) => {
+    const { db, userId } = ctx;
+    const search = input.search.trim();
+    if (search.length < 3) return {};
+
+    const trigrams = getTrigrams(search, { excludeUnigrams: true });
+
+    const chunkCte = db.$with('chunk_cte').as(
+      db
+        .select({
+          textHash: textChunksTable.textHash.as('text_hash'),
+          chunkCount: count(textChunksTable.chunk).as('chunk_count'),
+        })
+        .from(textChunksTable)
+        .groupBy(textChunksTable.textHash)
+        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams))),
+    );
+
+    const matchCte = db.$with('match_cte').as(
+      db
+        .select({
+          expenseId: expenseTextsTable.expenseId.as('expense_id'),
+          totalChunkCount: sum(chunkCte.chunkCount).as('total_chunk_count'),
+          sourceMatches: jsonGroupObjectArray({
+            chunkCount: chunkCte.chunkCount,
+            matchItemName: expenseItemsTable.name,
+            matchAdjustmentName: expenseAdjustmentsTable.name,
+          }).as('source_matches'),
+        })
+        .from(chunkCte)
+        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textHash))
+        .leftJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
+        .leftJoin(expenseAdjustmentsTable, eq(expenseTextsTable.sourceId, expenseAdjustmentsTable.id))
+        .groupBy(expenseTextsTable.expenseId),
+    );
+
+    const result = await db
+      .with(chunkCte, matchCte)
+      .select({
+        expenseId: matchCte.expenseId,
+        totalChunkCount: matchCte.totalChunkCount,
+        shopName: expensesTable.shopName,
+        shopMall: expensesTable.shopMall,
+        sourceMatches: matchCte.sourceMatches,
+      })
+      .from(matchCte)
+      .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
+      .orderBy(desc(matchCte.totalChunkCount));
+
+    return { searchResult: result };
+  });
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
@@ -375,4 +429,5 @@ export const expenseProcedures = {
   getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
+  search: searchExpenseProcedure,
 };

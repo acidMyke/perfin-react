@@ -95,6 +95,30 @@ export function jsonGroupArray<T extends ExtractableData>(data: T, options: { di
   });
 }
 
+export function jsonGroupObjectArray<T extends Record<string, ExtractableData>>(
+  shape: T,
+  options: { distinct?: boolean } = {},
+) {
+  const { distinct } = options;
+
+  const jsonObjectChunks = Object.entries(shape).flatMap(([key, value]) => [sql`${key}`, value]);
+  const jsonObject = sql`json_object(${sql.join(jsonObjectChunks, sql`, `)})`;
+  const jsonGroupedArray = distinct
+    ? sql`json_group_array(distinct ${jsonObject})`
+    : sql`json_group_array(${jsonObject})`;
+
+  return sql`coalesce(${jsonGroupedArray}, '[]')`.mapWith({
+    mapFromDriverValue: v => {
+      if (typeof v !== 'string') return [] as { [K in keyof T]: ExtractType<T[K]> }[];
+      try {
+        return JSON.parse(v) as { [K in keyof T]: ExtractType<T[K]> }[];
+      } catch {
+        return [] as { [K in keyof T]: ExtractType<T[K]> }[];
+      }
+    },
+  });
+}
+
 export function max<T extends ExtractableData>(data: T) {
   return sql<ExtractType<T>>`max(${data})`;
 }
