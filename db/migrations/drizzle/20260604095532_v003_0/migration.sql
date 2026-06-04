@@ -1,0 +1,1 @@
+ALTER TABLE `expenses_texts` ADD `ctx_text_hash` integer REFERENCES texts(text_hash);
