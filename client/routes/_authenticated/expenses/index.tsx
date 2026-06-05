@@ -3,7 +3,7 @@ import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#clien
 import { Fragment } from 'react/jsx-runtime';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { format, isBefore, isSameMonth, startOfMonth, subMonths } from 'date-fns';
-import { ChevronRight, SearchX } from 'lucide-react';
+import { ChevronRight, Search, SearchX } from 'lucide-react';
 import { abbreviatedMonthValues } from '#client/constants';
 import { PageHeader } from '#components/PageHeader';
 import { currencyNumberFormat } from '#client/utils';
@@ -115,10 +115,20 @@ function MonthSelector() {
   );
 }
 
+function ExpenseListHeader() {
+  return (
+    <PageHeader title='Expenses'>
+      <PageHeader.RightLink to='/expenses/search'>
+        <Search />
+      </PageHeader.RightLink>
+    </PageHeader>
+  );
+}
+
 function RoutePendingComponent() {
   return (
     <div className='mx-auto max-w-lg px-2'>
-      <PageHeader title='Expenses' />
+      <ExpenseListHeader />
       <MonthSelector />
       <span className='loading loading-spinner loading-xl'></span>
     </div>
@@ -206,7 +216,7 @@ function RouteComponent() {
   if (expenses.length == 0) {
     return (
       <div className='mx-auto max-w-lg px-2'>
-        <PageHeader title='Expenses' />
+        <ExpenseListHeader />
         <MonthSelector />
         <NoRecordsFound />
       </div>
@@ -216,7 +226,7 @@ function RouteComponent() {
 
   return (
     <div className='mx-auto max-w-lg px-2'>
-      <PageHeader title='Expenses' />
+      <ExpenseListHeader />
       <form.AppForm>
         <div className='flex justify-between'>
           <MonthSelector />

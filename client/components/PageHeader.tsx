@@ -1,22 +1,57 @@
-import { useCanGoBack, useRouter } from '@tanstack/react-router';
-import { ArrowLeft } from 'lucide-react';
+import { createLink, useCanGoBack, useRouter } from '@tanstack/react-router';
+import { ArrowLeft, ArrowRight } from 'lucide-react';
+import { forwardRef, type AnchorHTMLAttributes, type ReactNode } from 'react';
 
 type PageHeaderProp = {
+  title: string;
+  children?: ReactNode;
   showBackButton?: boolean;
-  title?: string;
 };
 
-export function PageHeader({ showBackButton, title }: PageHeaderProp) {
+const LeftLink = createLink(
+  forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(({ children, ...props }, ref) => {
+    return (
+      <div className='absolute left-0 flex items-center'>
+        <a ref={ref} {...props}>
+          {children ?? <ArrowLeft />}
+        </a>
+      </div>
+    );
+  }),
+);
+
+const RightLink = createLink(
+  forwardRef<HTMLAnchorElement, AnchorHTMLAttributes<HTMLAnchorElement>>(({ children, ...props }, ref) => {
+    return (
+      <div className='absolute right-0 flex items-center'>
+        <a ref={ref} {...props}>
+          {children ?? <ArrowRight />}
+        </a>
+      </div>
+    );
+  }),
+);
+
+const Main = ({ title, showBackButton, children }: PageHeaderProp) => {
   const router = useRouter();
   const canGoBack = useCanGoBack();
   return (
-    <>
+    <header className='relative mb-2 flex items-center justify-center py-2'>
+      <h1 className='m-0 text-center text-3xl font-black'>{title}</h1>
+
       {showBackButton && (
-        <button className='btn btn-ghost fixed' disabled={!canGoBack} onClick={_ => router.history.back()}>
+        <button
+          className='absolute left-0 flex items-center'
+          disabled={!canGoBack}
+          onClick={_ => router.history.back()}
+        >
           <ArrowLeft />
         </button>
       )}
-      {title && <h1 className='mb-2 text-center text-3xl font-black'>{title}</h1>}
-    </>
+
+      {children}
+    </header>
   );
-}
+};
+
+export const PageHeader = Object.assign(Main, { LeftLink, RightLink });
