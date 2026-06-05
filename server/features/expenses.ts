@@ -366,13 +366,13 @@ const setIsDeletedExpenseProcedure = protectedProcedure
   });
 
 const searchExpenseProcedure = protectedProcedure
-  .input(z.object({ search: z.string(), cursor: z.string().nullish() }))
+  .input(z.object({ query: z.string(), cursor: z.string().nullish() }))
   .query(async ({ ctx, input }) => {
     const { db, userId } = ctx;
-    const search = input.search.trim();
-    if (search.length < 3) return {};
+    const query = input.query.trim();
+    if (query.length < 3) return { searchResult: [] };
 
-    const trigrams = getTrigrams(search, { unlimited: true });
+    const trigrams = getTrigrams(query, { unlimited: true });
 
     const chunkCte = db.$with('chunk_cte').as(
       db
@@ -412,6 +412,8 @@ const searchExpenseProcedure = protectedProcedure
         shopName: expensesTable.shopName,
         shopMall: expensesTable.shopMall,
         sourceMatches: matchCte.sourceMatches,
+        amountCents: expensesTable.amountCents,
+        billedAt: expensesTable.billedAt,
       })
       .from(matchCte)
       .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
