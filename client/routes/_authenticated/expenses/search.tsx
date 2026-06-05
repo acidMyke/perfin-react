@@ -5,7 +5,7 @@ import { dateFormat, formatCents } from '#client/utils';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronRight, Search } from 'lucide-react';
-import { type ReactNode } from 'react';
+import { Fragment, type ReactNode } from 'react';
 import { z } from 'zod/v4';
 
 export const Route = createFileRoute('/_authenticated/expenses/search')({
@@ -55,14 +55,19 @@ function RouteLayoutComponent({ children }: RouteLayoutComponentProps) {
               onChangeAsync: () => navigate({ search: form.state.values }),
             }}
           >
-            {({ TextInput }) => <TextInput type='search' containerCn='mt-0 grow' />}
+            {({ TextInput }) => <TextInput type='search' containerCn='mt-0 grow' autoFocus />}
           </form.AppField>
           <button className='btn btn-ghost mb-2' onClick={() => navigate({ search: form.state.values })}>
             <Search />
           </button>
         </div>
       </form.AppForm>
-      {children ?? <div className='skeleton h-100 w-lg max-w-full' />}
+      {children ??
+        Array.from({ length: 6 }).map((_, i) => (
+          <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col' key={i}>
+            <ExpenseSkeleton />
+          </div>
+        ))}
     </div>
   );
 }
@@ -80,26 +85,23 @@ interface HighlightTextProps {
 function HighlightText({ text, query }: HighlightTextProps) {
   if (!query || !text) return <>{text}</>;
 
-  const result: React.ReactNode[] = [];
-  let queryIndex = 0;
-  const lowerQuery = query.toLowerCase();
+  const lettersToHighlight = new Set(query.toLowerCase().replace(/\s/g, ''));
 
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
+  return (
+    <>
+      {text.split('').map((char, index) => {
+        if (lettersToHighlight.has(char.toLowerCase())) {
+          return (
+            <span key={index} className='text-primary font-bold'>
+              {char}
+            </span>
+          );
+        }
 
-    if (queryIndex < lowerQuery.length && char.toLowerCase() === lowerQuery[queryIndex]) {
-      result.push(
-        <span key={i} className='text-primary font-bold'>
-          {char}
-        </span>,
-      );
-      queryIndex++;
-    } else {
-      result.push(char);
-    }
-  }
-
-  return <>{result}</>;
+        return <Fragment key={index}>{char}</Fragment>;
+      })}
+    </>
+  );
 }
 
 function ExpenseSearchResults() {
@@ -111,7 +113,7 @@ function ExpenseSearchResults() {
   }
 
   return (
-    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col'>
+    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col pb-20'>
       {data.searchResult.map(expense => {
         const { expenseId, shopName, shopMall, sourceMatches, amountCents, billedAt } = expense;
 
@@ -162,6 +164,33 @@ function ExpenseSearchResults() {
           </Link>
         );
       })}
+    </div>
+  );
+}
+
+function ExpenseSkeleton() {
+  return (
+    <div className='border-base-200 flex flex-col border-b px-4 py-4'>
+      <div className='mb-3 flex items-start justify-between'>
+        <div className='flex flex-col'>
+          <div className='skeleton mb-1 h-3 w-16'></div>
+
+          <div className='mb-2 flex flex-row items-end gap-2'>
+            <div className='skeleton h-5 w-32'></div>
+            <div className='skeleton mb-0.5 h-3 w-24'></div>
+          </div>
+
+          <div className='mt-1 flex flex-col gap-2'>
+            <div className='skeleton h-4 w-48'></div>
+            <div className='skeleton h-4 w-36'></div>
+          </div>
+        </div>
+
+        <div className='flex flex-col items-end gap-1'>
+          <div className='skeleton h-5 w-5 rounded-md'></div>
+          <div className='skeleton mt-1 h-8 w-20'></div>
+        </div>
+      </div>
     </div>
   );
 }
