@@ -52,12 +52,12 @@ function RouteLayoutComponent({ children }: RouteLayoutComponentProps) {
             validators={{
               onChange: z.string().trim().min(3, { error: 'at least 3 characters' }),
               onChangeAsyncDebounceMs: 800,
-              onChangeAsync: () => navigate({ search: form.state.values }),
+              onChangeAsync: () => navigate({ search: form.state.values, replace: true }),
             }}
           >
             {({ TextInput }) => <TextInput type='search' containerCn='mt-0 grow' autoFocus />}
           </form.AppField>
-          <button className='btn btn-ghost mb-2' onClick={() => navigate({ search: form.state.values })}>
+          <button className='btn btn-ghost mb-2' onClick={() => navigate({ search: form.state.values, replace: true })}>
             <Search />
           </button>
         </div>
@@ -106,7 +106,7 @@ function HighlightText({ text, query }: HighlightTextProps) {
 
 function ExpenseSearchResults() {
   const { query } = Route.useLoaderDeps();
-  const { data } = useSuspenseQuery(trpc.expense.search.queryOptions({ query }));
+  const { data } = useSuspenseQuery(trpc.expense.search.queryOptions({ query }, { enabled: query.length >= 3 }));
 
   if (!data || !data.searchResult || data.searchResult.length === 0) {
     return <div className='text-base-content/60 p-4 text-center text-sm'>No results found.</div>;
