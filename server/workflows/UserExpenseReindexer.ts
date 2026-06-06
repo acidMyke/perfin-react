@@ -18,7 +18,7 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
   private static limit = 40;
   async run(event: WorkflowEvent<UserExpenseReindexerParam>, step: WorkflowStep) {
     const { payload } = event;
-    const { version } = payload;
+    const { userId, version } = payload;
     let hasMore = true;
     let cursorId: string | undefined = undefined;
 
@@ -41,6 +41,11 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
 
       await step.sleep(`sleep-${cursorId}`, this.env.REINDEXER_SLEEP);
     }
+
+    await step.do('cleanup-old-index', async () => {
+      const db = createDatabase(this.env);
+      await cleanupOldIndex(db, userId, version);
+    });
   }
 
   private async retrieveExpensesWithChilds(db: AppDatabase, cursorId: string | undefined) {

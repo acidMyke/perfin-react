@@ -188,13 +188,16 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
   const textsTableCond = and(eq(textsTable.userId, userId), lt(textsTable.version, currentVersion));
   const textsTableSq = db.select({ hash: textsTable.textHash }).from(textsTable).where(textsTableCond);
 
-  const [[{ expenseTextsCount }], { meta: deleteMeta }] = await db.batch([
+  const [[{ deletedExpenseTextsCount }], { meta: deleteMeta }] = await db.batch([
     db
-      .select({ expenseTextsCount: count() })
+      .select({ deletedExpenseTextsCount: count() })
       .from(expenseTextsTable)
       .where(inArray(expenseTextsTable.textHash, textsTableSq)),
     db.delete(textsTable).where(textsTableCond),
   ]);
 
-  return { expenseTextsCount, totalDeletedCount: deleteMeta.changes };
+  await db
+    .update(searchIndexVersionTable)
+    .set({ deletedExpenseTextsCount, totalDeletedCount: deleteMeta.changes })
+    .where(and(eq(textsTable.userId, userId), eq(textsTable.version, currentVersion)));
 }
