@@ -122,9 +122,9 @@ function ExpenseSearchResults() {
             key={expenseId}
             to='/expenses/$expenseId/view'
             params={{ expenseId }}
-            className='border-base-200 active:bg-base-200/60 flex flex-col border-b px-4 py-4 no-underline transition-colors'
+            className='border-base-200 active:bg-base-200/60 flex flex-col border-b px-4 py-2 no-underline transition-colors'
           >
-            <div className='mb-3 flex items-start justify-between'>
+            <div className='flex items-start justify-between'>
               <div>
                 <span className='text-base-content text-xs'>{dateFormat.format(new Date(billedAt))}</span>
                 <div className='mb-2 flex flex-row gap-2'>
