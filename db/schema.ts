@@ -284,11 +284,10 @@ export const searchIndexVersionTable = sqliteTable(
     version: integer().notNull(),
     createdAt: createdAtColumn(),
     completedAt: dateColumn(),
-    deletedTextsCount: integer().notNull().default(0),
-    deletedTextChunksCount: integer().notNull().default(0),
+    totalDeletedCount: integer().notNull().default(0),
     deletedExpenseTextsCount: integer().notNull().default(0),
   },
-  t => [index('idx_search_index_versions_user_id_version').on(t.userId, t.version)],
+  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.version)],
 );
 
 export const textsTable = sqliteTable(

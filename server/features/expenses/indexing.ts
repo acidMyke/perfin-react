@@ -1,7 +1,7 @@
 import { excluded, type AppDatabase, type BatchCollector } from '#server/lib/db';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
 import { getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
-import { and, eq, desc } from 'drizzle-orm';
+import { and, eq, desc, lt, inArray, count } from 'drizzle-orm';
 import { textsTable, textChunksTable, expenseTextsTable, searchIndexVersionTable } from '../../../db/schema';
 
 type ExpenseInfoChildrenForIndexing = {
@@ -10,7 +10,7 @@ type ExpenseInfoChildrenForIndexing = {
   isDeleted?: undefined | null | boolean;
 };
 
-type ExpenseInfoForIndexing = {
+export type ExpenseInfoForIndexing = {
   id: string;
   userId: string;
   shopName?: null | undefined | string;
@@ -157,4 +157,44 @@ async function getLatestUserIndexVersion(db: AppDatabase, userId: string) {
     .limit(1);
 
   return version;
+}
+
+export async function processSaveExpenseSearchIndexing(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expense: ExpenseInfoForIndexing,
+) {
+  const searchables = gatherExpenseSearchables(expense);
+  if (searchables.length <= 0) return;
+  const version = await getLatestUserIndexVersion(db, expense.userId);
+  const records = await prepareSearchables(searchables, version);
+  queueDeleteExpenseTextsByExpenseId(collector, db, expense.id);
+  queueSaveSearchables(collector, db, records);
+}
+
+export async function processReindexing(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expenses: ExpenseInfoForIndexing[],
+  currentVersion: number,
+) {
+  const searchables = gatherExpenseSearchables(...expenses);
+  if (searchables.length <= 0) return;
+  const records = await prepareSearchables(searchables, currentVersion);
+  queueSaveSearchables(collector, db, records);
+}
+
+export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVersion: number) {
+  const textsTableCond = and(eq(textsTable.userId, userId), lt(textsTable.version, currentVersion));
+  const textsTableSq = db.select({ hash: textsTable.textHash }).from(textsTable).where(textsTableCond);
+
+  const [[{ expenseTextsCount }], { meta: deleteMeta }] = await db.batch([
+    db
+      .select({ expenseTextsCount: count() })
+      .from(expenseTextsTable)
+      .where(inArray(expenseTextsTable.textHash, textsTableSq)),
+    db.delete(textsTable).where(textsTableCond),
+  ]);
+
+  return { expenseTextsCount, totalDeletedCount: deleteMeta.changes };
 }
