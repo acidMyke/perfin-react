@@ -281,14 +281,14 @@ export const searchIndexVersionTable = sqliteTable(
   {
     id: pkIdColumn(),
     userId: idColumn(),
-    status: text({ enum: ['pending', 'fresh', 'purged'] })
-      .notNull()
-      .default('pending'),
     version: integer().notNull(),
     createdAt: createdAtColumn(),
     completedAt: dateColumn(),
+    deletedTextsCount: integer().notNull().default(0),
+    deletedTextChunksCount: integer().notNull().default(0),
+    deletedExpenseTextsCount: integer().notNull().default(0),
   },
-  t => [index('idx_search_index_versions_user_id_version').on(t.userId, t.status, t.version)],
+  t => [index('idx_search_index_versions_user_id_version').on(t.userId, t.version)],
 );
 
 export const textsTable = sqliteTable(
