@@ -152,7 +152,7 @@ async function getLatestUserIndexVersion(db: AppDatabase, userId: string) {
   const [{ version = 0 } = {}] = await db
     .select({ version: searchIndexVersionTable.version })
     .from(searchIndexVersionTable)
-    .where(and(eq(searchIndexVersionTable.userId, userId)))
+    .where(eq(searchIndexVersionTable.userId, userId))
     .orderBy(desc(searchIndexVersionTable.version))
     .limit(1);
 

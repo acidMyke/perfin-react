@@ -283,7 +283,7 @@ export const searchIndexVersionTable = sqliteTable(
     userId: idColumn(),
     version: integer().notNull(),
     createdAt: createdAtColumn(),
-    completedAt: dateColumn(),
+    completedAt: integer({ mode: 'timestamp' }),
     totalDeletedCount: integer().notNull().default(0),
     deletedExpenseTextsCount: integer().notNull().default(0),
   },
