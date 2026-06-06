@@ -1,7 +1,7 @@
 import { BatchCollector, createDatabase, type AppDatabase } from '#server/lib/db';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '../../db/schema';
-import { gt, inArray } from 'drizzle-orm';
+import { and, eq, gt, inArray } from 'drizzle-orm';
 import { cleanupOldIndex, processReindexing } from '#server/features/expenses/indexing';
 
 export type UserExpenseReindexerParam = {
@@ -71,7 +71,7 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
           expenseId: expenseItemsTable.expenseId,
         })
         .from(expenseItemsTable)
-        .where(inArray(expenseItemsTable.expenseId, expenseIds))
+        .where(and(inArray(expenseItemsTable.expenseId, expenseIds), eq(expenseItemsTable.isDeleted, false)))
         .orderBy(expenseItemsTable.expenseId, expenseItemsTable.sequence),
       db
         .select({
@@ -80,7 +80,9 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
           expenseId: expenseItemsTable.expenseId,
         })
         .from(expenseAdjustmentsTable)
-        .where(inArray(expenseAdjustmentsTable.expenseId, expenseIds))
+        .where(
+          and(inArray(expenseAdjustmentsTable.expenseId, expenseIds), eq(expenseAdjustmentsTable.isDeleted, false)),
+        )
         .orderBy(expenseAdjustmentsTable.expenseId, expenseAdjustmentsTable.sequence),
     ]);
 
