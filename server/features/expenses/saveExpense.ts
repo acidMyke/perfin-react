@@ -149,8 +149,8 @@ export function prepareQueueAccountCategory(
   accountInput: SaveExpenseInput['account'],
   categoryInput: SaveExpenseInput['category'],
 ) {
-  let accountId: string | null = null;
-  let categoryId: string | null = null;
+  let accountId = accountInput?.value ?? null;
+  let categoryId = categoryInput?.value ?? null;
 
   if (accountInput?.value === CREATE_ID) {
     accountId = generateId();
