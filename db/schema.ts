@@ -276,12 +276,27 @@ export const searchTable = sqliteTable(
   ],
 );
 
+export const searchIndexVersionTable = sqliteTable(
+  'search_index_versions',
+  {
+    id: pkIdColumn(),
+    userId: idColumn(),
+    version: integer().notNull(),
+    createdAt: createdAtColumn(),
+    completedAt: integer({ mode: 'timestamp' }),
+    totalDeletedCount: integer().notNull().default(0),
+    deletedExpenseTextsCount: integer().notNull().default(0),
+  },
+  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.version)],
+);
+
 export const textsTable = sqliteTable(
   'texts',
   {
     textHash: integer().primaryKey({ onConflict: 'ignore' }),
     userId: idColumn(),
     text: text().notNull(),
+    version: integer().notNull().default(0),
   },
   t => [unique('uq_texts_userId').on(t.userId, t.text)],
 );
@@ -299,6 +314,7 @@ export const textChunksTable = sqliteTable(
     chunk: text().notNull(),
     /** Use getTextHash() to calculate this value */
     textHash: textHashColumn(),
+    version: integer().notNull().default(0),
   },
   t => [
     // textHash includes userId in hashing
@@ -308,6 +324,7 @@ export const textChunksTable = sqliteTable(
   ],
 );
 
+/** @deprecated use expenseTextsTable.ctxTextHash instead */
 export const textsContextsTable = sqliteTable(
   'texts_contexts',
   {
@@ -328,6 +345,8 @@ export const expenseTextsTable = sqliteTable(
     textHash: textHashColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
+    ctxTextHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    version: integer().notNull().default(0),
   },
   t => [
     primaryKey({ columns: [t.textHash, t.sourceId] }),

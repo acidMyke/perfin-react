@@ -8,6 +8,7 @@ import { createIttyAppRouter } from './lib/itty';
 import { adminApiRouter } from './features/admin';
 import { error } from 'itty-router';
 export { VersionTwoDataMigrator } from './workflows/VersionTwoDataMigrator';
+export { UserExpenseReindexer } from './workflows/UserExpenseReindexer';
 
 const router = createIttyAppRouter();
 router

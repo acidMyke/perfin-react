@@ -6,15 +6,15 @@ import {
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
+  searchIndexVersionTable,
   textChunksTable,
-  textsContextsTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { endOfMonth } from 'date-fns';
+import { differenceInDays, endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, jsonGroupArray, max } from '../lib/db';
+import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
@@ -208,20 +208,12 @@ const getSuggestionsProcedure = protectedProcedure
       const contextHash = await getTextHash(userId, context);
       if (search) {
         // contextual sort, since it will be filtered by chunks
-        joinedHashQuery = hashQuery.leftJoin(
-          textsContextsTable,
-          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
-        );
-        const hasMatchingContext = caseWhen(eq(textsContextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
+        const hasMatchingContext = caseWhen(eq(expenseTextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
         const relevance = sql`${max(hasMatchingContext)} + ${count(textChunksTable.chunk)}`;
         orderBy.unshift(desc(relevance));
       } else {
         // contextual search, filtering by context
-        joinedHashQuery = hashQuery.innerJoin(
-          textsContextsTable,
-          eq(expenseTextsTable.textHash, textsContextsTable.textHash),
-        );
-        where.push(eq(textsContextsTable.ctxTextHash, contextHash));
+        where.push(eq(expenseTextsTable.ctxTextHash, contextHash));
       }
     }
 
@@ -331,16 +323,15 @@ const inferItemPricesProcedure = protectedProcedure
     const hashes = await getTextsHashes(userId, texts);
     const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
     if (input.shopName) {
-      where.push(eq(textsContextsTable.ctxTextHash, hashes.get(input.shopName)!));
+      where.push(eq(expenseTextsTable.ctxTextHash, hashes.get(input.shopName)!));
     } else {
-      where.push(isNull(textsContextsTable.ctxTextHash));
+      where.push(isNull(expenseTextsTable.ctxTextHash));
     }
     return db
       .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
       .from(expenseTextsTable)
       .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .leftJoin(textsContextsTable, eq(expenseTextsTable.textHash, textsContextsTable.textHash))
       .where(and(...where))
       .groupBy(expenseItemsTable.priceCents)
       .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
@@ -375,6 +366,89 @@ const setIsDeletedExpenseProcedure = protectedProcedure
     return { success: true };
   });
 
+const searchExpenseProcedure = protectedProcedure
+  .input(z.object({ query: z.string(), cursor: z.string().nullish() }))
+  .query(async ({ ctx, input }) => {
+    const { db, userId } = ctx;
+    const query = input.query.trim();
+    if (query.length < 3) return { searchResult: [] };
+
+    const trigrams = getTrigrams(query, { unlimited: true });
+
+    const chunkCte = db.$with('chunk_cte').as(
+      db
+        .select({
+          textHash: textChunksTable.textHash.as('text_hash'),
+          chunkCount: sql<number>`sum(length(${textChunksTable.chunk}) / 3.0)`.as('chunk_count'),
+        })
+        .from(textChunksTable)
+        .groupBy(textChunksTable.textHash)
+        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
+        .having(sql`chunk_count > 1`),
+    );
+
+    const matchCte = db.$with('match_cte').as(
+      db
+        .select({
+          expenseId: expenseTextsTable.expenseId.as('expense_id'),
+          totalChunkCount: sumAsNumber(chunkCte.chunkCount).as('total_chunk_count'),
+          sourceMatches: jsonGroupObjectArray({
+            chunkCount: chunkCte.chunkCount,
+            matchItemName: expenseItemsTable.name,
+            matchAdjustmentName: expenseAdjustmentsTable.name,
+          }).as('source_matches'),
+        })
+        .from(chunkCte)
+        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textHash))
+        .leftJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
+        .leftJoin(expenseAdjustmentsTable, eq(expenseTextsTable.sourceId, expenseAdjustmentsTable.id))
+        .groupBy(expenseTextsTable.expenseId),
+    );
+
+    const result = await db
+      .with(chunkCte, matchCte)
+      .select({
+        expenseId: matchCte.expenseId,
+        totalChunkCount: matchCte.totalChunkCount,
+        shopName: expensesTable.shopName,
+        shopMall: expensesTable.shopMall,
+        sourceMatches: matchCte.sourceMatches,
+        amountCents: expensesTable.amountCents,
+        billedAt: expensesTable.billedAt,
+      })
+      .from(matchCte)
+      .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
+      .orderBy(desc(matchCte.totalChunkCount));
+
+    return { searchResult: result };
+  });
+
+const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
+  const { db, env, userId } = ctx;
+
+  const [{ version = 0, createdAt = new Date(0) } = {}] = await db
+    .select({
+      version: max(searchIndexVersionTable.version),
+      createdAt: max(searchIndexVersionTable.createdAt).mapWith(searchIndexVersionTable.createdAt),
+    })
+    .from(searchIndexVersionTable)
+    .where(eq(searchIndexVersionTable.userId, userId));
+
+  if (differenceInDays(new Date(), createdAt) < 7) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Cannot reindex within 7 days of last reindex',
+    });
+  }
+
+  const newVersion = version + 1;
+  const payload = { userId, version: newVersion };
+  await db.insert(searchIndexVersionTable).values(payload);
+  await env.EXPENSE_REINDEXER.create({ params: payload });
+
+  return { newVersion };
+});
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
@@ -385,4 +459,6 @@ export const expenseProcedures = {
   getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
+  search: searchExpenseProcedure,
+  reindex: reindexExpenseProcedure,
 };

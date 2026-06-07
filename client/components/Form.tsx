@@ -178,10 +178,11 @@ type TextInputProps = {
   nullIfEmpty?: boolean;
   autoComplete?: string;
   hideError?: boolean;
+  autoFocus?: boolean;
 };
 
 function TextInput(props: TextInputProps) {
-  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete, hideError } = props;
+  const { label, type, containerCn, labelCn, inputCn, nullIfEmpty, autoComplete, hideError, autoFocus } = props;
   const field = useFieldContext<string | null>();
 
   let transforms = props.transform
@@ -198,6 +199,7 @@ function TextInput(props: TextInputProps) {
         id={field.name}
         name={field.name}
         className={cn('input input-primary w-full text-xl', inputCn)}
+        autoFocus={autoFocus}
         autoComplete={autoComplete}
         value={field.state.value ?? ''}
         onChange={e => {

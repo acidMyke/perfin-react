@@ -38,6 +38,11 @@
       "binding": "V2_MIGRATOR",
       "class_name": "VersionTwoDataMigrator",
     },
+    {
+      "name": "perfin-expense-reindexer",
+      "binding": "EXPENSE_REINDEXER",
+      "class_name": "UserExpenseReindexer",
+    },
   ],
   "vars": {
     "TOKEN_EXPIRE_DAYS": 30,
@@ -48,6 +53,7 @@
     "PASSKEYS_RP_NAME": "Perfin",
     "PASSKEYS_RP_ID": "localhost",
     "ALLOW_SIGNUP": "true",
+    "REINDEXER_SLEEP": "20 seconds",
   },
   "env": {
     "production": {
@@ -70,12 +76,18 @@
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
         "ALLOW_SIGNUP": "false",
+        "REINDEXER_SLEEP": "8 hours",
       },
       "workflows": [
         {
           "name": "perfin-v2-data-migrator",
           "binding": "V2_MIGRATOR",
           "class_name": "VersionTwoDataMigrator",
+        },
+        {
+          "name": "perfin-expense-reindexer",
+          "binding": "EXPENSE_REINDEXER",
+          "class_name": "UserExpenseReindexer",
         },
       ],
     },
@@ -98,12 +110,18 @@
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin-staging.acidmyke.link",
         "ALLOW_SIGNUP": "true",
+        "REINDEXER_SLEEP": "8 hours",
       },
       "workflows": [
         {
           "name": "perfin-staging-v2-data-migrator",
           "binding": "V2_MIGRATOR",
           "class_name": "VersionTwoDataMigrator",
+        },
+        {
+          "name": "perfin-staging-expense-reindexer",
+          "binding": "EXPENSE_REINDEXER",
+          "class_name": "UserExpenseReindexer",
         },
       ],
     },

@@ -22,6 +22,7 @@ import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authen
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
 import { Route as AuthenticatedSettingsElevatedRouteImport } from './routes/_authenticated/settings/_elevated'
+import { Route as AuthenticatedExpensesSearchRouteImport } from './routes/_authenticated/expenses/search'
 import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './routes/_authenticated/expenses/$expenseId/route'
 import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
 import { Route as AuthenticatedSettingsElevatedPasskeyRouteImport } from './routes/_authenticated/settings/_elevated/passkey'
@@ -98,6 +99,12 @@ const AuthenticatedSettingsElevatedRoute =
     path: '/settings',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
+const AuthenticatedExpensesSearchRoute =
+  AuthenticatedExpensesSearchRouteImport.update({
+    id: '/search',
+    path: '/search',
+    getParentRoute: () => AuthenticatedExpensesRouteRoute,
+  } as any)
 const AuthenticatedExpensesExpenseIdRouteRoute =
   AuthenticatedExpensesExpenseIdRouteRouteImport.update({
     id: '/$expenseId',
@@ -145,6 +152,7 @@ export interface FileRoutesByFullPath {
   '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
   '/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
+  '/expenses/search': typeof AuthenticatedExpensesSearchRoute
   '/settings': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -162,6 +170,7 @@ export interface FileRoutesByTo {
   '/dashboard': typeof AuthenticatedDashboardRoute
   '/signup/verify': typeof SignupVerifyRoute
   '/signup': typeof SignupIndexRoute
+  '/expenses/search': typeof AuthenticatedExpensesSearchRoute
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
@@ -183,6 +192,7 @@ export interface FileRoutesById {
   '/signup/verify': typeof SignupVerifyRoute
   '/signup/': typeof SignupIndexRoute
   '/_authenticated/expenses/$expenseId': typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
+  '/_authenticated/expenses/search': typeof AuthenticatedExpensesSearchRoute
   '/_authenticated/settings/_elevated': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
@@ -205,6 +215,7 @@ export interface FileRouteTypes {
     | '/signup/verify'
     | '/signup/'
     | '/expenses/$expenseId'
+    | '/expenses/search'
     | '/settings'
     | '/settings/manage-subjects'
     | '/expenses/'
@@ -222,6 +233,7 @@ export interface FileRouteTypes {
     | '/dashboard'
     | '/signup/verify'
     | '/signup'
+    | '/expenses/search'
     | '/settings'
     | '/settings/manage-subjects'
     | '/expenses'
@@ -242,6 +254,7 @@ export interface FileRouteTypes {
     | '/signup/verify'
     | '/signup/'
     | '/_authenticated/expenses/$expenseId'
+    | '/_authenticated/expenses/search'
     | '/_authenticated/settings/_elevated'
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/expenses/'
@@ -354,6 +367,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedSettingsElevatedRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
+    '/_authenticated/expenses/search': {
+      id: '/_authenticated/expenses/search'
+      path: '/search'
+      fullPath: '/expenses/search'
+      preLoaderRoute: typeof AuthenticatedExpensesSearchRouteImport
+      parentRoute: typeof AuthenticatedExpensesRouteRoute
+    }
     '/_authenticated/expenses/$expenseId': {
       id: '/_authenticated/expenses/$expenseId'
       path: '/$expenseId'
@@ -439,6 +459,7 @@ const AuthenticatedExpensesExpenseIdRouteRouteWithChildren =
 
 interface AuthenticatedExpensesRouteRouteChildren {
   AuthenticatedExpensesExpenseIdRouteRoute: typeof AuthenticatedExpensesExpenseIdRouteRouteWithChildren
+  AuthenticatedExpensesSearchRoute: typeof AuthenticatedExpensesSearchRoute
   AuthenticatedExpensesIndexRoute: typeof AuthenticatedExpensesIndexRoute
 }
 
@@ -446,6 +467,7 @@ const AuthenticatedExpensesRouteRouteChildren: AuthenticatedExpensesRouteRouteCh
   {
     AuthenticatedExpensesExpenseIdRouteRoute:
       AuthenticatedExpensesExpenseIdRouteRouteWithChildren,
+    AuthenticatedExpensesSearchRoute: AuthenticatedExpensesSearchRoute,
     AuthenticatedExpensesIndexRoute: AuthenticatedExpensesIndexRoute,
   }
 
