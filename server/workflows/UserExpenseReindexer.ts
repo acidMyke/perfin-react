@@ -75,9 +75,9 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
         .orderBy(expenseItemsTable.expenseId, expenseItemsTable.sequence),
       db
         .select({
-          id: expenseItemsTable.id,
-          name: expenseItemsTable.name,
-          expenseId: expenseItemsTable.expenseId,
+          id: expenseAdjustmentsTable.id,
+          name: expenseAdjustmentsTable.name,
+          expenseId: expenseAdjustmentsTable.expenseId,
         })
         .from(expenseAdjustmentsTable)
         .where(
