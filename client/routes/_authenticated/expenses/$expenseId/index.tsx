@@ -22,7 +22,7 @@ import { currencyNumberFormat, formatCents } from '#client/utils';
 import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
-import { useState } from 'react';
+import { Fragment, useState } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -143,7 +143,7 @@ const ItemsDetailsSubForm = withForm({
                         const { grossTotalCents = 0, netTotalCents = 0 } = itemResults[id] ?? {};
 
                         return (
-                          <>
+                          <Fragment key={id}>
                             <span className='col-start-1 w-full'>{name}</span>
 
                             {quantity > 1 && <span>x{quantity}</span>}
@@ -166,7 +166,7 @@ const ItemsDetailsSubForm = withForm({
                             >
                               <X />
                             </button>
-                          </>
+                          </Fragment>
                         );
                       })}
                     </>
