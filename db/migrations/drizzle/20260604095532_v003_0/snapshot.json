@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "94e61614-2d2a-4dd8-8a7e-0043650d902b",
+  "id": "9bb73d72-d3eb-4323-ba0f-f67619e08a38",
   "prevIds": [
-    "358c0e1f-41ea-4c58-8bf9-e29098f6cc8f"
+    "94e61614-2d2a-4dd8-8a7e-0043650d902b"
   ],
   "ddl": [
     {
@@ -44,6 +44,10 @@
     },
     {
       "name": "passkeys",
+      "entityType": "tables"
+    },
+    {
+      "name": "search_index_versions",
       "entityType": "tables"
     },
     {
@@ -745,6 +749,16 @@
       "table": "expenses_texts"
     },
     {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "expenses_texts"
+    },
+    {
       "type": "text(21)",
       "notNull": false,
       "autoincrement": false,
@@ -1175,6 +1189,76 @@
       "table": "passkeys"
     },
     {
+      "type": "text(21)",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "id",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "user_id",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "created_at",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "completed_at",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "total_deleted_count",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "deleted_expense_texts_count",
+      "entityType": "columns",
+      "table": "search_index_versions"
+    },
+    {
       "type": "text",
       "notNull": true,
       "autoincrement": false,
@@ -1338,6 +1422,16 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "version",
+      "entityType": "columns",
+      "table": "texts_chunks"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
       "default": null,
       "generated": null,
       "name": "text_hash",
@@ -1381,6 +1475,16 @@
       "default": null,
       "generated": null,
       "name": "text",
+      "entityType": "columns",
+      "table": "texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "version",
       "entityType": "columns",
       "table": "texts"
     },
@@ -1731,6 +1835,15 @@
       "nameExplicit": false,
       "name": "passkeys_pk",
       "table": "passkeys",
+      "entityType": "pks"
+    },
+    {
+      "columns": [
+        "id"
+      ],
+      "nameExplicit": false,
+      "name": "search_index_versions_pk",
+      "table": "search_index_versions",
       "entityType": "pks"
     },
     {
@@ -2195,6 +2308,16 @@
       "name": "idx_texts_contexts_ctxTextHash_textHash",
       "entityType": "indexes",
       "table": "texts_contexts"
+    },
+    {
+      "columns": [
+        "user_id",
+        "version"
+      ],
+      "nameExplicit": true,
+      "name": "uq_search_index_versions_user_id_version",
+      "entityType": "uniques",
+      "table": "search_index_versions"
     },
     {
       "columns": [
