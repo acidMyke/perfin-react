@@ -427,7 +427,10 @@ const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, userId } = ctx;
 
   const [{ version = 0, createdAt = new Date(0) } = {}] = await db
-    .select({ version: max(searchIndexVersionTable.version), createdAt: max(searchIndexVersionTable.createdAt) })
+    .select({
+      version: max(searchIndexVersionTable.version),
+      createdAt: max(searchIndexVersionTable.createdAt).mapWith(searchIndexVersionTable.createdAt),
+    })
     .from(searchIndexVersionTable)
     .where(eq(searchIndexVersionTable.userId, userId));
 
