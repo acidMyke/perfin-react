@@ -199,5 +199,5 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
   await db
     .update(searchIndexVersionTable)
     .set({ deletedExpenseTextsCount, totalDeletedCount: deleteMeta.changes, completedAt: new Date() })
-    .where(and(eq(textsTable.userId, userId), eq(textsTable.version, currentVersion)));
+    .where(and(eq(searchIndexVersionTable.userId, userId), eq(searchIndexVersionTable.version, currentVersion)));
 }
