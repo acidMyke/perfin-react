@@ -28,7 +28,7 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
         const expenses = await this.retrieveExpensesWithChilds(db, cursorId);
         const collector = new BatchCollector();
         await processReindexing(collector, db, expenses, version);
-        await collector.executeBatch(db, true);
+        await collector.executeBatch(db);
 
         return {
           hasMore: expenses.length === UserExpenseReindexer.limit,

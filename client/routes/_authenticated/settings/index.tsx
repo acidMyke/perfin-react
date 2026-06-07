@@ -91,7 +91,9 @@ function RouteComponent() {
               onClick={() =>
                 reindexExpenseMutation
                   .mutateAsync()
-                  .then(() => setTimeout(() => reindexModelRef.current?.close(), 5000))
+                  .then(() =>
+                    setTimeout(() => (reindexModelRef.current?.close(), reindexExpenseMutation.reset()), 5000),
+                  )
               }
             >
               Start
