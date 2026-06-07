@@ -52,7 +52,7 @@ function MonthSelector() {
   return (
     <div className='flex flex-row gap-4'>
       <details className='dropdown'>
-        {isBefore(selectedDate, startOfMonth(subMonths(new Date(), 3))) ? (
+        {isBefore(selectedDate, startOfMonth(subMonths(new Date(), 2))) ? (
           <summary className='btn btn-primary btn-sm'>{format(selectedDate, 'MMM yy')} </summary>
         ) : (
           <summary className='btn btn-sm'>Other</summary>
