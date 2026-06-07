@@ -25,7 +25,8 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
     while (hasMore) {
       const batchResult: BatchResultType = await step.do(`batch-${cursorId}`, async () => {
         const db = createDatabase(this.env);
-        const expenses = await this.retrieveExpensesWithChilds(db, cursorId);
+        const expenses = await this.retrieveExpensesWithChilds(db, userId, cursorId);
+        if (expenses.length == 0) return { cursorId, hasMore: false };
         const collector = new BatchCollector();
         await processReindexing(collector, db, expenses, version);
         await collector.executeBatch(db);
@@ -48,17 +49,20 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
     });
   }
 
-  private async retrieveExpensesWithChilds(db: AppDatabase, cursorId: string | undefined) {
+  private async retrieveExpensesWithChilds(db: AppDatabase, userId: string, cursorId: string | undefined) {
     // Fetch expenses
+    const cond = [eq(expensesTable.userId, userId)];
+    if (cursorId) cond.push(gt(expensesTable.id, cursorId));
+
     const rawExpenses = await db
       .select()
       .from(expensesTable)
-      .where(cursorId ? gt(expensesTable.id, cursorId) : undefined)
+      .where(and(...cond))
       .orderBy(expensesTable.id)
       .limit(UserExpenseReindexer.limit);
 
     if (rawExpenses.length <= 0) {
-      throw 'No records found';
+      return [];
     }
 
     // Fetching child tables
