@@ -6,12 +6,13 @@ import {
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
+  searchIndexVersionTable,
   textChunksTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { endOfMonth } from 'date-fns';
+import { differenceInDays, endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
@@ -422,6 +423,29 @@ const searchExpenseProcedure = protectedProcedure
     return { searchResult: result };
   });
 
+const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
+  const { db, env, userId } = ctx;
+
+  const [{ version = 0, createdAt = new Date(0) } = {}] = await db
+    .select({ version: max(searchIndexVersionTable.version), createdAt: max(searchIndexVersionTable.createdAt) })
+    .from(searchIndexVersionTable)
+    .where(eq(searchIndexVersionTable.userId, userId));
+
+  if (differenceInDays(new Date(), createdAt) < 7) {
+    throw new TRPCError({
+      code: 'BAD_REQUEST',
+      message: 'Cannot reindex within 7 days of last reindex',
+    });
+  }
+
+  const newVersion = version + 1;
+  const payload = { userId, version: newVersion };
+  await db.insert(searchIndexVersionTable).values(payload);
+  await env.EXPENSE_REINDEXER.create({ params: payload });
+
+  return { newVersion };
+});
+
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
@@ -433,4 +457,5 @@ export const expenseProcedures = {
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
+  reindex: reindexExpenseProcedure,
 };
