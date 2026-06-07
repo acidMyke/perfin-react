@@ -15,6 +15,7 @@ function RouteComponent() {
   const signOutMutation = useMutation(
     trpc.session.signOut.mutationOptions({
       async onSuccess() {
+        queryClient.clear();
         await queryClient.refetchQueries(trpc.whoami.pathFilter());
         await navigate({ to: '/' });
       },
@@ -87,7 +88,9 @@ function RouteComponent() {
             </button>
             <button
               className='btn btn-primary'
-              disabled={reindexExpenseMutation.isPending || reindexExpenseMutation.isSuccess}
+              disabled={
+                reindexExpenseMutation.isPending || reindexExpenseMutation.isSuccess || reindexExpenseMutation.isError
+              }
               onClick={() =>
                 reindexExpenseMutation
                   .mutateAsync()
