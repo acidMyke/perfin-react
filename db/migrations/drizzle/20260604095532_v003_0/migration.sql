@@ -4,6 +4,7 @@ CREATE TABLE `search_index_versions` (
 	`version` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`completed_at` integer,
+	`records_processed` integer DEFAULT 0 NOT NULL
 	`total_deleted_count` integer DEFAULT 0 NOT NULL,
 	`deleted_expense_texts_count` integer DEFAULT 0 NOT NULL,
 	CONSTRAINT `uq_search_index_versions_user_id_version` UNIQUE(`user_id`,`version`)
