@@ -4,7 +4,6 @@ import { Link } from '@tanstack/react-router';
 import { ChevronRight } from 'lucide-react';
 import { useMutation } from '@tanstack/react-query';
 import { queryClient, trpc } from '#client/trpc';
-import { useRef } from 'react';
 
 export const Route = createFileRoute('/_authenticated/settings/')({
   component: RouteComponent,
