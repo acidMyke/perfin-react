@@ -5,7 +5,7 @@ import { useEffect, useState } from 'react';
 import { useAppForm } from '#components/Form';
 import { sleep } from '#client/utils';
 import { PageHeader } from '#components/PageHeader';
-import z from 'zod';
+import * as z from 'zod/mini';
 
 export const Route = createFileRoute('/signup/verify')({
   component: RouteComponent,
@@ -121,9 +121,11 @@ function RouteComponent() {
               validators={{
                 onChange: z
                   .string()
-                  .nonempty()
-                  .max(100, 'Input too long')
-                  .regex(/^[a-zA-Z0-9_ -]*$/, 'Invalid characters detected'),
+                  .check(
+                    z.minLength(0),
+                    z.maxLength(100, 'Input too long'),
+                    z.regex(/^[a-zA-Z0-9_ -]*$/, 'Invalid characters detected'),
+                  ),
               }}
             >
               {({ TextInput }) => <TextInput type='text' label='Username' />}
@@ -133,8 +135,10 @@ function RouteComponent() {
               validators={{
                 onChange: z
                   .string()
-                  .min(12)
-                  .regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
+                  .check(
+                    z.minLength(12),
+                    z.regex(/^(?=.*?[A-Z])(?=.*?[a-z])(?=.*?[0-9])(?=.*?[#?!@$%^&*-]).{8,}$/, 'Password too week'),
+                  ),
               }}
             >
               {({ TextInput }) => <TextInput type='password' label='Password' />}

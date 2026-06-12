@@ -6,7 +6,7 @@ import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronRight, Search } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
-import { z } from 'zod/v4';
+import * as z from 'zod/mini';
 
 export const Route = createFileRoute('/_authenticated/expenses/search')({
   component: RouteComponent,
@@ -50,7 +50,7 @@ function RouteLayoutComponent({ children }: RouteLayoutComponentProps) {
           <form.AppField
             name='query'
             validators={{
-              onChange: z.string().trim().min(3, { error: 'at least 3 characters' }),
+              onChange: z.string().check(z.trim(), z.minLength(3, 'at least 3 characters')),
               onChangeAsyncDebounceMs: 800,
               onChangeAsync: () => navigate({ search: form.state.values, replace: true }),
             }}
