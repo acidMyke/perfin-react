@@ -1,7 +1,7 @@
 import { BatchCollector, createDatabase, type AppDatabase } from '#server/lib/db';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
-import { expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '../../db/schema';
-import { and, eq, gt, inArray } from 'drizzle-orm';
+import { expenseAdjustmentsTable, expenseItemsTable, expensesTable, searchIndexVersionTable } from '../../db/schema';
+import { and, eq, gt, inArray, sql } from 'drizzle-orm';
 import { cleanupOldIndex, processReindexing } from '#server/features/expenses/indexing';
 
 export type UserExpenseReindexerParam = {
@@ -29,6 +29,12 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
         if (expenses.length == 0) return { cursorId, hasMore: false };
         const collector = new BatchCollector();
         await processReindexing(collector, db, expenses, version);
+        collector.push(
+          db
+            .update(searchIndexVersionTable)
+            .set({ recordsProcessed: sql`${searchIndexVersionTable.recordsProcessed} + ${expenses.length}` })
+            .where(and(eq(searchIndexVersionTable.userId, userId), eq(searchIndexVersionTable.version, version))),
+        );
         await collector.executeBatch(db);
 
         return {

@@ -423,6 +423,23 @@ const searchExpenseProcedure = protectedProcedure
     return { searchResult: result };
   });
 
+const listReindexHistoryProcedure = protectedProcedure.query(async ({ ctx }) => {
+  const { db, userId } = ctx;
+
+  return db
+    .select({
+      version: searchIndexVersionTable.version,
+      createdAt: searchIndexVersionTable.createdAt,
+      completedAt: searchIndexVersionTable.completedAt,
+      recordsProcessed: searchIndexVersionTable.recordsProcessed,
+      totalDeletedCount: searchIndexVersionTable.totalDeletedCount,
+      deletedExpenseTextsCount: searchIndexVersionTable.deletedExpenseTextsCount,
+    })
+    .from(searchIndexVersionTable)
+    .where(eq(searchIndexVersionTable.userId, userId))
+    .orderBy(desc(searchIndexVersionTable.version));
+});
+
 const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, userId } = ctx;
 
@@ -461,4 +478,5 @@ export const expenseProcedures = {
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,
+  reindexList: listReindexHistoryProcedure,
 };
