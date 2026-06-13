@@ -31,5 +31,5 @@
       "#components/*": ["./client/components/*"]
     }
   },
-  "include": ["client", "db/schema.ts", "server/cloudflare.d.ts"]
+  "include": ["client", "db/schema.ts", "server/cloudflare.d.ts", "server/lib/notification.ts"]
 }
