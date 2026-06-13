@@ -3,7 +3,7 @@ import { handleFormMutateAsync, queryClient, trpc } from '#client/trpc';
 import { whoamiQueryOptions } from '#client/queryOptions';
 import { useMutation } from '@tanstack/react-query';
 import { useAppForm } from '#components/Form';
-import z from 'zod';
+import * as z from 'zod/mini';
 import { ChevronRight } from 'lucide-react';
 
 export const Route = createFileRoute('/signup/')({
@@ -42,7 +42,7 @@ function RouteComponent() {
         <form.AppField validators={{ onChange: z.email() }} name='email'>
           {({ TextInput }) => <TextInput type='email' label='Email' />}
         </form.AppField>
-        <form.AppField validators={{ onChange: z.string().min(4) }} name='name'>
+        <form.AppField validators={{ onChange: z.string().check(z.minLength(4)) }} name='name'>
           {({ TextInput }) => <TextInput type='text' label='Username' />}
         </form.AppField>
         <form.StatusMessage />
