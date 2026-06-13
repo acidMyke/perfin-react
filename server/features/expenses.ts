@@ -8,6 +8,7 @@ import {
   expenseTextsTable,
   searchIndexVersionTable,
   textChunksTable,
+  textsTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -18,6 +19,7 @@ import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, 
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
+import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -158,104 +160,8 @@ const listExpenseProcedure = protectedProcedure
   });
 
 const getSuggestionsProcedure = protectedProcedure
-  .input(
-    z.object({
-      scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
-      search: z.string(),
-      context: z.string().optional(),
-    }),
-  )
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-
-    const search = input.search.trim();
-    const context = input.context?.trim();
-
-    if (!search && !context) {
-      return { suggestions: [] as string[] };
-    }
-
-    const where: SQL[] = [];
-    let having: SQL | undefined;
-
-    const orderBy: SQL[] = [desc(count(expenseTextsTable.sourceId))]; // By frequency
-    const hashQuery = db
-      .select({
-        textHash: expenseTextsTable.textHash.as('text_hash'),
-        sourceId: min(expenseTextsTable.sourceId).as('source_id'),
-      })
-      .from(expenseTextsTable);
-
-    let joinedHashQuery: ReturnType<typeof hashQuery.innerJoin> | undefined;
-
-    if (search) {
-      // search by chunks
-      const trigrams = getTrigrams(search);
-      joinedHashQuery = hashQuery.innerJoin(textChunksTable, eq(expenseTextsTable.textHash, textChunksTable.textHash));
-      where.push(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams));
-
-      if (trigrams.length > 5) {
-        // If there is more than 5 chunks for searching, remove those with less matches
-        having = gte(count(textChunksTable.chunk), trigrams.length - 5);
-      }
-
-      if (!context) {
-        orderBy.unshift(desc(count(textChunksTable.chunk)));
-      }
-    }
-
-    if (context) {
-      const contextHash = await getTextHash(userId, context);
-      if (search) {
-        // contextual sort, since it will be filtered by chunks
-        const hasMatchingContext = caseWhen(eq(expenseTextsTable.ctxTextHash, contextHash), sql`5`).else(sql`0`);
-        const relevance = sql`${max(hasMatchingContext)} + ${count(textChunksTable.chunk)}`;
-        orderBy.unshift(desc(relevance));
-      } else {
-        // contextual search, filtering by context
-        where.push(eq(expenseTextsTable.ctxTextHash, contextHash));
-      }
-    }
-
-    if (!joinedHashQuery) {
-      return { suggestions: [] };
-    }
-
-    const groupedHashQuery = hashQuery.where(and(...where)).groupBy(expenseTextsTable.textHash);
-    const topHashesSubquery = (having ? groupedHashQuery.having(having) : groupedHashQuery)
-      .orderBy(...orderBy)
-      .limit(15)
-      .as('top_hashes');
-
-    let textColumn: AnySQLiteColumn<{ data: string }>;
-    let sourceTable: typeof expensesTable | typeof expenseItemsTable | typeof expenseAdjustmentsTable;
-    switch (input.scope) {
-      case 'shopName':
-        textColumn = expensesTable.shopName;
-        sourceTable = expensesTable;
-        break;
-      case 'shopMall':
-        textColumn = expensesTable.shopMall;
-        sourceTable = expensesTable;
-        break;
-      case 'itemName':
-        textColumn = expenseItemsTable.name;
-        sourceTable = expenseItemsTable;
-        break;
-      case 'adjName':
-        textColumn = expenseAdjustmentsTable.name;
-        sourceTable = expenseAdjustmentsTable;
-        break;
-    }
-
-    const result = await db
-      .select({ text: textColumn })
-      .from(topHashesSubquery)
-      .innerJoin(sourceTable, eq(topHashesSubquery.sourceId, sourceTable.id))
-      .where(isNotNull(textColumn));
-
-    return { suggestions: result.map(({ text }) => text!) };
-  });
+  .input(getSuggestionInputSchema)
+  .mutation(({ ctx, input }) => getSuggestions(ctx, input));
 
 const suggestShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))

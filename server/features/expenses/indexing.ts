@@ -1,8 +1,19 @@
-import { excluded, type AppDatabase, type BatchCollector } from '#server/lib/db';
+import { caseWhen, excluded, max, type AppDatabase, type BatchCollector } from '#server/lib/db';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
-import { getMultiUserTextsHashes, getTrigrams, splitArray } from '#server/lib/utils';
-import { and, eq, desc, lt, inArray, count } from 'drizzle-orm';
-import { textsTable, textChunksTable, expenseTextsTable, searchIndexVersionTable } from '../../../db/schema';
+import { getMultiUserTextsHashes, getTextHash, getTrigrams, splitArray } from '#server/lib/utils';
+import { and, eq, desc, lt, inArray, count, sql, SQL, isNotNull, min, gte } from 'drizzle-orm';
+import {
+  textsTable,
+  textChunksTable,
+  expenseTextsTable,
+  searchIndexVersionTable,
+  expenseAdjustmentsTable,
+  expenseItemsTable,
+  expensesTable,
+} from '../../../db/schema';
+import z from 'zod';
+import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
+import type { ProtectedContext } from '#server/lib/trpc';
 
 type ExpenseInfoChildrenForIndexing = {
   id: string;
@@ -200,4 +211,97 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
     .update(searchIndexVersionTable)
     .set({ deletedExpenseTextsCount, totalDeletedCount: deleteMeta.changes, completedAt: new Date() })
     .where(and(eq(searchIndexVersionTable.userId, userId), eq(searchIndexVersionTable.version, currentVersion)));
+}
+
+export const getSuggestionInputSchema = z.object({
+  scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
+  search: z.string(),
+  context: z.string().optional(),
+});
+
+type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
+
+export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
+  const { db, userId } = ctx;
+  const search = input.search.trim();
+  const context = input.context?.trim();
+
+  if (!search && !context) {
+    return { suggestions: [] as string[] };
+  }
+
+  let textColumn: AnySQLiteColumn<{ data: string }>;
+  let sourceTable: typeof expensesTable | typeof expenseItemsTable | typeof expenseAdjustmentsTable;
+
+  switch (input.scope) {
+    case 'shopName':
+      textColumn = expensesTable.shopName;
+      sourceTable = expensesTable;
+      break;
+    case 'shopMall':
+      textColumn = expensesTable.shopMall;
+      sourceTable = expensesTable;
+      break;
+    case 'itemName':
+      textColumn = expenseItemsTable.name;
+      sourceTable = expenseItemsTable;
+      break;
+    case 'adjName':
+      textColumn = expenseAdjustmentsTable.name;
+      sourceTable = expenseAdjustmentsTable;
+      break;
+  }
+  const contextHash = context ? await getTextHash(userId, context) : undefined;
+
+  if (!search) {
+    // Suggestion via context
+    const results = await db
+      .select({ text: min(textColumn) })
+      .from(expenseTextsTable)
+      .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
+      .where(and(eq(expenseTextsTable.ctxTextHash, contextHash!), isNotNull(textColumn)))
+      .groupBy(expenseTextsTable.textHash)
+      .limit(10);
+
+    return { suggestions: results.map(({ text }) => text!) };
+  }
+  // Search by input
+
+  const trigrams = getTrigrams(search);
+  if (trigrams.length === 0) return { suggestions: [] };
+
+  const baseMatchedChunks = db
+    .select({
+      textHash: textChunksTable.textHash.as('text_hash'),
+      matchCount: count(textChunksTable.chunk).as('match_count'),
+    })
+    .from(textChunksTable)
+    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
+    .groupBy(textChunksTable.textHash);
+
+  // filter out lower quality matches
+  const matchedChunks = (
+    trigrams.length > 5
+      ? baseMatchedChunks.having(gte(count(textChunksTable.chunk), trigrams.length - 5))
+      : baseMatchedChunks
+  ).as('matchedChunks');
+
+  const orderLogic: SQL[] = [];
+  if (contextHash) {
+    // sort by context exists
+    orderLogic.push(desc(max(caseWhen(eq(expenseTextsTable.ctxTextHash, contextHash), 1).else(0))));
+  }
+  orderLogic.push(desc(max(matchedChunks.matchCount)));
+
+  const results = await db
+    .select({ text: min(textColumn) })
+    .from(matchedChunks)
+    .innerJoin(expenseTextsTable, eq(matchedChunks.textHash, expenseTextsTable.textHash))
+    .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
+    .where(isNotNull(textColumn))
+    .groupBy(matchedChunks.textHash)
+    .orderBy(...orderLogic)
+    .limit(10);
+
+  return { suggestions: results.map(({ text }) => text!) };
 }
