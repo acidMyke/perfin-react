@@ -4,6 +4,7 @@ import { expenseProcedures } from './features/expenses';
 import { subjectProcedures } from './features/subjects';
 import { dashboardProcedure } from './features/dashboard';
 import passkeyProcedures from './features/passkeys';
+import webpushProcedures from './features/webpush';
 
 export const appRouter = router({
   whoami: whoamiProcedure,
@@ -12,6 +13,7 @@ export const appRouter = router({
   expense: expenseProcedures,
   subject: subjectProcedures,
   passkey: passkeyProcedures,
+  webpush: webpushProcedures,
 });
 
 // For client to import just the types

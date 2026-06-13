@@ -43,6 +43,10 @@ function RouteComponent() {
         <h3 className='inline-block text-2xl'>Manage passkey</h3>
         <ChevronRight className='ml-auto inline-block' />
       </Link>
+      <Link to='/settings/notifications' className='btn btn-block btn-xl btn-ghost bg-base-200/25'>
+        <h3 className='inline-block text-2xl'>Notifications</h3>
+        <ChevronRight className='ml-auto inline-block' />
+      </Link>
       <Link to='/settings/reindex' className='btn btn-block btn-xl btn-ghost bg-base-200/25'>
         <h3 className='inline-block text-2xl'>Reindex expenses</h3>
         <ChevronRight className='ml-auto inline-block' />
