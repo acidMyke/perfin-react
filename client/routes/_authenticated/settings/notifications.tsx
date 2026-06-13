@@ -29,19 +29,19 @@ function RouteComponent() {
 
   return (
     <div className='mx-auto flex max-w-md flex-col'>
-      <PageHeader title='Notifications' />
+      <PageHeader title='Notifications' showBackButton />
 
       <label className='label text-primary-content w-full justify-between px-5'>
         Show notification on this device
         <input
           type='checkbox'
-          checked={notiStateQuery.isEnabled}
-          className='toggle-primary toggle toggle-xl'
+          checked={notiStateQuery.data.isEnabled}
+          className='toggle checked:toggle-primary toggle-xl'
           onChange={() => {
-            if (notiStateQuery.isEnabled) {
-              subToWebPushMutation.mutate();
-            } else {
+            if (notiStateQuery.data.isEnabled) {
               disableWebPushMutation.mutate();
+            } else {
+              subToWebPushMutation.mutate();
             }
           }}
         />
