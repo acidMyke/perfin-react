@@ -8,16 +8,14 @@ import {
   expenseTextsTable,
   searchIndexVersionTable,
   textChunksTable,
-  textsTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, min, sql, SQL } from 'drizzle-orm';
+import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
 import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 

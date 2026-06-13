@@ -1,7 +1,7 @@
 import { caseWhen, excluded, max, type AppDatabase, type BatchCollector } from '#server/lib/db';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
 import { getMultiUserTextsHashes, getTextHash, getTrigrams, splitArray } from '#server/lib/utils';
-import { and, eq, desc, lt, inArray, count, sql, SQL, isNotNull, min, gte } from 'drizzle-orm';
+import { and, eq, desc, lt, inArray, count, SQL, isNotNull, min, gte } from 'drizzle-orm';
 import {
   textsTable,
   textChunksTable,
