@@ -7,7 +7,7 @@ import { useAppForm } from '#components/Form';
 import { ChevronRight } from 'lucide-react';
 import { startAuthentication, type PublicKeyCredentialRequestOptionsJSON } from '@simplewebauthn/browser';
 import { useCallback, useEffect, useRef } from 'react';
-import z from 'zod';
+import * as z from 'zod/mini';
 
 export const Route = createFileRoute('/signin')({
   component: RouteComponent,
