@@ -5,6 +5,7 @@ import { RouterProvider, createRouteMask, createRouter } from '@tanstack/react-r
 import { QueryClientProvider } from '@tanstack/react-query';
 import { queryClient } from '#client/trpc';
 import { routeTree } from './routeTree.gen';
+import { registerServiceWorker } from './registerSW';
 
 const expenseItemSubpageMask = createRouteMask({
   routeTree,
@@ -38,3 +39,5 @@ createRoot(document.getElementById('root')!).render(
     </QueryClientProvider>
   </StrictMode>,
 );
+
+registerServiceWorker();
