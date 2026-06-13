@@ -1,6 +1,6 @@
 import * as z from 'zod/v4-mini';
 
-export const NotificationDataOptionsSchema = z.looseObject({
+export const NotificationDataOptionsSchema = z.object({
   targetUrl: z.optional(z.string()),
 });
 

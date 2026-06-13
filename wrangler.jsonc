@@ -54,6 +54,7 @@
     "PASSKEYS_RP_ID": "localhost",
     "ALLOW_SIGNUP": "true",
     "REINDEXER_SLEEP": "20 seconds",
+    "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
   },
   "env": {
     "production": {
@@ -77,6 +78,7 @@
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
         "ALLOW_SIGNUP": "false",
         "REINDEXER_SLEEP": "8 hours",
+        "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
       "workflows": [
         {
@@ -111,6 +113,7 @@
         "PASSKEYS_RP_ID": "perfin-staging.acidmyke.link",
         "ALLOW_SIGNUP": "true",
         "REINDEXER_SLEEP": "8 hours",
+        "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
       "workflows": [
         {
