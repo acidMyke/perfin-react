@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "9bb73d72-d3eb-4323-ba0f-f67619e08a38",
+  "id": "969470bc-2325-480d-b7d6-5c58f2f720be",
   "prevIds": [
-    "94e61614-2d2a-4dd8-8a7e-0043650d902b"
+    "9bb73d72-d3eb-4323-ba0f-f67619e08a38"
   ],
   "ddl": [
     {
@@ -1535,6 +1535,46 @@
       "default": null,
       "generated": null,
       "name": "nickname",
+      "entityType": "columns",
+      "table": "user_devices"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "show_notification",
+      "entityType": "columns",
+      "table": "user_devices"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "push_endpoint",
+      "entityType": "columns",
+      "table": "user_devices"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "push_p256dh",
+      "entityType": "columns",
+      "table": "user_devices"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "push_auth",
       "entityType": "columns",
       "table": "user_devices"
     },

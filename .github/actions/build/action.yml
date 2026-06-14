@@ -7,6 +7,9 @@ inputs:
   GOOGLE_MAPS_API_KEY:
     description: google map api key
     required: true
+  VAPID_PUBLIC_KEY:
+    description: vapid public key
+    required: true
 
 runs:
   using: "composite"
@@ -29,3 +32,4 @@ runs:
         CI: true
         CLOUDFLARE_ENV: ${{ inputs.CLOUDFLARE_ENV }}
         VITE_GOOGLE_MAPS_API_KEY: ${{ inputs.GOOGLE_MAPS_API_KEY }}
+        VITE_VAPID_PUBLIC_KEY: ${{ inputs.VAPID_PUBLIC_KEY }}
