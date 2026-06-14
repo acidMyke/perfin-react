@@ -14,6 +14,7 @@ export async function triggerWebPush(
 
   try {
     const payload = await buildPushPayload(message, { ...subscription, expirationTime: null }, vapid);
+    //@ts-ignore tsconfig.app.json with "dom" lib is too strict, payload not allowed
     const res = await fetch(subscription.endpoint, payload);
 
     if (!res.ok) {
