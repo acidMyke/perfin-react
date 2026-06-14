@@ -66,11 +66,12 @@ adminApiRouter.post(
   withZod({
     body: z.object({
       userId: z.nanoid(),
+      deviceId: z.nanoid().optional(),
       ...NotificationEventDataSchema.shape,
     }),
   }),
   async (request, env) => {
-    const { userId, ...others } = request.validated.body;
+    const { userId, deviceId, ...others } = request.validated.body;
     const db = createDatabase(env);
     const [subscription] = await db
       .select({
@@ -84,6 +85,7 @@ adminApiRouter.post(
       .where(
         and(
           eq(userDevicesTable.userId, userId),
+          deviceId ? eq(userDevicesTable.deviceId, deviceId) : undefined,
           eq(userDevicesTable.showNotification, true),
           isNotNull(userDevicesTable.push_endpoint),
           isNotNull(userDevicesTable.push_auth),
