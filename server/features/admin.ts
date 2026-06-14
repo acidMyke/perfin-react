@@ -3,10 +3,8 @@ import { NotificationEventDataSchema } from '#server/lib/notification';
 import { CHECKPOINT_EVENT_TYPE, VersionTwoDataMigratorParamSchema } from '#server/workflows/VersionTwoDataMigrator';
 import { error, json, status, type IRequest, type RequestHandler } from 'itty-router';
 import z from 'zod';
-import { userDevicesTable } from '../../db/schema';
 import { createDatabase } from '#server/lib/db';
-import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
-import { triggerWebPush } from '#server/lib/webpush';
+import { getWebPushSubscription, processWebPushResult, triggerWebPush } from '#server/lib/webpush';
 
 const withAdminCheck: RequestHandler<IRequest, IttyCfArgs> = (request, env) => {
   const authHeader = request.headers.get('authorization');
@@ -73,33 +71,14 @@ adminApiRouter.post(
   async (request, env) => {
     const { userId, deviceId, ...others } = request.validated.body;
     const db = createDatabase(env);
-    const [subscription] = await db
-      .select({
-        endpoint: sql<string>`${userDevicesTable.push_endpoint}`,
-        keys: {
-          p256dh: sql<string>`${userDevicesTable.push_p256dh}`,
-          auth: sql<string>`${userDevicesTable.push_auth}`,
-        },
-      })
-      .from(userDevicesTable)
-      .where(
-        and(
-          eq(userDevicesTable.userId, userId),
-          deviceId ? eq(userDevicesTable.deviceId, deviceId) : undefined,
-          eq(userDevicesTable.showNotification, true),
-          isNotNull(userDevicesTable.push_endpoint),
-          isNotNull(userDevicesTable.push_auth),
-          isNotNull(userDevicesTable.push_p256dh),
-        ),
-      )
-      .orderBy(desc(userDevicesTable.lastUsedAt))
-      .limit(1);
+    const subscription = await getWebPushSubscription(db, { userId, deviceId });
 
     if (!subscription) {
       return error(404, `user ${userId} may not exists / have register for notification`);
     }
 
     const result = await triggerWebPush(env, subscription, { data: others });
+    await processWebPushResult(db, subscription, result);
     return json(result);
   },
 );

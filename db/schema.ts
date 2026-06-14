@@ -117,10 +117,11 @@ export const userDevicesTable = sqliteTable(
     userId: idColumn(),
     lastUsedAt: dateColumn(),
     nickname: text(),
+    // Push fields
     showNotification: boolean(),
-    push_endpoint: text(),
-    push_p256dh: text(),
-    push_auth: text(),
+    pushEndpoint: text(),
+    pushP256dh: text('push_p256dh'),
+    pushAuth: text(),
   },
   t => [primaryKey({ columns: [t.deviceId, t.userId] })],
 );
