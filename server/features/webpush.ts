@@ -13,9 +13,9 @@ const getWebPushSettingProcedure = protectedProcedure.query(async ({ ctx }) => {
         eq(userDevicesTable.userId, userId),
         eq(userDevicesTable.deviceId, deviceId),
         eq(userDevicesTable.showNotification, true),
-        isNotNull(userDevicesTable.push_endpoint),
-        isNotNull(userDevicesTable.push_auth),
-        isNotNull(userDevicesTable.push_p256dh),
+        isNotNull(userDevicesTable.pushEndpoint),
+        isNotNull(userDevicesTable.pushAuth),
+        isNotNull(userDevicesTable.pushP256dh),
       ),
     )
     .limit(1);
@@ -33,9 +33,9 @@ const setupWebPushProcedure = protectedProcedure
       .update(userDevicesTable)
       .set({
         showNotification: true,
-        push_endpoint: endpoint,
-        push_auth: auth,
-        push_p256dh: p256dh,
+        pushEndpoint: endpoint,
+        pushAuth: auth,
+        pushP256dh: p256dh,
       })
       .where(and(eq(userDevicesTable.userId, userId), eq(userDevicesTable.deviceId, deviceId)));
   });
