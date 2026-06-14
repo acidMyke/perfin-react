@@ -26,6 +26,11 @@ export async function subscribeToPush() {
     const registration = await registerServiceWorkerInternally();
     let subscription = await registration.pushManager.getSubscription();
 
+    if (subscription) {
+      const unsubSuccess = await subscription.unsubscribe();
+      if (unsubSuccess) subscription = null;
+    }
+
     if (!subscription) {
       subscription = await registration.pushManager.subscribe({
         userVisibleOnly: true,
@@ -44,6 +49,19 @@ export async function subscribeToPush() {
     return { endpoint, p256dh, auth };
   } catch (error) {
     console.error('Service Worker registration / Push subscription failed:', error);
+    throw error;
+  }
+}
+
+export async function unsubscribeToPush() {
+  try {
+    const registration = await registerServiceWorkerInternally();
+    let subscription = await registration.pushManager.getSubscription();
+
+    if (!subscription) return;
+    return await subscription.unsubscribe();
+  } catch (error) {
+    console.error('Push unsubscription failed:', error);
     throw error;
   }
 }

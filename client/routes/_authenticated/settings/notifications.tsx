@@ -1,5 +1,5 @@
 import { PageHeader } from '#client/components/PageHeader';
-import { subscribeToPush } from '#client/registerSW';
+import { subscribeToPush, unsubscribeToPush } from '#client/registerSW';
 import { queryClient, trpc } from '#client/trpc';
 import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -20,21 +20,28 @@ function RouteComponent() {
   });
   const setupWebPushMutation = useMutation(
     trpc.webpush.setup.mutationOptions({
-      onMutate: () => queryClient.setQueryData(trpc.webpush.get.queryKey(), { isEnabled: true }),
+      onMutate: () => (setError(null), queryClient.setQueryData(trpc.webpush.get.queryKey(), { isEnabled: true })),
       onSettled: () => queryClient.invalidateQueries(trpc.webpush.get.queryFilter()),
       onError: () => setError('Failed to enable notifications'),
     }),
   );
   const disableWebPushMutation = useMutation(
     trpc.webpush.disable.mutationOptions({
-      onMutate: () => queryClient.setQueryData(trpc.webpush.get.queryKey(), { isEnabled: false }),
+      onMutate: () => (setError(null), queryClient.setQueryData(trpc.webpush.get.queryKey(), { isEnabled: false })),
       onSettled: () => queryClient.invalidateQueries(trpc.webpush.get.queryFilter()),
       onError: () => setError('Failed to disable notifications'),
     }),
   );
+  const unsubtoWebPushMutation = useMutation({
+    mutationFn: () => (setError(null), unsubscribeToPush()),
+    onError: err => setError(err instanceof Error ? err.message : 'Failed to unsubscribe to notifications'),
+  });
 
   const isLoading =
-    subToWebPushMutation.isPending || setupWebPushMutation.isPending || disableWebPushMutation.isPending;
+    subToWebPushMutation.isPending ||
+    setupWebPushMutation.isPending ||
+    disableWebPushMutation.isPending ||
+    unsubtoWebPushMutation.isPending;
 
   return (
     <div className='mx-auto flex max-w-md flex-col'>
@@ -50,6 +57,7 @@ function RouteComponent() {
           onChange={() => {
             if (notiStateQuery.data.isEnabled) {
               disableWebPushMutation.mutate();
+              unsubtoWebPushMutation.mutate();
             } else {
               subToWebPushMutation.mutate();
             }
