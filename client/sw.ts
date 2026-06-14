@@ -10,7 +10,7 @@ self.addEventListener('push', event => {
     const options: NotificationOptions = {
       ...otherOptions,
       icon: '/android-chrome-192x192.png',
-      badge: '/android-chrome-192x192.png',
+      badge: '/perfin_noti_badge.png',
     };
     event.waitUntil(self.registration.showNotification(title, options));
   } catch (err) {
