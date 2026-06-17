@@ -72,8 +72,26 @@ function RouteComponent() {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi, formApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (fieldName === 'history') return;
+        if (fieldName.startsWith('history')) return;
+        if (fieldName.startsWith('ui')) return;
         if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
+
+        // History updating
+        let { lastFieldName, past } = formApi.getFieldValue('history');
+        const { history, ui, ...currentValues } = formApi.state.values;
+
+        if (lastFieldName !== fieldName) {
+          // @ts-ignore
+          const prevValue = formApi.getFieldValue(`history.lastValues.${fieldName}`);
+          past = [...past, { name: fieldName, value: prevValue }];
+        }
+        console.log({ past, future: [], lastValues: currentValues, lastFieldName: fieldName });
+
+        formApi.setFieldValue(
+          'history',
+          { past, future: [], lastValues: currentValues, lastFieldName: fieldName },
+          { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true },
+        );
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
