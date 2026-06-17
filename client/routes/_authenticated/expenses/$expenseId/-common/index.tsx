@@ -64,13 +64,6 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
   }
 
   return {
-    ui: {
-      isCreate: false,
-      shouldInferShopDetail: false,
-      shouldFetchShopSuggestion: false,
-      shopDetailSource: 'user' as InputSource,
-      calculateResult: calculateExpense(detail),
-    },
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
     account,
     category,
@@ -79,37 +72,53 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
   };
 }
 
+function createNewExpenseForm() {
+  return {
+    version: 0,
+    amountCents: 0,
+    billedAt: new Date(),
+    account: undefined,
+    category: undefined,
+    type: 'online' as 'online' | 'physical',
+    geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
+    shopName: null,
+    shopMall: null,
+    isDeleted: false,
+    specifiedAmountCents: 0,
+    items: [] as ExpenseItem[],
+    adjustments: [] as ExpenseAdjustment[],
+  } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
+}
+
+interface HistoryEntry {
+  name: string;
+  value: any;
+}
+
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
   options?: ExpenseOptions,
   param?: { isCopy: boolean },
 ) {
-  if (detail && options) {
-    return processApiResponse(detail, options, param);
-  } else {
-    return {
-      ui: {
-        isCreate: true,
-        shouldInferShopDetail: true,
-        shouldFetchShopSuggestion: true,
-        shopDetailSource: null,
-        calculateResult: calculateExpense({ specifiedAmountCents: 0, items: [], adjustments: [] }),
-      },
-      version: 0,
-      amountCents: 0,
-      billedAt: new Date(),
-      account: undefined,
-      category: undefined,
-      type: 'online' as 'online' | 'physical',
-      geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
-      shopName: null,
-      shopMall: null,
-      isDeleted: false,
-      specifiedAmountCents: 0,
-      items: [] as ExpenseItem[],
-      adjustments: [] as ExpenseAdjustment[],
-    } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
-  }
+  const isCreate = !!detail && !!options;
+  const formValues = isCreate ? processApiResponse(detail, options, param) : createNewExpenseForm();
+
+  return {
+    ...formValues,
+    ui: {
+      isCreate,
+      shouldInferShopDetail: isCreate,
+      shouldFetchShopSuggestion: isCreate,
+      shopDetailSource: isCreate ? null : ('user' as InputSource),
+      calculateResult: calculateExpense(formValues),
+    },
+    history: {
+      past: [] as HistoryEntry[],
+      future: [] as HistoryEntry[],
+      lastFieldName: null as string | null,
+      lastValues: formValues,
+    },
+  };
 }
 
 export type ExpenseFormData = ReturnType<typeof mapExpenseDetailToForm>;

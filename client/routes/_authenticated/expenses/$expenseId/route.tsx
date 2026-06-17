@@ -70,8 +70,9 @@ function RouteComponent() {
     ...createEditExpenseFormOptions,
     listeners: {
       onChangeDebounceMs: 700,
-      onChange: ({ fieldApi }) => {
+      onChange: ({ fieldApi, formApi }) => {
         const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
+        if (fieldName === 'history') return;
         if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
       },
       onBlurDebounceMs: 200,
@@ -83,7 +84,7 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ui, ...otherValues } = value;
+        const { billedAt, geolocation, ui, history, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
