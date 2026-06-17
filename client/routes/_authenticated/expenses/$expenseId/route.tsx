@@ -16,6 +16,7 @@ import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
+import { Redo, Undo } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -149,7 +150,18 @@ function RouteComponent() {
   return (
     <div className='mx-auto max-w-md'>
       <div className='col-span-full'>
-        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} />
+        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'}>
+          <PageHeader.RightSection>
+            <div className='flex flex-row gap-2'>
+              <button className='btn btn-square btn-sm btn-ghost' onClick={() => {}}>
+                <Undo />
+              </button>
+              <button className='btn btn-square btn-sm btn-ghost' onClick={() => {}}>
+                <Redo />
+              </button>
+            </div>
+          </PageHeader.RightSection>
+        </PageHeader>
       </div>
       <div className='h-4'></div>
       <form.AppForm>
