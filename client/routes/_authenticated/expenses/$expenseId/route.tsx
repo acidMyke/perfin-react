@@ -10,13 +10,16 @@ import {
   mapExpenseDetailToForm,
   type ExpenseFormData,
   useAdjustmentCallbacks,
+  type ExpenseFormApi,
 } from './-common';
-import type { DeepKeys } from '@tanstack/react-form';
+import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
+
+const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -85,12 +88,11 @@ function RouteComponent() {
           const prevValue = formApi.getFieldValue(`history.lastValues.${fieldName}`);
           past = [...past, { name: fieldName, value: prevValue }];
         }
-        console.log({ past, future: [], lastValues: currentValues, lastFieldName: fieldName });
 
         formApi.setFieldValue(
           'history',
           { past, future: [], lastValues: currentValues, lastFieldName: fieldName },
-          { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true },
+          SET_VAL_ONLY,
         );
       },
       onBlurDebounceMs: 200,
@@ -170,16 +172,7 @@ function RouteComponent() {
     <div className='mx-auto max-w-md'>
       <div className='col-span-full'>
         <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'}>
-          <PageHeader.RightSection>
-            <div className='flex flex-row gap-2'>
-              <button className='btn btn-square btn-sm btn-ghost' onClick={() => {}}>
-                <Undo />
-              </button>
-              <button className='btn btn-square btn-sm btn-ghost' onClick={() => {}}>
-                <Redo />
-              </button>
-            </div>
-          </PageHeader.RightSection>
+          <UndoRedoButtons form={form} />
         </PageHeader>
       </div>
       <div className='h-4'></div>
@@ -249,5 +242,70 @@ function ExpenseNotFoundComponent() {
         Back
       </Link>
     </div>
+  );
+}
+
+function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
+  const handleUndo = useCallback(() => {
+    const { past, future } = form.getFieldValue('history');
+    if (past.length === 0) return;
+    const lastAction = past.pop();
+    if (!lastAction) return;
+    const fieldName = lastAction.name as DeepKeys<ExpenseFormData>;
+    const { history, ui, ...currentValues } = form.state.values;
+    const fieldValue = form.getFieldValue(fieldName);
+    form.setFieldValue(
+      'history',
+      {
+        past: [...past],
+        future: [...future, { name: fieldName, value: fieldValue }],
+        lastValues: currentValues,
+        lastFieldName: past.at(-1)?.name ?? null,
+      },
+      SET_VAL_ONLY,
+    );
+    // @ts-ignore
+    form.setFieldValue(fieldName, lastAction.value, SET_VAL_ONLY);
+  }, [form]);
+
+  const handleRedo = useCallback(() => {
+    const { past, future } = form.getFieldValue('history');
+    if (future.length === 0) return;
+    const nextAction = future.pop();
+    if (!nextAction) return;
+    const fieldName = nextAction.name as DeepKeys<ExpenseFormData>;
+    const { history, ui, ...currentValues } = form.state.values;
+    const fieldValue = form.getFieldValue(fieldName);
+    form.setFieldValue(
+      'history',
+      {
+        past: [...past, { name: fieldName, value: fieldValue }],
+        future: [...future],
+        lastValues: currentValues,
+        lastFieldName: fieldName,
+      },
+      SET_VAL_ONLY,
+    );
+    // @ts-ignore
+    form.setFieldValue(fieldName, nextAction.value, SET_VAL_ONLY);
+  }, [form]);
+
+  return (
+    <PageHeader.RightSection>
+      <form.Subscribe
+        selector={state => [state.values.history.past.length === 0, state.values.history.future.length === 0]}
+      >
+        {([cantUndo, cantRedo]) => (
+          <div className='flex flex-row gap-2'>
+            <button className='btn btn-square btn-sm btn-ghost' disabled={cantUndo} onClick={handleUndo}>
+              <Undo />
+            </button>
+            <button className='btn btn-square btn-sm btn-ghost' disabled={cantRedo} onClick={handleRedo}>
+              <Redo />
+            </button>
+          </div>
+        )}
+      </form.Subscribe>
+    </PageHeader.RightSection>
   );
 }
