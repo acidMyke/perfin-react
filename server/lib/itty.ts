@@ -78,8 +78,24 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
 
     if (schemas.body) {
       try {
-        const json = await request.json();
-        const result = schemas.body.safeParse(json);
+        const contentType = request.headers.get('content-type') ?? '';
+        let payload: any;
+
+        if (contentType.includes('application/json')) {
+          payload = await request.json();
+        } else if (
+          contentType.includes('multipart/form-data') ||
+          contentType.includes('application/x-www-form-urlencoded')
+        ) {
+          payload = await request.formData();
+        } else {
+          return new Response(JSON.stringify({ error: 'Invalid body' }), {
+            status: 415,
+            headers: { 'Content-Type': 'application/json' },
+          });
+        }
+
+        const result = schemas.body.safeParse(payload);
 
         if (!result.success) throw result.error;
         parsedBody = result.data;
@@ -95,10 +111,8 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
     }
 
     if (schemas.query) {
-      const url = new URL(request.url);
-      const queryObj = Object.fromEntries(url.searchParams);
+      const result = schemas.query.safeParse(request.query);
 
-      const result = schemas.query.safeParse(queryObj);
       if (!result.success) {
         return new Response(
           JSON.stringify({
@@ -112,7 +126,7 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
     }
 
     if (schemas.params) {
-      const result = schemas.params.safeParse((request as any).params || {});
+      const result = schemas.params.safeParse(request.params);
 
       if (!result.success) {
         return new Response(
