@@ -195,6 +195,7 @@ function RouteComponent() {
               form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
               triggerFetchShopDetail(shopName);
             }
+            pushHistory(form, ['shopMall', 'shopName']);
           }}
         />
         <ShopDetailPicker
@@ -224,6 +225,7 @@ function RouteComponent() {
               createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
             }
             form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+            pushHistory(form, ['account', 'category', 'adjustments']);
           }}
         />
         <DirtyFormBlockModel mainRouteId={Route.id} />
