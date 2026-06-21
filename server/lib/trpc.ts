@@ -8,7 +8,7 @@ import type { DefaultErrorShape } from '@trpc/server/unstable-core-do-not-import
 import { createDatabase } from './db';
 import ErrorCodes from './ErrorCodes';
 
-export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
+export function createTrpcContextFactory(env: Env, ctx: ExecutionContext, resHeaders: CookieHeaders) {
   const db = createDatabase(env);
   return async function ({ req }: FetchCreateContextFnOptions) {
     const reqCookie = parseCookie(req);
@@ -27,7 +27,7 @@ export function createContextFactory(env: Env, ctx: ExecutionContext, resHeaders
   };
 }
 
-export type Context = Awaited<ReturnType<ReturnType<typeof createContextFactory>>>;
+export type Context = Awaited<ReturnType<ReturnType<typeof createTrpcContextFactory>>>;
 
 export type AppErrorShapeData = DefaultErrorShape['data'] & {
   fieldErrors?: Record<string, string[] | undefined>;
@@ -104,7 +104,7 @@ const t = initTRPC.context<Context>().create({
   },
 });
 
-export const router = t.router;
+export const createTrpcRouter = t.router;
 export const publicProcedure = t.procedure.use(async opts => {
   const result = await opts.next();
   if (!result.ok) {
