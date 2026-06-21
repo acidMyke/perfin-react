@@ -11,6 +11,7 @@ import {
   type ExpenseFormData,
   useAdjustmentCallbacks,
   type ExpenseFormApi,
+  type HistoryEntry,
 } from './-common';
 import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
@@ -80,20 +81,18 @@ function RouteComponent() {
         if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
 
         // History updating
-        let { lastFieldName, past } = formApi.getFieldValue('history');
+        let { past } = formApi.getFieldValue('history');
         const { history, ui, ...currentValues } = formApi.state.values;
-
+        const lastPastEntry = history.past.at(-1);
+        const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
         if (lastFieldName !== fieldName) {
           // @ts-ignore
           const prevValue = formApi.getFieldValue(`history.lastValues.${fieldName}`);
-          past = [...past, { name: fieldName, value: prevValue }];
+          past = [...past, [{ name: fieldName, value: prevValue }]];
+          console.log('pushHistory', { entry: { name: fieldName, value: prevValue } });
         }
 
-        formApi.setFieldValue(
-          'history',
-          { past, future: [], lastValues: currentValues, lastFieldName: fieldName },
-          SET_VAL_ONLY,
-        );
+        formApi.setFieldValue('history', { past, future: [], lastValues: currentValues }, SET_VAL_ONLY);
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
@@ -245,50 +244,41 @@ function ExpenseNotFoundComponent() {
   );
 }
 
-function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
-  const handleUndo = useCallback(() => {
-    const { past, future } = form.getFieldValue('history');
-    if (past.length === 0) return;
-    const lastAction = past.pop();
-    if (!lastAction) return;
-    const fieldName = lastAction.name as DeepKeys<ExpenseFormData>;
-    const { history, ui, ...currentValues } = form.state.values;
-    const fieldValue = form.getFieldValue(fieldName);
-    form.setFieldValue(
-      'history',
-      {
-        past: [...past],
-        future: [...future, { name: fieldName, value: fieldValue }],
-        lastValues: currentValues,
-        lastFieldName: past.at(-1)?.name ?? null,
-      },
-      SET_VAL_ONLY,
-    );
-    // @ts-ignore
-    form.setFieldValue(fieldName, lastAction.value, SET_VAL_ONLY);
-  }, [form]);
+const applyHistory = (form: ExpenseFormApi, sourceKey: 'past' | 'future') => {
+  const { history, ui, ...currentValues } = form.state.values;
+  const targetKey: 'past' | 'future' = sourceKey === 'future' ? 'past' : 'future';
+  const source = [...history[sourceKey]];
+  const target = [...history[targetKey]];
 
-  const handleRedo = useCallback(() => {
-    const { past, future } = form.getFieldValue('history');
-    if (future.length === 0) return;
-    const nextAction = future.pop();
-    if (!nextAction) return;
-    const fieldName = nextAction.name as DeepKeys<ExpenseFormData>;
-    const { history, ui, ...currentValues } = form.state.values;
-    const fieldValue = form.getFieldValue(fieldName);
-    form.setFieldValue(
-      'history',
-      {
-        past: [...past, { name: fieldName, value: fieldValue }],
-        future: [...future],
-        lastValues: currentValues,
-        lastFieldName: fieldName,
-      },
-      SET_VAL_ONLY,
-    );
-    // @ts-ignore
-    form.setFieldValue(fieldName, nextAction.value, SET_VAL_ONLY);
-  }, [form]);
+  if (source.length === 0) return;
+
+  const actions = source.pop();
+  if (!actions) return;
+
+  const inverseActions: HistoryEntry[] = [];
+
+  for (const action of actions) {
+    const fieldName = action.name as DeepKeys<ExpenseFormData>;
+    const currentValue = form.getFieldValue(fieldName);
+
+    inverseActions.push({ name: fieldName, value: currentValue });
+    form.setFieldValue(fieldName, action.value, SET_VAL_ONLY);
+  }
+
+  form.setFieldValue(
+    'history',
+    {
+      past: sourceKey === 'past' ? source : [...target, inverseActions],
+      future: sourceKey === 'future' ? source : [...target, inverseActions],
+      lastValues: currentValues,
+    },
+    SET_VAL_ONLY,
+  );
+};
+
+function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
+  const handleUndo = useCallback(() => applyHistory(form, 'past'), [form]);
+  const handleRedo = useCallback(() => applyHistory(form, 'future'), [form]);
 
   return (
     <PageHeader.RightSection>

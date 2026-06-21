@@ -90,7 +90,7 @@ function createNewExpenseForm() {
   } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
 }
 
-interface HistoryEntry {
+export interface HistoryEntry {
   name: string;
   value: any;
 }
@@ -113,9 +113,8 @@ export function mapExpenseDetailToForm(
       calculateResult: calculateExpense(formValues),
     },
     history: {
-      past: [] as HistoryEntry[],
-      future: [] as HistoryEntry[],
-      lastFieldName: null as string | null,
+      past: [] as HistoryEntry[][],
+      future: [] as HistoryEntry[][],
       lastValues: formValues,
     },
   };
