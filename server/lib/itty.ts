@@ -31,6 +31,37 @@ export const withContext: RequestHandler<RequestWithContext, IttyCfArgs> = async
 export const createIttyAppRouter = <ResponseType = any>(options?: RouterOptions<RequestWithContext, IttyCfArgs>) =>
   Router<RequestWithContext, IttyCfArgs, ResponseType>(options);
 
+// Middleware chaining and types propagations
+
+type ChainableHandler<T> = RequestHandler<T, IttyCfArgs> & {
+  then: <U>(middleware: RequestHandler<U, IttyCfArgs>) => ChainableHandler<T & U>;
+};
+
+export function chainHandler<T>(handler: RequestHandler<T>): ChainableHandler<T> {
+  const _h: RequestHandler<T, IttyCfArgs> = (req: T, ...args) => handler(req, ...args);
+
+  const then = <U>(nextHandler: RequestHandler<U, IttyCfArgs>) => {
+    const _ch: RequestHandler<T & U, IttyCfArgs> = async (req, ...args) =>
+      (await _h(req, ...args)) ?? (await nextHandler(req, ...args));
+    return chainHandler(_ch) as ChainableHandler<T & U>;
+  };
+
+  return Object.assign(_h, { then }) as ChainableHandler<T>;
+}
+
+type Middleware<T> = RequestHandler<RequestWithContext & T, IttyCfArgs>;
+
+export function withProperty<TKey extends string, TResult>(
+  key: TKey,
+  resolver: (request: RequestWithContext, ...args: IttyCfArgs) => TResult,
+): Middleware<Record<TKey, Awaited<TResult>>> {
+  return async (request, ...args) => {
+    (request as any)[key] = await resolver(request, ...args);
+  };
+}
+
+// Zod Middleware
+
 type WithZodSchemas = { body?: ZodType; query?: ZodType; params?: ZodType };
 
 export type ValidatedData<T extends WithZodSchemas> = {
@@ -39,7 +70,7 @@ export type ValidatedData<T extends WithZodSchemas> = {
 
 export type ValidatedRequest<T extends WithZodSchemas> = RequestWithContext & { validated: ValidatedData<T> };
 
-export const withZod = <T extends WithZodSchemas>(schemas: T): RequestHandler<ValidatedRequest<T>, IttyCfArgs> => {
+export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<ValidatedRequest<T>> => {
   return async request => {
     let parsedBody: any = undefined;
     let parsedQuery: any = undefined;
