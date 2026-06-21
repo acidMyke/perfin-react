@@ -10,12 +10,17 @@ import {
   mapExpenseDetailToForm,
   type ExpenseFormData,
   useAdjustmentCallbacks,
+  type ExpenseFormApi,
+  type HistoryEntry,
 } from './-common';
-import type { DeepKeys } from '@tanstack/react-form';
+import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
+import { Redo, Undo } from 'lucide-react';
+
+const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -51,6 +56,26 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   preload: false,
 });
 
+type TrackableFieldName = Exclude<DeepKeys<ExpenseFormData>, 'ui' | 'history' | `ui${string}` | `history${string}`>;
+const pushHistory = (form: ExpenseFormApi, fieldNames: TrackableFieldName[]) => {
+  const { history, ui, ...currentValues } = form.state.values;
+  let { past } = history;
+  const lastPastEntry = history.past.at(-1);
+  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
+
+  const actions: HistoryEntry[] = [];
+  for (const fieldName of fieldNames) {
+    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
+      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
+      actions.push({ name: fieldName, value: prevValue });
+    }
+  }
+
+  if (actions.length > 0) {
+    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
+  }
+};
+
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -70,8 +95,10 @@ function RouteComponent() {
     listeners: {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi }) => {
-        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
+        if (fieldApi.name.startsWith('history')) return;
+        if (fieldApi.name.startsWith('ui')) return;
+        if (/(geolocation.*)/.test(fieldApi.name)) triggerFetchShopSuggestion();
+        pushHistory(form, [fieldApi.name as TrackableFieldName]);
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
@@ -82,7 +109,7 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ui, ...otherValues } = value;
+        const { billedAt, geolocation, ui, history, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId,
@@ -149,7 +176,9 @@ function RouteComponent() {
   return (
     <div className='mx-auto max-w-md'>
       <div className='col-span-full'>
-        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'} />
+        <PageHeader title={(isCreate ? 'Create' : 'Edit') + ' expense'}>
+          <UndoRedoButtons form={form} />
+        </PageHeader>
       </div>
       <div className='h-4'></div>
       <form.AppForm>
@@ -160,12 +189,13 @@ function RouteComponent() {
           onFinalized={data => {
             const { shopMall, shopName } = data;
             if (shopMall) {
-              form.setFieldValue('shopMall', shopMall, { dontValidate: true });
+              form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
             }
             if (shopName) {
-              form.setFieldValue('shopName', shopName, { dontValidate: true });
+              form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
               triggerFetchShopDetail(shopName);
             }
+            pushHistory(form, ['shopMall', 'shopName']);
           }}
         />
         <ShopDetailPicker
@@ -195,6 +225,7 @@ function RouteComponent() {
               createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
             }
             form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+            pushHistory(form, ['account', 'category', 'adjustments']);
           }}
         />
         <DirtyFormBlockModel mainRouteId={Route.id} />
@@ -218,5 +249,61 @@ function ExpenseNotFoundComponent() {
         Back
       </Link>
     </div>
+  );
+}
+
+const applyHistory = (form: ExpenseFormApi, sourceKey: 'past' | 'future') => {
+  const { history, ui, ...currentValues } = form.state.values;
+  const targetKey: 'past' | 'future' = sourceKey === 'future' ? 'past' : 'future';
+  const source = [...history[sourceKey]];
+  const target = [...history[targetKey]];
+
+  if (source.length === 0) return;
+
+  const actions = source.pop();
+  if (!actions) return;
+
+  const inverseActions: HistoryEntry[] = [];
+
+  for (const action of actions) {
+    const fieldName = action.name as DeepKeys<ExpenseFormData>;
+    const currentValue = form.getFieldValue(fieldName);
+
+    inverseActions.push({ name: fieldName, value: currentValue });
+    form.setFieldValue(fieldName, action.value, SET_VAL_ONLY);
+  }
+
+  form.setFieldValue(
+    'history',
+    {
+      past: sourceKey === 'past' ? source : [...target, inverseActions],
+      future: sourceKey === 'future' ? source : [...target, inverseActions],
+      lastValues: currentValues,
+    },
+    SET_VAL_ONLY,
+  );
+};
+
+function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
+  const handleUndo = useCallback(() => applyHistory(form, 'past'), [form]);
+  const handleRedo = useCallback(() => applyHistory(form, 'future'), [form]);
+
+  return (
+    <PageHeader.RightSection>
+      <form.Subscribe
+        selector={state => [state.values.history.past.length === 0, state.values.history.future.length === 0]}
+      >
+        {([cantUndo, cantRedo]) => (
+          <div className='flex flex-row gap-2'>
+            <button className='btn btn-square btn-sm btn-ghost' disabled={cantUndo} onClick={handleUndo}>
+              <Undo />
+            </button>
+            <button className='btn btn-square btn-sm btn-ghost' disabled={cantRedo} onClick={handleRedo}>
+              <Redo />
+            </button>
+          </div>
+        )}
+      </form.Subscribe>
+    </PageHeader.RightSection>
   );
 }

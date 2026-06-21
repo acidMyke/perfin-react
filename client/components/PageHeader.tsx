@@ -32,6 +32,14 @@ const RightLink = createLink(
   }),
 );
 
+const LeftSection = ({ children }: { children: ReactNode }) => (
+  <div className='absolute left-0 flex items-center'>{children}</div>
+);
+
+const RightSection = ({ children }: { children: ReactNode }) => (
+  <div className='absolute right-0 flex items-center'>{children}</div>
+);
+
 const Main = ({ title, showBackButton, children }: PageHeaderProp) => {
   const router = useRouter();
   const canGoBack = useCanGoBack();
@@ -54,4 +62,4 @@ const Main = ({ title, showBackButton, children }: PageHeaderProp) => {
   );
 };
 
-export const PageHeader = Object.assign(Main, { LeftLink, RightLink });
+export const PageHeader = Object.assign(Main, { LeftLink, RightLink, LeftSection, RightSection });

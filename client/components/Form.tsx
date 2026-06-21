@@ -107,7 +107,7 @@ function NumericInput(props: NumericInputProps) {
   useEffect(() => {
     const value = transforms.reduce((a, t) => NumericTransformers[t].revert(a), field.state.value ?? 0);
     const newFormatted = formatValue(value).number;
-    if ((formatted !== '') == (value !== 0) && formatted != newFormatted) {
+    if ((formatted !== '' || value === 0) && formatted != newFormatted) {
       setFormatted(newFormatted);
     }
   }, [formatValue, field.state.value]);
@@ -421,7 +421,12 @@ function ComboBox({
                 setQuery(val);
               }
             }}
-            onBlur={() => field.handleBlur()}
+            onBlur={() => {
+              if (!suggestionMode) {
+                setQuery('');
+              }
+              field.handleBlur();
+            }}
             onFocus={e => {
               if (suggestionMode && triggerChangeOnFocus) {
                 const val = e.target.value;
