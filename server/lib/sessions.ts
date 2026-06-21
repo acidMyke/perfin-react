@@ -1,4 +1,5 @@
-import type { Context, ProtectedContext } from './trpc';
+import type { Context } from './itty';
+import type { ProtectedContext } from './trpc';
 import { and, eq, gt, sql } from 'drizzle-orm';
 import { UAParser } from 'ua-parser-js';
 import { BatchCollector, maybeBatch, type AppDatabase } from './db';
