@@ -56,6 +56,26 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   preload: false,
 });
 
+type TrackableFieldName = Exclude<DeepKeys<ExpenseFormData>, 'ui' | 'history' | `ui${string}` | `history${string}`>;
+const pushHistory = (form: ExpenseFormApi, fieldNames: TrackableFieldName[]) => {
+  const { history, ui, ...currentValues } = form.state.values;
+  let { past } = history;
+  const lastPastEntry = history.past.at(-1);
+  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
+
+  const actions: HistoryEntry[] = [];
+  for (const fieldName of fieldNames) {
+    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
+      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
+      actions.push({ name: fieldName, value: prevValue });
+    }
+  }
+
+  if (actions.length > 0) {
+    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
+  }
+};
+
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -74,25 +94,11 @@ function RouteComponent() {
     ...createEditExpenseFormOptions,
     listeners: {
       onChangeDebounceMs: 700,
-      onChange: ({ fieldApi, formApi }) => {
-        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (fieldName.startsWith('history')) return;
-        if (fieldName.startsWith('ui')) return;
-        if (/(geolocation.*)/.test(fieldName)) triggerFetchShopSuggestion();
-
-        // History updating
-        let { past } = formApi.getFieldValue('history');
-        const { history, ui, ...currentValues } = formApi.state.values;
-        const lastPastEntry = history.past.at(-1);
-        const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
-        if (lastFieldName !== fieldName) {
-          // @ts-ignore
-          const prevValue = formApi.getFieldValue(`history.lastValues.${fieldName}`);
-          past = [...past, [{ name: fieldName, value: prevValue }]];
-          console.log('pushHistory', { entry: { name: fieldName, value: prevValue } });
-        }
-
-        formApi.setFieldValue('history', { past, future: [], lastValues: currentValues }, SET_VAL_ONLY);
+      onChange: ({ fieldApi }) => {
+        if (fieldApi.name.startsWith('history')) return;
+        if (fieldApi.name.startsWith('ui')) return;
+        if (/(geolocation.*)/.test(fieldApi.name)) triggerFetchShopSuggestion();
+        pushHistory(form, [fieldApi.name as TrackableFieldName]);
       },
       onBlurDebounceMs: 200,
       onBlur: ({ fieldApi }) => {
@@ -183,10 +189,10 @@ function RouteComponent() {
           onFinalized={data => {
             const { shopMall, shopName } = data;
             if (shopMall) {
-              form.setFieldValue('shopMall', shopMall, { dontValidate: true });
+              form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
             }
             if (shopName) {
-              form.setFieldValue('shopName', shopName, { dontValidate: true });
+              form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
               triggerFetchShopDetail(shopName);
             }
           }}
