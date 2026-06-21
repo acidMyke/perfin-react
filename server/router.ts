@@ -1,11 +1,11 @@
-import { createTrpcContextFactory, createTrpcRouter } from './lib/trpc';
+import { createTrpcRouter } from './lib/trpc';
 import { whoamiProcedure, sessionProcedures } from './features/users';
 import { expenseProcedures } from './features/expenses';
 import { subjectProcedures } from './features/subjects';
 import { dashboardProcedure } from './features/dashboard';
 import passkeyProcedures from './features/passkeys';
 import webpushProcedures from './features/webpush';
-import { createIttyAppRouter } from './lib/itty';
+import { createIttyAppRouter, withContext } from './lib/itty';
 import { CookieHeaders } from './lib/CookieHeaders';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { adminApiRouter } from './features/admin';
@@ -25,13 +25,14 @@ export const trpcRouter = createTrpcRouter({
 export type AppRouter = typeof trpcRouter;
 
 export const router = createIttyAppRouter()
-  .all('/trpc/*', async (req, env, ctx) => {
+  .all('*', withContext)
+  .all('/trpc/*', async req => {
     const resHeaders = new CookieHeaders();
     const response = await fetchRequestHandler({
       endpoint: '/trpc',
       req,
       router: trpcRouter,
-      createContext: createTrpcContextFactory(env, ctx, resHeaders),
+      createContext: () => req.context,
     });
     resHeaders.forEach((value, key) => response.headers.append(key, value));
     return response;
