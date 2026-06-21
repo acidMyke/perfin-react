@@ -109,7 +109,7 @@ export function mapExpenseDetailToForm(
       isCreate,
       shouldInferShopDetail: isCreate,
       shouldFetchShopSuggestion: isCreate,
-      shopDetailSource: isCreate ? null : ('user' as InputSource),
+      shopDetailSource: isCreate ? ('user' as InputSource) : null,
       calculateResult: calculateExpense(formValues),
     },
     history: {
