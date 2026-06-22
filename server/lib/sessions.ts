@@ -316,6 +316,8 @@ async function check(
   };
 }
 
+export type SessionCheckResult = Awaited<ReturnType<typeof check>>;
+
 export const sessions = {
   create,
   revoke,

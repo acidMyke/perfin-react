@@ -1,8 +1,9 @@
 import { z, type ZodType } from 'zod';
-import { Router, type IRequestStrict, type RequestHandler, type RouterOptions } from 'itty-router';
+import { error, Router, type IRequestStrict, type RequestHandler, type RouterOptions } from 'itty-router';
 import { createDatabase, type AppDatabase } from './db';
 import { CookieHeaders, parseCookie } from './CookieHeaders';
-import sessions from './sessions';
+import sessions, { type SessionCheckResult } from './sessions';
+import ErrorCodes from './ErrorCodes';
 
 export type IttyCfArgs = [Env, ExecutionContext];
 
@@ -14,7 +15,7 @@ export type Context = {
   url: URL;
   resHeaders: CookieHeaders;
   reqCookie: ReturnType<typeof parseCookie>;
-} & Awaited<ReturnType<typeof sessions.check>>;
+} & SessionCheckResult;
 
 export type RequestWithContext = IRequestStrict & { context: Context };
 
@@ -145,5 +146,33 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
       query: parsedQuery,
       params: parsedParams,
     } as ValidatedData<T>;
+  };
+};
+
+type WithAuthOptions = {
+  requiresElevation?: boolean;
+};
+
+type ProtectedContext<T extends WithAuthOptions> = Extract<Context, { isAuthenticated: true }> & {
+  isAllowElevated: T['requiresElevation'] extends true ? true : boolean;
+};
+
+export type RequestWithProtectedContext<T extends WithAuthOptions> = IRequestStrict & { context: ProtectedContext<T> };
+
+export const withAuth = <T extends WithAuthOptions>(options?: T): Middleware<{ context: ProtectedContext<T> }> => {
+  return request => {
+    if (!request.context.isAuthenticated) {
+      return error(401, import.meta.env.DEV ? request.context.authFailureReason : undefined);
+    }
+
+    if (request.method !== 'GET' && !request.context.isCsrfValid) {
+      return error(403, ErrorCodes.CSRF_FAILED);
+    }
+
+    if (options?.requiresElevation && !request.context.isAllowElevated) {
+      return error(403, ErrorCodes.ELEVATION_REQUIRED);
+    }
+
+    request.context = request.context;
   };
 };
