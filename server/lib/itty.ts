@@ -34,7 +34,7 @@ export const createIttyAppRouter = <ResponseType = any>(options?: RouterOptions<
 // Middleware chaining and types propagations
 
 type ChainableHandler<T> = RequestHandler<T, IttyCfArgs> & {
-  then: <U>(middleware: RequestHandler<U, IttyCfArgs>) => ChainableHandler<T & U>;
+  then: <U>(nextHandler: RequestHandler<U, IttyCfArgs>) => ChainableHandler<T & U>;
 };
 
 export function chainHandler<T>(handler: RequestHandler<T>): ChainableHandler<T> {
