@@ -6,7 +6,6 @@ import { dashboardProcedure } from './features/dashboard';
 import passkeyProcedures from './features/passkeys';
 import webpushProcedures from './features/webpush';
 import { createIttyAppRouter, withContext } from './lib/itty';
-import { CookieHeaders } from './lib/CookieHeaders';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { adminApiRouter } from './features/admin';
 import { error } from 'itty-router';
@@ -27,14 +26,13 @@ export type AppRouter = typeof trpcRouter;
 export const router = createIttyAppRouter()
   .all('*', withContext)
   .all('/trpc/*', async req => {
-    const resHeaders = new CookieHeaders();
     const response = await fetchRequestHandler({
       endpoint: '/trpc',
       req,
       router: trpcRouter,
       createContext: () => req.context,
     });
-    resHeaders.forEach((value, key) => response.headers.append(key, value));
+    req.context.resHeaders.forEach((value, key) => response.headers.append(key, value));
     return response;
   })
   .all('/admin/*', adminApiRouter.fetch)
