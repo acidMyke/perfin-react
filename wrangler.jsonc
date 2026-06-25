@@ -44,6 +44,12 @@
       "class_name": "UserExpenseReindexer",
     },
   ],
+  "r2_buckets": [
+    {
+      "binding": "bk",
+      "bucket_name": "perfin-staging",
+    },
+  ],
   "vars": {
     "TOKEN_EXPIRE_DAYS": 30,
     "TOKEN_COOKIE_NAME": "token",
