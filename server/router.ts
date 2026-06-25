@@ -1,6 +1,6 @@
 import { createTrpcRouter } from './lib/trpc';
 import { whoamiProcedure, sessionProcedures } from './features/users';
-import { expenseProcedures } from './features/expenses';
+import { expenseProcedures, expenseRouter } from './features/expenses';
 import { subjectProcedures } from './features/subjects';
 import { dashboardProcedure } from './features/dashboard';
 import passkeyProcedures from './features/passkeys';
@@ -36,6 +36,7 @@ export const router = createIttyAppRouter()
     return response;
   })
   .all('/admin/*', adminApiRouter.fetch)
+  .all('/expense/*', expenseRouter.fetch)
   .all('*', () => error(404));
 
 export default router;
