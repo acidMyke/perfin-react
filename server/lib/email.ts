@@ -1,5 +1,5 @@
 // import { createMimeMessage, MIMEMessage, type MailboxAddrObject } from 'mimetext';
-import type { Context } from './trpc';
+import type { Context } from './itty';
 import { emailCodesTable } from '../../db/schema';
 import { addSeconds } from 'date-fns';
 import { and, eq, gt, SQL } from 'drizzle-orm';
