@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
@@ -28,4 +29,5 @@ export default defineConfig({
       '#components': path.resolve(__dirname, './client/components'),
     },
   },
+  test: {},
 });
