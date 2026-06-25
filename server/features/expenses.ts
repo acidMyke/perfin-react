@@ -11,7 +11,7 @@ import {
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import z, { nanoid } from 'zod';
+import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
@@ -20,6 +20,8 @@ import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpen
 import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 import { chainHandler, createIttyAppRouter, withAuth, withZod } from '#server/lib/itty';
 import { zfd } from 'zod-form-data';
+import { json } from 'itty-router';
+import { nanoid } from 'nanoid';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -395,26 +397,36 @@ export const expenseRouter = createIttyAppRouter({ base: '/expense' }).post(
         accountIds: zfd.repeatable(z.array(zfd.text()).default([])),
         categoryIds: zfd.repeatable(z.array(zfd.text()).default([])),
         items: zfd.repeatable(
-          z.array(
-            z.object({
-              type: zfd.text(),
-              image: z.instanceof(Blob, { message: 'An image file asset is required' }),
-              description: zfd.text(z.string().optional()),
-            }),
-          ),
+          z
+            .array(
+              z.object({
+                type: zfd.text(),
+                image: z.instanceof(Blob, { message: 'An image file asset is required' }),
+                description: zfd.text(z.string().optional()),
+              }),
+            )
+            .min(1),
         ),
       }),
     }),
   ),
-  request => {
+  async request => {
     const { context, validated } = request;
     const { db, env, userId } = context;
     const { items } = validated.body;
 
     const r2Promises: Promise<R2Object | null>[] = [];
 
-    for (const { image } of items) {
-      r2Promises.push(env.bk!.put(`agent-request/${userId}/${nanoid()}`, image));
+    for (const { type, image, description } of items) {
+      const putOptions: R2PutOptions = {
+        httpMetadata: { contentType: image.type },
+        customMetadata: { userId, uploadedAt: Date.now().toString() },
+      };
+      r2Promises.push(env.bk!.put(`agent-request/${userId}/${nanoid()}`, image, putOptions));
     }
+
+    await Promise.all(r2Promises);
+
+    return json({ ok: true });
   },
 );
