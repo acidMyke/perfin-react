@@ -178,4 +178,31 @@ describe('calculateExpense()', () => {
       expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
     });
   });
+
+  describe('Edge cases', () => {
+    describe('$0 amount', () => {
+      it('should handle flat adjustments when the current total is zero', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [],
+          adjustments: [{ id: 'flat-fee', amountCents: 500 }],
+        });
+
+        expect(result.netTotalCents).toBe(500);
+        expect(result.adjustmentResults[0][1].rateBps).toBe(Infinity);
+      });
+
+      it('should handle global rate adjustments when item totals sum to zero', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [{ id: 'free-item', quantity: 1, priceCents: 0 }],
+          adjustments: [{ id: 'tax-rate', rateBps: 1000 }],
+        });
+
+        expect(result.netTotalCents).toBe(0);
+        expect(result.itemResults['free-item'].netTotalCents).toBe(0);
+        expect(result.adjustmentResults[0][2]['free-item'].rateBps).toBeNaN();
+      });
+    });
+  });
 });
