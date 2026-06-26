@@ -73,7 +73,79 @@ export const saveExpenseInputSchema = z.object({
 const CREATE_ID = 'create' as const;
 type SaveExpenseInput = z.infer<typeof saveExpenseInputSchema>;
 
-export async function processSaveExpense(context: ProtectedContext, input: SaveExpenseInput) {
+export const saveExpenseRepo = {
+  getExtgExpense: (db: AppDatabase, expenseId: string, userId: string) =>
+    db.query.expensesTable.findFirst({
+      where: { id: expenseId, userId },
+      columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
+    }),
+  getExtgExpenseChildren: (db: AppDatabase, expenseId: string) =>
+    db.batch([
+      db
+        .select({ id: expenseItemsTable.id })
+        .from(expenseItemsTable)
+        .where(and(eq(expenseItemsTable.expenseId, expenseId), eq(expenseItemsTable.isDeleted, false))),
+      db
+        .select({ id: expenseAdjustmentsTable.id })
+        .from(expenseAdjustmentsTable)
+        .where(and(eq(expenseAdjustmentsTable.expenseId, expenseId), eq(expenseAdjustmentsTable.isDeleted, false))),
+    ]),
+  insertSubject: (
+    db: AppDatabase,
+    table: typeof accountsTable | typeof categoriesTable,
+    id: string,
+    name: string,
+    userId: string,
+  ) => db.insert(table).values({ id, name, userId }),
+  upsertMainExpense: (db: AppDatabase, value: typeof expensesTable.$inferInsert) =>
+    db
+      .insert(expensesTable)
+      .values(value)
+      .onConflictDoUpdate({ target: expensesTable.id, set: excludedAll(expensesTable, ['userId']) }),
+  upsertExpenseItems: (db: AppDatabase, itemsRecords: (typeof expenseItemsTable.$inferInsert)[]) =>
+    db
+      .insert(expenseItemsTable)
+      .values(itemsRecords)
+      .onConflictDoUpdate({
+        target: expenseItemsTable.id,
+        set: excludedAll(expenseItemsTable),
+      }),
+  upsertExpenseAdjustments: (db: AppDatabase, adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[]) =>
+    db
+      .insert(expenseAdjustmentsTable)
+      .values(adjustmentsRecords)
+      .onConflictDoUpdate({
+        target: expenseAdjustmentsTable.id,
+        set: excludedAll(expenseAdjustmentsTable),
+      }),
+  markExpenseChildAsDeleted: (
+    db: AppDatabase,
+    table: typeof expenseItemsTable | typeof expenseAdjustmentsTable,
+    expenseId: string,
+    ids: Iterable<string>,
+  ) =>
+    db
+      .update(table)
+      .set({ isDeleted: true })
+      .where(and(eq(table.expenseId, expenseId), inArray(table.id, Array.from(ids)))),
+};
+
+export type SaveExpenseRepo = typeof saveExpenseRepo;
+type PickRepos<TName extends keyof SaveExpenseRepo> = Pick<SaveExpenseRepo, TName>;
+
+const saveExpenseHelpers = {
+  verifyExpenseVersion,
+  getExistingChildrenData,
+  queueMainExpenseRecord,
+  queueExpenseItems,
+  queueExpenseAdjustments,
+};
+
+export type SaveExpenseHelpers = typeof saveExpenseHelpers;
+
+const allDeps = { ...saveExpenseRepo, ...saveExpenseHelpers };
+
+export async function processSaveExpense(context: ProtectedContext, input: SaveExpenseInput, deps = allDeps) {
   const { user, db } = context;
   const userId = user.id;
   let expenseId = input.expenseId;
@@ -81,27 +153,29 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const extgAdjIds = new Set<string>();
 
   if (expenseId !== CREATE_ID) {
-    await verifyExpenseVersion(db, userId, expenseId, input.version);
-    await getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds);
+    await deps.verifyExpenseVersion(db, userId, expenseId, input.version, deps);
+    await deps.getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds, deps);
   } else {
     expenseId = generateId();
   }
 
   const collector = new BatchCollector();
-  const { accountId, categoryId } = prepareQueueAccountCategory(collector, db, userId, input.account, input.category);
-  queueMainExpenseRecord(collector, db, userId, expenseId, input, accountId, categoryId);
-  queueExpenseItems(collector, db, expenseId, input.items, extgItemIds);
-  queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds);
+  deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
+  deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
+  deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
   await processSaveExpenseSearchIndexing(collector, db, { ...input, id: expenseId, userId });
 
   await collector.executeBatch(db, true);
 }
 
-export async function verifyExpenseVersion(db: AppDatabase, userId: string, expenseId: string, inputVersion: number) {
-  const extgExpense = await db.query.expensesTable.findFirst({
-    where: { id: expenseId, userId },
-    columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
-  });
+export async function verifyExpenseVersion(
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  inputVersion: number,
+  { getExtgExpense }: PickRepos<'getExtgExpense'> = saveExpenseRepo,
+) {
+  const extgExpense = await getExtgExpense(db, expenseId, userId);
 
   if (!extgExpense) {
     throw new TRPCError({ code: 'FORBIDDEN' });
@@ -119,17 +193,9 @@ export async function getExistingChildrenData(
   expenseId: string,
   extgItemIds: Set<string>,
   extgAdjustmentIds: Set<string>,
+  { getExtgExpenseChildren }: PickRepos<'getExtgExpenseChildren'> = saveExpenseRepo,
 ) {
-  const [items, adjustments] = await db.batch([
-    db
-      .select({ id: expenseItemsTable.id })
-      .from(expenseItemsTable)
-      .where(and(eq(expenseItemsTable.expenseId, expenseId), eq(expenseItemsTable.isDeleted, false))),
-    db
-      .select({ id: expenseAdjustmentsTable.id })
-      .from(expenseAdjustmentsTable)
-      .where(and(eq(expenseAdjustmentsTable.expenseId, expenseId), eq(expenseAdjustmentsTable.isDeleted, false))),
-  ]);
+  const [items, adjustments] = await getExtgExpenseChildren(db, expenseId);
 
   for (const { id } of items) {
     extgItemIds.add(id);
@@ -142,37 +208,13 @@ export async function getExistingChildrenData(
   return { extgItemIds, extgAdjustmentIds };
 }
 
-export function prepareQueueAccountCategory(
-  collector: BatchCollector,
-  db: AppDatabase,
-  userId: string,
-  accountInput: SaveExpenseInput['account'],
-  categoryInput: SaveExpenseInput['category'],
-) {
-  let accountId = accountInput?.value ?? null;
-  let categoryId = categoryInput?.value ?? null;
-
-  if (accountInput?.value === CREATE_ID) {
-    accountId = generateId();
-    collector.push(db.insert(accountsTable).values({ id: accountId, name: accountInput.label, userId: userId }));
-  }
-
-  if (categoryInput?.value === CREATE_ID) {
-    categoryId = generateId();
-    collector.push(db.insert(categoriesTable).values({ id: categoryId, name: categoryInput.label, userId: userId }));
-  }
-
-  return { accountId, categoryId };
-}
-
 export function queueMainExpenseRecord(
   collector: BatchCollector,
   db: AppDatabase,
   userId: string,
   expenseId: string,
   input: SaveExpenseInput,
-  accountId: string | null,
-  categoryId: string | null,
+  { insertSubject, upsertMainExpense }: PickRepos<'upsertMainExpense' | 'insertSubject'> = saveExpenseRepo,
 ) {
   const { netTotalCents } = calculateExpense(input);
   const [boxId] =
@@ -180,30 +222,37 @@ export function queueMainExpenseRecord(
       ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
       : [null];
 
+  let accountId = input.account?.value ?? null;
+  let categoryId = input.category?.value ?? null;
+
+  if (input.account?.value === CREATE_ID) {
+    accountId = generateId();
+    collector.push(insertSubject(db, accountsTable, accountId, input.account.label, userId));
+  }
+
+  if (input.category?.value === CREATE_ID) {
+    categoryId = generateId();
+    collector.push(insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
+  }
+
   collector.push(
-    db
-      .insert(expensesTable)
-      .values({
-        id: expenseId,
-        amountCents: netTotalCents,
-        billedAt: input.billedAt,
-        userId: userId,
-        accountId: accountId,
-        categoryId: categoryId,
-        type: input.type,
-        updatedBy: userId,
-        latitude: input.latitude,
-        longitude: input.longitude,
-        geoAccuracy: input.geoAccuracy,
-        boxId,
-        shopName: input.shopName,
-        shopMall: input.shopMall,
-        specifiedAmountCents: input.specifiedAmountCents,
-      })
-      .onConflictDoUpdate({
-        target: expensesTable.id,
-        set: excludedAll(expensesTable, ['userId']),
-      }),
+    upsertMainExpense(db, {
+      id: expenseId,
+      amountCents: netTotalCents,
+      billedAt: input.billedAt,
+      userId: userId,
+      accountId: accountId,
+      categoryId: categoryId,
+      type: input.type,
+      updatedBy: userId,
+      latitude: input.latitude,
+      longitude: input.longitude,
+      geoAccuracy: input.geoAccuracy,
+      boxId,
+      shopName: input.shopName,
+      shopMall: input.shopMall,
+      specifiedAmountCents: input.specifiedAmountCents,
+    }),
   );
 }
 
@@ -213,6 +262,7 @@ export function queueExpenseItems(
   expenseId: string,
   items: SaveExpenseInput['items'],
   extgItemIds: Set<string>,
+  deps: PickRepos<'upsertExpenseItems' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
 ) {
   const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
   const removedItemIds = new Set(extgItemIds);
@@ -224,26 +274,11 @@ export function queueExpenseItems(
   }
 
   if (itemsRecords.length > 0) {
-    collector.push(
-      db
-        .insert(expenseItemsTable)
-        .values(itemsRecords)
-        .onConflictDoUpdate({
-          target: expenseItemsTable.id,
-          set: excludedAll(expenseItemsTable),
-        }),
-    );
+    collector.push(deps.upsertExpenseItems(db, itemsRecords));
   }
 
   if (removedItemIds.size > 0) {
-    collector.push(
-      db
-        .update(expenseItemsTable)
-        .set({ isDeleted: true })
-        .where(
-          and(eq(expenseItemsTable.expenseId, expenseId), inArray(expenseItemsTable.id, Array.from(removedItemIds))),
-        ),
-    );
+    collector.push(deps.markExpenseChildAsDeleted(db, expenseItemsTable, expenseId, removedItemIds));
   }
 }
 
@@ -253,6 +288,7 @@ export function queueExpenseAdjustments(
   expenseId: string,
   adjustments: SaveExpenseInput['adjustments'],
   extgAdjustmentIds: Set<string>,
+  deps: PickRepos<'upsertExpenseAdjustments' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
 ) {
   const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
   const removedAdjIds = new Set(extgAdjustmentIds);
@@ -264,28 +300,10 @@ export function queueExpenseAdjustments(
   }
 
   if (adjustmentsRecords.length > 0) {
-    collector.push(
-      db
-        .insert(expenseAdjustmentsTable)
-        .values(adjustmentsRecords)
-        .onConflictDoUpdate({
-          target: expenseAdjustmentsTable.id,
-          set: excludedAll(expenseAdjustmentsTable),
-        }),
-    );
+    collector.push(deps.upsertExpenseAdjustments(db, adjustmentsRecords));
   }
 
   if (removedAdjIds.size > 0) {
-    collector.push(
-      db
-        .update(expenseAdjustmentsTable)
-        .set({ isDeleted: true })
-        .where(
-          and(
-            eq(expenseAdjustmentsTable.expenseId, expenseId),
-            inArray(expenseAdjustmentsTable.id, Array.from(removedAdjIds)),
-          ),
-        ),
-    );
+    collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
   }
 }
