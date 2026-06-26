@@ -72,4 +72,110 @@ describe('calculateExpense()', () => {
       });
     });
   });
+
+  describe('Itemized Expenses', () => {
+    describe('Without adjustments', () => {
+      it('should ignore specifiedAmountCents when items is provided', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 100_00,
+          items: [{ id: 'i001', priceCents: 10_00, quantity: 2 }],
+          adjustments: [],
+        });
+        expect(result.grossTotalCents, 'grossTotalCents').toBe(20_00);
+        expect(result.netTotalCents, 'netTotalCents').toBe(20_00);
+      });
+
+      it('should calculate line totals based on the provided items', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i002', priceCents: 5_00, quantity: 3 },
+            { id: 'i003', priceCents: 7_00, quantity: 7 },
+          ],
+          adjustments: [],
+        });
+        expect(result.itemResults).toEqual({
+          i002: { grossTotalCents: 15_00, netTotalCents: 15_00 },
+          i003: { grossTotalCents: 49_00, netTotalCents: 49_00 },
+        });
+      });
+
+      it('should calculate base gross/net amounts based on the provided items that is not deleted', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i004', priceCents: 5_00, quantity: 3 },
+            { id: 'del0', priceCents: 30_00, quantity: 1, isDeleted: true },
+            { id: 'i005', priceCents: 7_00, quantity: 7 },
+          ],
+          adjustments: [],
+        });
+        expect(result.grossTotalCents, 'grossTotalCents').toBe(64_00);
+        expect(result.netTotalCents, 'netTotalCents').toBe(64_00);
+      });
+    });
+  });
+
+  describe('With adjustments', () => {
+    it('should apply flat adjustment to the total bill', () => {
+      const result = calculateExpense({
+        specifiedAmountCents: 0,
+        items: [{ id: 'i006', priceCents: 5_00, quantity: 3 }],
+        adjustments: [{ id: 'a001', amountCents: 10_00 }],
+      });
+
+      expect(result.grossTotalCents, 'grossTotalCents').toBe(15_00);
+      expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
+    });
+
+    it('should apply rate adjustment (no expenseItemId provided) to the total bill', () => {
+      const result = calculateExpense({
+        specifiedAmountCents: 0,
+        items: [
+          { id: 'i007', priceCents: 5_00, quantity: 3 },
+          { id: 'i008', priceCents: 8_00, quantity: 1 },
+        ],
+        adjustments: [{ id: 'a002', rateBps: 9_00 }],
+      });
+
+      expect(result.itemResults).toEqual({
+        i007: { grossTotalCents: 15_00, netTotalCents: 16_35 },
+        i008: { grossTotalCents: 8_00, netTotalCents: 8_72 },
+      });
+      expect(result.adjustmentResults[0]).toEqual([
+        'a002',
+        { amountCents: 2_07, rateBps: 9_00 },
+        {
+          i007: { amountCents: 1_35, rateBps: expect.any(Number) },
+          i008: { amountCents: 72, rateBps: expect.any(Number) },
+        },
+      ]);
+      expect(result.grossTotalCents, 'grossTotalCents').toBe(23_00);
+      expect(result.netTotalCents, 'netTotalCents').toBe(25_07);
+    });
+
+    it('should apply rate adjustment (expenseItemId provided) only to the specific item', () => {
+      const result = calculateExpense({
+        specifiedAmountCents: 0,
+        items: [
+          { id: 'i009', priceCents: 5_00, quantity: 3 },
+          { id: 'i010', priceCents: 20_00, quantity: 1 },
+        ],
+        adjustments: [{ id: 'a003', rateBps: -50_00, expenseItemId: 'i010' }],
+      });
+
+      expect(result.itemResults).toEqual({
+        i009: { grossTotalCents: 15_00, netTotalCents: 15_00 },
+        i010: { grossTotalCents: 20_00, netTotalCents: 10_00 },
+      });
+      expect(result.adjustmentResults[0]).toEqual([
+        'a003',
+        { amountCents: -10_00, rateBps: expect.any(Number) },
+        { i010: { amountCents: -10_00, rateBps: -50_00 } },
+      ]);
+
+      expect(result.grossTotalCents, 'grossTotalCents').toBe(35_00);
+      expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
+    });
+  });
 });
