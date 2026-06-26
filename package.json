@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "test": "vitest",
     "tsbuild": "tsc -p tsconfig.app.json",
     "build": "tsc -p tsconfig.app.json && vite build",
     "preview": "vite preview",
@@ -47,6 +48,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.42.3",
+    "@cloudflare/vitest-pool-workers": "^0.16.20",
     "@eslint/js": "^10.0.1",
     "@tailwindcss/vite": "^4.3.1",
     "@tanstack/router-plugin": "^1.168.18",
@@ -63,6 +65,7 @@
     "tailwindcss": "^4.3.1",
     "typescript": "~6.0.3",
     "vite": "^8.0.16",
+    "vitest": "^4.1.9",
     "wrangler": "^4.105.0"
   },
   "packageManager": "pnpm@10.25.0+sha512.5e82639027af37cf832061bcc6d639c219634488e0f2baebe785028a793de7b525ffcd3f7ff574f5e9860654e098fe852ba8ac5dd5cefe1767d23a020a92f501"
