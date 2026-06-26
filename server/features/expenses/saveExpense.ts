@@ -307,3 +307,7 @@ export function queueExpenseAdjustments(
     collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
   }
 }
+
+export function mockPoc() {
+  return eq(expenseAdjustmentsTable.expenseId, 'testing testing poc id');
+}
