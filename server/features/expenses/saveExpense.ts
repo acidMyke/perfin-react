@@ -79,7 +79,7 @@ export const saveExpenseRepo = {
       where: { id: expenseId, userId },
       columns: { userId: true, isDeleted: true, version: true, shopName: true, shopMall: true },
     }),
-  getExtgExpenseChildren: (db: AppDatabase, expenseId: string) =>
+  getExtgExpenseChildrenIds: (db: AppDatabase, expenseId: string) =>
     db.batch([
       db
         .select({ id: expenseItemsTable.id })
@@ -193,9 +193,9 @@ export async function getExistingChildrenData(
   expenseId: string,
   extgItemIds: Set<string>,
   extgAdjustmentIds: Set<string>,
-  { getExtgExpenseChildren }: PickRepos<'getExtgExpenseChildren'> = saveExpenseRepo,
+  { getExtgExpenseChildrenIds }: PickRepos<'getExtgExpenseChildrenIds'> = saveExpenseRepo,
 ) {
-  const [items, adjustments] = await getExtgExpenseChildren(db, expenseId);
+  const [items, adjustments] = await getExtgExpenseChildrenIds(db, expenseId);
 
   for (const { id } of items) {
     extgItemIds.add(id);
@@ -204,8 +204,6 @@ export async function getExistingChildrenData(
   for (const { id } of adjustments) {
     extgAdjustmentIds.add(id);
   }
-
-  return { extgItemIds, extgAdjustmentIds };
 }
 
 export function queueMainExpenseRecord(

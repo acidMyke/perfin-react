@@ -6,7 +6,7 @@ import {
   type MockProtectedContext,
 } from '#server/test/mocks';
 import { nanoid } from 'nanoid';
-import { verifyExpenseVersion } from './saveExpense';
+import { getExistingChildrenData, verifyExpenseVersion } from './saveExpense';
 
 vi.mock(import('drizzle-orm'), importOriginal => {
   return mockDrizzleOrm(importOriginal);
@@ -54,6 +54,26 @@ describe('helpers', () => {
           getExtgExpense: vi.fn().mockReturnValue({ userId, version: 4 }),
         }),
       ).rejects.toThrowErrorMatchingInlineSnapshot(`[TRPCError: CONFLICT]`);
+    });
+  });
+
+  describe(getExistingChildrenData, () => {
+    it('should gather the children ids into supplied set', async () => {
+      const itemIds = Array.from({ length: 2 }).map(() => nanoid());
+      const adjustmentIds = Array.from({ length: 2 }).map(() => nanoid());
+
+      const items = itemIds.map(id => ({ id }));
+      const adjustments = adjustmentIds.map(id => ({ id }));
+
+      const extgItemIds = new Set<string>();
+      const extgAdjustmentIds = new Set<string>();
+
+      await getExistingChildrenData(db, expenseId, extgItemIds, extgAdjustmentIds, {
+        getExtgExpenseChildrenIds: vi.fn().mockReturnValue([items, adjustments]),
+      });
+
+      expect(extgItemIds).toEqual(new Set(itemIds));
+      expect(extgAdjustmentIds).toEqual(new Set(adjustmentIds));
     });
   });
 });
