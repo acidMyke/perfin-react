@@ -10,15 +10,22 @@ type CreateMockDatabaseOption = {
   dbMode?: 'throwError' | 'mock';
 };
 
+const MOCK_DB_NAME = '_MockDb';
+
+export const expectMockDatabase = () => expect.objectContaining({ _name: MOCK_DB_NAME });
+
 export function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabaseOption = {}) {
   let mockResults: any[] = [];
   let nextResultIdx = 0;
   const dynamicSpies: Record<string, Mock> = {};
 
   const db = new Proxy(
-    {},
+    { _name: MOCK_DB_NAME },
     {
       get(_, prop: string) {
+        if (prop === '_name') {
+          return MOCK_DB_NAME;
+        }
         return (...args: any[]) => {
           if (dbMode === 'throwError')
             throw Error('Database methods are not expected to be called, are you missing a mock?');
@@ -29,7 +36,7 @@ export function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabase
         };
       },
     },
-  ) as AppDatabase;
+  ) as unknown as AppDatabase;
 
   const dbSpies: Record<string, Mock> = new Proxy(
     {},

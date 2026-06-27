@@ -1,6 +1,7 @@
 import type { AppDatabase } from '#server/lib/db';
 import {
   createMockProtectedContext,
+  expectMockDatabase,
   mockDrizzleOrm,
   mockSchemaModule,
   type MockProtectedContext,
@@ -16,6 +17,7 @@ import {
 import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
 import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
+import { getLocationBoxId } from '../../lib/utils';
 
 vi.mock(import('drizzle-orm'), importOriginal => {
   return mockDrizzleOrm(importOriginal);
@@ -28,7 +30,8 @@ vi.mock(import('#schema'), importOriginal => {
 vi.mock(import('../../lib/expenseHelper'), () => ({ calculateExpense: vi.fn() }));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
 
-describe('helpers', () => {
+describe('helpers', async () => {
+  const [schema] = await Promise.all([import('#schema')]);
   let expenseId: string;
   let mockContext: MockProtectedContext;
   let db: AppDatabase;
@@ -100,36 +103,84 @@ describe('helpers', () => {
       vi.clearAllMocks();
     });
 
-    it('should call upsertMainExpense with the correctValues and push it into batch collector', async () => {
+    it('should call save values accordingly base on info and push it into batch collector', async () => {
       const netTotalCents = 60_00;
-      vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
+      const expectedBoxId = 2903487923848;
+      const mockedCalculateExpense = vi
+        .mocked(calculateExpense)
+        .mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
+      const mockedGetLocationBoxId = vi.mocked(getLocationBoxId).mockReturnValue([expectedBoxId]);
       const batchItem0 = 'Main Expense Upserted';
       deps.insertSubject.mockThrow('Should not be called');
       deps.upsertMainExpense.mockReturnValue(batchItem0);
 
+      const accountId = nanoid();
+      const categoryId = nanoid();
       const shopName = 'Just another shop';
       const shopMall = 'Just another mall';
 
-      queueMainExpenseRecord(
-        collector,
-        db,
-        userId,
-        expenseId,
-        { shopMall, shopName, expenseId: 'not this' } as SaveExpenseInput,
-        deps,
+      const input: SaveExpenseInput = {
+        expenseId: 'ignore this id :X',
+        billedAt: new Date(),
+        shopMall,
+        shopName,
+        specifiedAmountCents: 0,
+        type: 'physical',
+        version: 1,
+        latitude: 1.258837,
+        longitude: 103.8093661,
+        account: { value: accountId, label: '' },
+        category: { value: categoryId, label: '' },
+        items: [
+          {
+            id: nanoid(),
+            name: 'item0',
+            priceCents: 3000,
+            isDeleted: false,
+            quantity: 2,
+          },
+        ],
+        adjustments: [
+          {
+            id: nanoid(),
+            name: 'adj0',
+            amountCents: 5000,
+            expenseItemId: undefined,
+            rateBps: undefined,
+            isDeleted: false,
+          },
+        ],
+      };
+
+      queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
+
+      expect(mockedCalculateExpense).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({
+          specifiedAmountCents: input.specifiedAmountCents,
+          items: input.items,
+          adjustments: input.adjustments,
+        }),
+      );
+
+      expect(mockedGetLocationBoxId).toHaveBeenCalledExactlyOnceWith(
+        expect.objectContaining({ latitude: input.latitude, longitude: input.longitude }),
       );
 
       expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expect.anything(),
+        expectMockDatabase(),
         expect.objectContaining({
           id: expenseId,
           userId,
           updatedBy: userId,
           shopMall,
           shopName,
-          accountId: null,
-          categoryId: null,
+          accountId,
+          categoryId,
           amountCents: netTotalCents,
+          boxId: expectedBoxId,
+          type: input.type,
+          specifiedAmountCents: input.specifiedAmountCents,
+          billedAt: input.billedAt,
         }),
       );
       expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
@@ -156,14 +207,14 @@ describe('helpers', () => {
       );
 
       expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expect.anything(),
-        expect.anything(),
+        expectMockDatabase(),
+        schema.accountsTable,
         expectedAccountId,
         accountName,
         userId,
       );
       expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expect.anything(),
+        expectMockDatabase(),
         expect.objectContaining({ accountId: expectedAccountId }),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
@@ -191,14 +242,14 @@ describe('helpers', () => {
       );
 
       expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expect.anything(),
-        expect.anything(),
+        expectMockDatabase(),
+        schema.categoriesTable,
         expectedAccountId,
         categoryName,
         userId,
       );
       expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expect.anything(),
+        expectMockDatabase(),
         expect.objectContaining({ categoryId: expectedAccountId }),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
