@@ -2,6 +2,9 @@ import type { AppDatabase } from '#server/lib/db';
 import type { Context } from '#server/lib/itty';
 import type { AnySQLiteColumn, AnySQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { Mock } from 'vitest';
+import { nanoid } from 'nanoid';
+import { CookieHeaders } from '../lib/CookieHeaders';
+import type { ProtectedContext } from '#server/lib/trpc';
 
 type CreateMockDatabaseOption = {
   dbMode?: 'throwError' | 'mock';
@@ -118,13 +121,59 @@ export async function mockSchemaModule(importOriginal: () => Promise<SchemaModul
 
 type CreateMockContextOption = CreateMockDatabaseOption & {
   url?: string;
+  deviceId?: string;
+  resHeaders?: CookieHeaders;
+  reqCookie?: Record<string, string>;
 };
+
+const MockRequest = Request<unknown, IncomingRequestCfProperties>;
 
 export function createMockContext(options: CreateMockContextOption = {}) {
   const mockDb = createMockDatabase(options);
+  const {
+    url = 'http://localhost/unmocked',
+    deviceId = nanoid(),
+    resHeaders = new CookieHeaders(),
+    reqCookie = {},
+  } = options;
   return {
     ...mockDb,
+    req: new MockRequest(url),
+    url: new URL(url),
+    env: {} as unknown as Env,
+    wctx: {} as unknown as ExecutionContext,
+    isAuthenticated: false as const,
+    resHeaders,
+    reqCookie,
+    deviceId,
+    authFailureReason: '',
+    isCsrfValid: undefined,
+    session: undefined,
+    user: undefined,
+    userId: undefined,
+    isAllowElevated: undefined,
   } satisfies Context & Record<string, any>;
 }
 
-export function createMockProtectedContext(options: CreateMockDatabaseOption) {}
+type CreateMockProtectedContextOption = CreateMockContextOption & {
+  userId?: string;
+  userName?: string;
+  isCsrfValid?: boolean;
+  isAllowElevated?: boolean;
+};
+
+export function createMockProtectedContext(options: CreateMockProtectedContextOption) {
+  const mockContext = createMockContext();
+  const { userId = nanoid(), userName = 'unmocked', isCsrfValid = true, isAllowElevated = false } = options;
+  const user = { id: userId, name: userName };
+  return {
+    ...mockContext,
+    authFailureReason: undefined,
+    isAuthenticated: true,
+    isCsrfValid,
+    isAllowElevated,
+    userId,
+    user,
+    session: {} as unknown as ProtectedContext['session'],
+  } satisfies ProtectedContext & Record<string, any>;
+}
