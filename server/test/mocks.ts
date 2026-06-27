@@ -119,11 +119,15 @@ export async function mockSchemaModule(importOriginal: () => Promise<SchemaModul
   });
 }
 
-function createForbiddenStub<T>() {
+function createForbiddenStub<T>(value?: Partial<T>) {
   return new Proxy(
     {},
     {
-      get() {
+      get(_, p) {
+        if (value && p in value) {
+          // @ts-ignore
+          return value[p];
+        }
         throw new Error('Should not be used');
       },
     },
@@ -185,6 +189,6 @@ export function createMockProtectedContext(options: CreateMockProtectedContextOp
     isAllowElevated,
     userId,
     user,
-    session: createForbiddenStub<ProtectedContext['session']>(),
+    session: createForbiddenStub<ProtectedContext['session']>({ user }),
   } satisfies ProtectedContext & Record<string, any>;
 }
