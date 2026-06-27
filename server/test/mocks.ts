@@ -119,6 +119,17 @@ export async function mockSchemaModule(importOriginal: () => Promise<SchemaModul
   });
 }
 
+function createForbiddenStub<T>() {
+  return new Proxy(
+    {},
+    {
+      get() {
+        throw new Error('Should not be used');
+      },
+    },
+  ) as T;
+}
+
 type CreateMockContextOption = CreateMockDatabaseOption & {
   url?: string;
   deviceId?: string;
@@ -140,8 +151,8 @@ export function createMockContext(options: CreateMockContextOption = {}) {
     ...mockDb,
     req: new MockRequest(url),
     url: new URL(url),
-    env: {} as unknown as Env,
-    wctx: {} as unknown as ExecutionContext,
+    env: createForbiddenStub<Env>(),
+    wctx: createForbiddenStub<ExecutionContext>(),
     isAuthenticated: false as const,
     resHeaders,
     reqCookie,
@@ -174,6 +185,6 @@ export function createMockProtectedContext(options: CreateMockProtectedContextOp
     isAllowElevated,
     userId,
     user,
-    session: {} as unknown as ProtectedContext['session'],
+    session: createForbiddenStub<ProtectedContext['session']>(),
   } satisfies ProtectedContext & Record<string, any>;
 }
