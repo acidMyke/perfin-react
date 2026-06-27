@@ -1,4 +1,5 @@
-import { excludedAll, BatchCollector, type AppDatabase } from '#server/lib/db';
+import BatchCollector from '#server/lib/BatchCollector';
+import { excludedAll, type AppDatabase } from '#server/lib/db';
 import type { ProtectedContext } from '#server/lib/trpc';
 import { parseISO } from 'date-fns';
 import z from 'zod';
