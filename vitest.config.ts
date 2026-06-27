@@ -6,11 +6,7 @@ export default defineConfig({
   test: {
     globals: true,
   },
-  plugins: [
-    cloudflareTest({
-      wrangler: { configPath: './wrangler.jsonc' },
-    }),
-  ],
+  plugins: [],
   resolve: {
     alias: {
       '#server': path.resolve(__dirname, './server'),
