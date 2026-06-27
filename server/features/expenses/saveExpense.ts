@@ -71,10 +71,11 @@ export const saveExpenseInputSchema = z.object({
   ),
 });
 
-const CREATE_ID = 'create' as const;
-type SaveExpenseInput = z.infer<typeof saveExpenseInputSchema>;
+export const CREATE_ID = 'create' as const;
+export type SaveExpenseInput = z.infer<typeof saveExpenseInputSchema>;
 
 export const saveExpenseRepo = {
+  generateId,
   getExtgExpense: (db: AppDatabase, expenseId: string, userId: string) =>
     db.query.expensesTable.findFirst({
       where: { id: expenseId, userId },
@@ -157,7 +158,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
     await deps.verifyExpenseVersion(db, userId, expenseId, input.version, deps);
     await deps.getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds, deps);
   } else {
-    expenseId = generateId();
+    expenseId = deps.generateId();
   }
 
   const collector = new BatchCollector();
@@ -213,7 +214,7 @@ export function queueMainExpenseRecord(
   userId: string,
   expenseId: string,
   input: SaveExpenseInput,
-  { insertSubject, upsertMainExpense }: PickRepos<'upsertMainExpense' | 'insertSubject'> = saveExpenseRepo,
+  deps: PickRepos<'upsertMainExpense' | 'insertSubject' | 'generateId'> = saveExpenseRepo,
 ) {
   const { netTotalCents } = calculateExpense(input);
   const [boxId] =
@@ -225,17 +226,17 @@ export function queueMainExpenseRecord(
   let categoryId = input.category?.value ?? null;
 
   if (input.account?.value === CREATE_ID) {
-    accountId = generateId();
-    collector.push(insertSubject(db, accountsTable, accountId, input.account.label, userId));
+    accountId = deps.generateId();
+    collector.push(deps.insertSubject(db, accountsTable, accountId, input.account.label, userId));
   }
 
   if (input.category?.value === CREATE_ID) {
-    categoryId = generateId();
-    collector.push(insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
+    categoryId = deps.generateId();
+    collector.push(deps.insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
   }
 
   collector.push(
-    upsertMainExpense(db, {
+    deps.upsertMainExpense(db, {
       id: expenseId,
       amountCents: netTotalCents,
       billedAt: input.billedAt,
@@ -261,13 +262,13 @@ export function queueExpenseItems(
   expenseId: string,
   items: SaveExpenseInput['items'],
   extgItemIds: Set<string>,
-  deps: PickRepos<'upsertExpenseItems' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
+  deps: PickRepos<'generateId' | 'upsertExpenseItems' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
 ) {
   const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
   const removedItemIds = new Set(extgItemIds);
   for (const item of items) {
     if (item.isDeleted) continue;
-    if (item.id === CREATE_ID) item.id = generateId();
+    if (item.id === CREATE_ID) item.id = deps.generateId();
     removedItemIds.delete(item.id);
     itemsRecords.push({ ...item, expenseId, sequence: itemsRecords.length });
   }
@@ -287,13 +288,13 @@ export function queueExpenseAdjustments(
   expenseId: string,
   adjustments: SaveExpenseInput['adjustments'],
   extgAdjustmentIds: Set<string>,
-  deps: PickRepos<'upsertExpenseAdjustments' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
+  deps: PickRepos<'generateId' | 'upsertExpenseAdjustments' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
 ) {
   const adjustmentsRecords: (typeof expenseAdjustmentsTable.$inferInsert)[] = [];
   const removedAdjIds = new Set(extgAdjustmentIds);
   for (const adj of adjustments) {
     if (adj.isDeleted) continue;
-    if (adj.id === CREATE_ID) adj.id = generateId();
+    if (adj.id === CREATE_ID) adj.id = deps.generateId();
     removedAdjIds.delete(adj.id);
     adjustmentsRecords.push({ ...adj, expenseId, sequence: adjustmentsRecords.length });
   }
