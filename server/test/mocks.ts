@@ -1,18 +1,18 @@
 import type { AppDatabase } from '#server/lib/db';
 import type { Context } from '#server/lib/itty';
-import type { ProtectedContext } from '#server/lib/trpc';
+import type { AnySQLiteColumn, AnySQLiteTable } from 'drizzle-orm/sqlite-core';
 import type { Mock } from 'vitest';
 
-type CreateMockContextOption = {
-  dbMode: 'throwError' | 'mock';
+type CreateMockDatabaseOption = {
+  dbMode?: 'throwError' | 'mock';
 };
 
-function createMockDatabase({ dbMode = 'throwError' }: CreateMockContextOption) {
+function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabaseOption) {
   let mockResults: any[] = [];
   let nextResultIdx = 0;
   const dynamicSpies: Record<string, Mock> = {};
 
-  const chain = new Proxy(
+  const db = new Proxy(
     {},
     {
       get(_, prop: string) {
@@ -22,13 +22,13 @@ function createMockDatabase({ dbMode = 'throwError' }: CreateMockContextOption) 
           if (prop === 'then') return Promise.resolve(mockResults[nextResultIdx++]).then(args[0]);
           if (!dynamicSpies[prop]) dynamicSpies[prop] = vi.fn();
           dynamicSpies[prop](...args);
-          return chain;
+          return db;
         };
       },
     },
-  );
+  ) as AppDatabase;
 
-  const spies = new Proxy(
+  const dbSpies: Record<string, Mock> = new Proxy(
     {},
     {
       get(_, prop: string) {
@@ -39,9 +39,9 @@ function createMockDatabase({ dbMode = 'throwError' }: CreateMockContextOption) 
   );
 
   return {
-    chain,
-    spies,
-    addResult: (...results: any[]) => mockResults.push(...results),
+    db,
+    dbSpies,
+    addDbResult: (...results: any[]) => mockResults.push(...results),
   };
 }
 
@@ -73,7 +73,7 @@ const opList: Set<string> = new Set([
 ]);
 
 type DrizzleOrmModule = typeof import('drizzle-orm');
-export async function mockSchemaModule(importOriginal: () => Promise<DrizzleOrmModule>): Promise<DrizzleOrmModule> {
+export async function mockDrizzleOrm(importOriginal: () => Promise<DrizzleOrmModule>): Promise<DrizzleOrmModule> {
   return new Proxy(await importOriginal(), {
     get(target, prop: string) {
       if (opList.has(prop))
@@ -87,11 +87,44 @@ export async function mockSchemaModule(importOriginal: () => Promise<DrizzleOrmM
   });
 }
 
-export function createMockContext(options: CreateMockContextOption): Context {
-  const mock = createMockDatabase(options);
-  return {
-    db: mock.chain as AppDatabase,
-  };
+type SchemaModule = typeof import('#schema');
+export async function mockSchemaModule(importOriginal: () => Promise<SchemaModule>): Promise<SchemaModule> {
+  return new Proxy(await importOriginal(), {
+    get(module, p: string) {
+      if (p.endsWith('Table')) {
+        //@ts-expect-error
+        const table = module[p] as AnySQLiteTable;
+        //@ts-expect-error
+        const tableName: string = table[Symbol.for('drizzle:Name')]; //Copied from drizzle source code
+        return new Proxy(
+          { tableName },
+          {
+            get(table, p) {
+              if (p === 'tableName') return tableName;
+              //@ts-expect-error
+              const column = table[p] as AnySQLiteColumn;
+              if (!column) return column;
+              const columnName = column.name;
+              return { tableName, columnName };
+            },
+          },
+        );
+      }
+      // @ts-ignore
+      return module[p];
+    },
+  });
 }
 
-export function createMockProtectedContext(options: CreateMockContextOption): ProtectedContext {}
+type CreateMockContextOption = CreateMockDatabaseOption & {
+  url?: string;
+};
+
+export function createMockContext(options: CreateMockContextOption = {}) {
+  const mockDb = createMockDatabase(options);
+  return {
+    ...mockDb,
+  } satisfies Context & Record<string, any>;
+}
+
+export function createMockProtectedContext(options: CreateMockDatabaseOption) {}

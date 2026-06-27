@@ -9,7 +9,7 @@ import {
   expenseItemsTable,
   expensesTable,
   generateId,
-} from '../../../db/schema';
+} from '#schema';
 import { and, eq, inArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
@@ -308,6 +308,6 @@ export function queueExpenseAdjustments(
   }
 }
 
-export function mockPoc() {
-  return eq(expenseAdjustmentsTable.expenseId, 'testing testing poc id');
+export function mockPoc(db: AppDatabase) {
+  return db.select().from(expensesTable).where(eq(expensesTable.userId, 'hello'));
 }
