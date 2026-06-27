@@ -307,7 +307,3 @@ export function queueExpenseAdjustments(
     collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
   }
 }
-
-export function mockPoc(db: AppDatabase) {
-  return db.select().from(expensesTable).where(eq(expensesTable.userId, 'hello'));
-}

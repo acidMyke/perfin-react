@@ -10,7 +10,7 @@ type CreateMockDatabaseOption = {
   dbMode?: 'throwError' | 'mock';
 };
 
-function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabaseOption) {
+export function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabaseOption = {}) {
   let mockResults: any[] = [];
   let nextResultIdx = 0;
   const dynamicSpies: Record<string, Mock> = {};
@@ -47,6 +47,8 @@ function createMockDatabase({ dbMode = 'throwError' }: CreateMockDatabaseOption)
     addDbResult: (...results: any[]) => mockResults.push(...results),
   };
 }
+
+export type MockDatabase = ReturnType<typeof createMockDatabase>;
 
 const opList: Set<string> = new Set([
   'sql',
@@ -170,6 +172,8 @@ export function createMockContext(options: CreateMockContextOption = {}) {
   } satisfies Context & Record<string, any>;
 }
 
+export type MockContext = ReturnType<typeof createMockContext>;
+
 type CreateMockProtectedContextOption = CreateMockContextOption & {
   userId?: string;
   userName?: string;
@@ -177,7 +181,7 @@ type CreateMockProtectedContextOption = CreateMockContextOption & {
   isAllowElevated?: boolean;
 };
 
-export function createMockProtectedContext(options: CreateMockProtectedContextOption) {
+export function createMockProtectedContext(options: CreateMockProtectedContextOption = {}) {
   const mockContext = createMockContext();
   const { userId = nanoid(), userName = 'unmocked', isCsrfValid = true, isAllowElevated = false } = options;
   const user = { id: userId, name: userName };
@@ -192,3 +196,5 @@ export function createMockProtectedContext(options: CreateMockProtectedContextOp
     session: createForbiddenStub<ProtectedContext['session']>({ user }),
   } satisfies ProtectedContext & Record<string, any>;
 }
+
+export type MockProtectedContext = ReturnType<typeof createMockProtectedContext>;

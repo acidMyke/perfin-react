@@ -1,5 +1,12 @@
-import { createMockContext, mockDrizzleOrm, mockSchemaModule } from '#server/test/mocks';
-import { mockPoc } from './saveExpense';
+import type { AppDatabase } from '#server/lib/db';
+import {
+  createMockProtectedContext,
+  mockDrizzleOrm,
+  mockSchemaModule,
+  type MockProtectedContext,
+} from '#server/test/mocks';
+import { nanoid } from 'nanoid';
+import { verifyExpenseVersion } from './saveExpense';
 
 vi.mock(import('drizzle-orm'), importOriginal => {
   return mockDrizzleOrm(importOriginal);
@@ -9,17 +16,44 @@ vi.mock(import('#schema'), importOriginal => {
   return mockSchemaModule(importOriginal);
 });
 
-describe('test', () => {
-  it('should be mock', async () => {
-    const [{ expensesTable }, { eq }] = await Promise.all([import('#schema'), import('drizzle-orm')]);
-    const { db, dbSpies, addDbResult } = createMockContext({ dbMode: 'mock' });
-    addDbResult([{ test: 'hello world' }]);
+describe('helpers', () => {
+  let expenseId: string;
+  let mockContext: MockProtectedContext;
+  let db: AppDatabase;
+  let userId: string;
 
-    const res = await mockPoc(db);
+  beforeEach(() => {
+    mockContext = createMockProtectedContext();
+    db = mockContext.db;
+    userId = mockContext.userId;
+    expenseId = nanoid();
+  });
 
-    expect(dbSpies.select).toHaveBeenCalledOnce();
-    expect(dbSpies.from).toHaveBeenCalledExactlyOnceWith(expensesTable);
-    expect(dbSpies.where).toHaveBeenCalledWith(eq(expensesTable.userId, 'hello'));
-    expect(res).toEqual([{ test: 'hello world' }]);
+  describe(verifyExpenseVersion, () => {
+    it('should get existing expense and return', async () => {
+      const expense = await verifyExpenseVersion(db, userId, expenseId, 3, {
+        getExtgExpense: vi.fn().mockReturnValue({ userId, version: 2 }),
+      });
+
+      expect(expense).toBeDefined();
+      expect(expense.userId).toBe(userId);
+      expect(expense.version).toBe(2);
+    });
+
+    it('should throw TRPC error with code FORBIDDEN when no expense is found', async () => {
+      await expect(() =>
+        verifyExpenseVersion(db, userId, expenseId, 3, {
+          getExtgExpense: vi.fn().mockReturnValue(null),
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[TRPCError: FORBIDDEN]`);
+    });
+
+    it('should throw TRPC error with code CONFLICT when expense is found with newer version', async () => {
+      await expect(() =>
+        verifyExpenseVersion(db, userId, expenseId, 3, {
+          getExtgExpense: vi.fn().mockReturnValue({ userId, version: 4 }),
+        }),
+      ).rejects.toThrowErrorMatchingInlineSnapshot(`[TRPCError: CONFLICT]`);
+    });
   });
 });
