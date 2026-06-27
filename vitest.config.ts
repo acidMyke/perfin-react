@@ -16,6 +16,7 @@ export default defineConfig({
       '#server': path.resolve(__dirname, './server'),
       '#client': path.resolve(__dirname, './client'),
       '#components': path.resolve(__dirname, './client/components'),
+      '#schema': path.resolve(__dirname, './db/schema'),
     },
   },
 });

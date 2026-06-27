@@ -23,7 +23,8 @@
 
     /* Path Alias */
     "paths": {
-      "#server/*": ["./server/*"]
+      "#server/*": ["./server/*"],
+      "#schema": ["./db/schema"]
     }
   },
   "include": ["server", "db/schema.ts"]
