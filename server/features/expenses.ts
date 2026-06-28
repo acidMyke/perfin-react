@@ -322,7 +322,7 @@ const searchExpenseProcedure = protectedProcedure
       })
       .from(matchCte)
       .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
-      .orderBy(desc(matchCte.totalChunkCount));
+      .orderBy(desc(matchCte.totalChunkCount), desc(expensesTable.billedAt));
 
     return { searchResult: result };
   });
