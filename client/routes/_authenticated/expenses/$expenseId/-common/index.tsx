@@ -100,16 +100,17 @@ export function mapExpenseDetailToForm(
   options?: ExpenseOptions,
   param?: { isCopy: boolean },
 ) {
-  const isCreate = !!detail && !!options;
-  const formValues = isCreate ? processApiResponse(detail, options, param) : createNewExpenseForm();
+  const isEmptyCreate = !detail || !options;
+  const formValues = isEmptyCreate ? createNewExpenseForm() : processApiResponse(detail, options, param);
 
   return {
     ...formValues,
     ui: {
-      isCreate,
-      shouldInferShopDetail: isCreate,
-      shouldFetchShopSuggestion: isCreate,
-      shopDetailSource: isCreate ? ('user' as InputSource) : null,
+      // copying is also creating
+      isCreate: isEmptyCreate || param?.isCopy,
+      shouldInferShopDetail: isEmptyCreate,
+      shouldFetchShopSuggestion: isEmptyCreate,
+      shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult: calculateExpense(formValues),
     },
     history: {

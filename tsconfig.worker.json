@@ -19,11 +19,12 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["vite/client", "@types/node"],
+    "types": ["vite/client", "vitest/globals", "@types/node"],
 
     /* Path Alias */
     "paths": {
-      "#server/*": ["./server/*"]
+      "#server/*": ["./server/*"],
+      "#schema": ["./db/schema"]
     }
   },
   "include": ["server", "db/schema.ts"]

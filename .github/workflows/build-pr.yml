@@ -1,18 +1,32 @@
-name: Build pull request
+name: Pull Request CI
 
 on:
   pull_request:
-    branches: [ main ]
-
+    branches: [ main, production ]
 
 jobs:
   build:
+    name: Typescript Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout Code
+        uses: actions/checkout@v4
 
-      - name: Setup build env
+      - name: Setup Environment
         uses: ./.github/actions/setup
 
-      - name: Typescript Build
+      - name: Typescript Check
         run: pnpm tsbuild
+
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Environment
+        uses: ./.github/actions/setup
+
+      - name: Run Tests
+        run: pnpm test

@@ -28,7 +28,8 @@
     "paths": {
       "#server/*": ["./server/*"],
       "#client/*": ["./client/*"],
-      "#components/*": ["./client/components/*"]
+      "#components/*": ["./client/components/*"],
+      "#schema": ["./db/schema"]
     }
   },
   "include": ["client", "db/schema.ts", "server/cloudflare.d.ts", "server/lib/notification.ts"]

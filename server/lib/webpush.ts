@@ -1,6 +1,7 @@
 import { type PushMessage, type PushSubscription, buildPushPayload } from '@block65/webcrypto-web-push';
 import type { NotificationEventData } from './notification';
-import { maybeBatch, type AppDatabase, type BatchCollector } from './db';
+import type { AppDatabase } from './db';
+import { maybeBatch, type BatchCollector } from './BatchCollector';
 import { and, desc, eq, isNotNull, sql } from 'drizzle-orm';
 import { userDevicesTable } from '../../db/schema';
 
