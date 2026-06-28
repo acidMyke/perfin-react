@@ -13,7 +13,7 @@ export const Route = createFileRoute('/signup/')({
     if (!isAuthenticated) {
       return;
     }
-    throw redirect({ to: '/dashboard' });
+    throw redirect({ to: '/expenses' });
   },
 });
 

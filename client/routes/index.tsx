@@ -6,9 +6,7 @@ export const Route = createFileRoute('/')({
   async beforeLoad() {
     const { isAuthenticated } = await queryClient.ensureQueryData(whoamiQueryOptions);
     if (isAuthenticated) {
-      throw redirect({
-        to: '/dashboard',
-      });
+      throw redirect({ to: '/expenses' });
     } else {
       throw redirect({
         to: '/signin',

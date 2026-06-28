@@ -26,6 +26,7 @@ const options = linkOptions([
     to: '/dashboard',
     label: 'Dashboard',
     Icon: ChartLine,
+    preload: false,
   },
   {
     to: '/expenses',

@@ -22,7 +22,7 @@ function RouteComponent() {
     trpc.session.signUpFinalize.mutationOptions({
       onSuccess() {
         Promise.allSettled([queryClient.refetchQueries(trpc.whoami.pathFilter()), sleep(2000)]).then(async () => {
-          navigate({ to: '/dashboard' });
+          navigate({ to: '/expenses' });
         });
       },
       onError() {
