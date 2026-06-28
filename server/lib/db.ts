@@ -2,7 +2,6 @@ import { getColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'dr
 import { drizzle } from 'drizzle-orm/d1';
 import { defineRelations } from 'drizzle-orm';
 import * as schema from '../../db/schema';
-import type { BatchItem } from 'drizzle-orm/batch';
 
 export const sankeCaseFromCamelCase = (camelCase: string) =>
   camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
