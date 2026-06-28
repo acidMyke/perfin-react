@@ -141,6 +141,9 @@ importers:
       wrangler:
         specifier: ^4.105.0
         version: 4.105.0
+      zocker:
+        specifier: ^3.0.0
+        version: 3.0.0(zod@4.4.3)
 
 packages:
 
@@ -864,6 +867,10 @@ packages:
   '@eslint/plugin-kit@0.7.2':
     resolution: {integrity: sha512-+CNAzxglkrpNf/kKywqQfk74QjtceuOE7Qm+AF8miRvPF/wmmK5+OJOgVh3AVTT3RP2mH3+FOaxlE5v72owk0A==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@faker-js/faker@10.5.0':
+    resolution: {integrity: sha512-bsxD8WLS5lIj7aaoCx1YJkktqYj5vlBUE6HWzu2Q51ksrGJ0H737ECCKlFU7Yf8Br45z9t99frBp/J7kzbMPAg==}
+    engines: {node: ^20.19.0 || ^22.13.0 || ^23.5.0 || >=24.0.0, npm: '>=10'}
 
   '@floating-ui/core@1.7.5':
     resolution: {integrity: sha512-1Ih4WTWyw0+lKyFMcBHGbb5U5FtuHJuujoyyr5zTaWS5EYMeT6Jb2AuDeftsCsEuchO+mM2ij5+q9crhydzLhQ==}
@@ -1853,6 +1860,10 @@ packages:
     resolution: {integrity: sha512-DPi0FmjiSU5EvQV0++GFDOJ9ASQUVFh5kD+OzOnYdi7n3Wpm9hWWGfB/O2blfHcMVTL5WkQXSnRiK9makhrcnw==}
     engines: {node: '>=0.3.1'}
 
+  drange@1.1.1:
+    resolution: {integrity: sha512-pYxfDYpued//QpnLIm4Avk7rsNtAtQkUES2cwAYSvD/wd2pKD71gN2Ebj3e7klzXwjocvE8c5vx/1fxwpqmSxA==}
+    engines: {node: '>=4'}
+
   drizzle-kit@1.0.0-beta.4-4605abe:
     resolution: {integrity: sha512-VeCeDq0V7T1omP4EfjYghmMh+tGa1iZR6aFJdDQvY5aePhPpsPGzxgkYVmLxGNA5K2Gu2ttDCytavRxElWL1ng==}
     hasBin: true
@@ -2515,6 +2526,10 @@ packages:
     resolution: {integrity: sha512-KTqnxsgGiQ6ZAzZCVlJH5eOjSnvlyEgx1m8bkRJfOhmGRqfo5KLvmAlACQkrjEtOQ4B7wF9TdSLIs9O90MX9xA==}
     engines: {node: '>=16.0.0'}
 
+  randexp@0.5.3:
+    resolution: {integrity: sha512-U+5l2KrcMNOUPYvazA3h5ekF80FHTUG+87SEAmHZmolh1M+i/WyTCxVzmi+tidIa1tM4BSe8g2Y/D3loWDjj+w==}
+    engines: {node: '>=4'}
+
   react-dom@19.2.7:
     resolution: {integrity: sha512-t0BRVXvbiE/o20Hfw669rLbMCDWtYZLvmJigy2f0MxsXF+71pxhR3xOkspmsO8h3ZlNzyibAmtCa3l4lYKk6gQ==}
     peerDependencies:
@@ -2571,6 +2586,10 @@ packages:
 
   resolve-pkg-maps@1.0.0:
     resolution: {integrity: sha512-seS2Tj26TBVOC2NIc2rOe2y2ZO7efxITtLZcGSOnHHNOQ7CkiUBfw0Iw2ck6xkIhPwLhKNLS8BO+hEpngQlqzw==}
+
+  ret@0.2.2:
+    resolution: {integrity: sha512-M0b3YWQs7R3Z917WRQy1HHA7Ba7D8hvZg6UE5mLykJxQVE2ju0IXbGlaHPPlkY+WN7wFP+wUMXmBFA0aV6vYGQ==}
+    engines: {node: '>=4'}
 
   rfdc@1.4.1:
     resolution: {integrity: sha512-q1b3N5QkRUWUl7iyylaaj3kOpIT0N2i9MqIEQXP73GVsN9cw3fdx8X63cEmWhJGi2PPCF23Ijp7ktmd39rawIA==}
@@ -2911,6 +2930,11 @@ packages:
 
   youch@4.1.0-beta.10:
     resolution: {integrity: sha512-rLfVLB4FgQneDr0dv1oddCVZmKjcJ6yX6mS4pU82Mq/Dt9a3cLZQ62pDBL4AUO+uVrCvtWz3ZFUL2HFAFJ/BXQ==}
+
+  zocker@3.0.0:
+    resolution: {integrity: sha512-xSJz2M9AELZKzgpuuZPbTQdMv9263p/zSHDIj81B58X3334Xl6iJ/C3u6OQiOlsrWAoJSJsveBcIdz1eEPL0EA==}
+    peerDependencies:
+      zod: ^3.25.0 || ^4.0.0
 
   zod-form-data@3.0.2:
     resolution: {integrity: sha512-iN8oSINKqNHJ90T+SHUvHg2gfvF+gyVvg4nK1RYYhMUDUpUWaqwqawLbJNDxxrM59pgE0kdcMfqKVwK55Bm5cw==}
@@ -3522,6 +3546,8 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
     optional: true
+
+  '@faker-js/faker@10.5.0': {}
 
   '@floating-ui/core@1.7.5':
     dependencies:
@@ -4486,6 +4512,8 @@ snapshots:
 
   diff@8.0.4: {}
 
+  drange@1.1.1: {}
+
   drizzle-kit@1.0.0-beta.4-4605abe:
     dependencies:
       '@drizzle-team/brocli': 0.11.0
@@ -5068,6 +5096,11 @@ snapshots:
 
   pvutils@1.1.5: {}
 
+  randexp@0.5.3:
+    dependencies:
+      drange: 1.1.1
+      ret: 0.2.2
+
   react-dom@19.2.7(react@19.2.7):
     dependencies:
       react: 19.2.7
@@ -5128,6 +5161,8 @@ snapshots:
 
   resolve-pkg-maps@1.0.0:
     optional: true
+
+  ret@0.2.2: {}
 
   rfdc@1.4.1: {}
 
@@ -5468,6 +5503,12 @@ snapshots:
       '@speed-highlight/core': 1.2.17
       cookie: 1.1.1
       youch-core: 0.3.3
+
+  zocker@3.0.0(zod@4.4.3):
+    dependencies:
+      '@faker-js/faker': 10.5.0
+      randexp: 0.5.3
+      zod: 4.4.3
 
   zod-form-data@3.0.2(zod@4.4.3):
     dependencies:
