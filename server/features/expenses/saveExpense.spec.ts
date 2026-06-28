@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid';
 import {
   CREATE_ID,
   getExistingChildrenData,
+  queueExpenseAdjustments,
   queueExpenseItems,
   queueMainExpenseRecord,
   verifyExpenseVersion,
@@ -356,6 +357,113 @@ describe('helpers', async () => {
       expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
         expectMockDatabase(),
         schema.expenseItemsTable,
+        expenseId,
+        new Set([deletingId]),
+      );
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+    });
+  });
+
+  describe(queueExpenseAdjustments, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    const deps = { generateId: vi.fn(), upsertExpenseAdjustments: vi.fn(), markExpenseChildAsDeleted: vi.fn() };
+    let expenseId: string;
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+    });
+
+    it('should map adjustments and call upsertExpenseAdjustments with the correct values', () => {
+      const extgItemIds = new Set<string>();
+      const adjs: SaveExpenseInput['adjustments'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', amountCents: 0, rateBps: 4000, expenseItemId: undefined },
+        { id: 'id2', isDeleted: false, name: 'name2', amountCents: 4000, rateBps: 0, expenseItemId: undefined },
+        { id: 'id3', isDeleted: false, name: 'name3', amountCents: 0, rateBps: 4000, expenseItemId: 'item1' },
+      ];
+      const batchItem0 = 'Expense djustments Upserted';
+
+      deps.upsertExpenseAdjustments.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseAdjustments(collector, db, expenseId, adjs, extgItemIds, deps);
+
+      expect(deps.upsertExpenseAdjustments).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...adjs[0], expenseId, sequence: 0 }),
+        expect.objectContaining({ ...adjs[1], expenseId, sequence: 1 }),
+        expect.objectContaining({ ...adjs[2], expenseId, sequence: 2 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
+    });
+
+    it('should treat generate new id if input id is create', () => {
+      const extgItemIds = new Set<string>([]);
+      const adjs: SaveExpenseInput['adjustments'] = [
+        { id: CREATE_ID, isDeleted: false, name: 'name1', amountCents: 4000, rateBps: 0, expenseItemId: undefined },
+      ];
+      const batchItem0 = 'Expense Adjustments Upserted';
+      const expectedId = nanoid();
+      deps.generateId.mockReturnValue(expectedId);
+      deps.upsertExpenseAdjustments.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseAdjustments(collector, db, expenseId, adjs, extgItemIds, deps);
+
+      expect(deps.upsertExpenseAdjustments).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...adjs[0], id: expectedId, expenseId, sequence: 0 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
+    });
+
+    it('should call markExpenseChildAsDeleted when there is extg ids missing from input', () => {
+      const deletingId = 'deleting1';
+      const extgItemIds = new Set<string>([deletingId]);
+      const adjs: SaveExpenseInput['adjustments'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', amountCents: 4000, rateBps: 0, expenseItemId: undefined },
+      ];
+      const batchItem0 = 'Expense Adjustments Upserted';
+      const batchItem1 = 'Expense Adjustments mark deleted';
+
+      deps.upsertExpenseAdjustments.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockReturnValue(batchItem1);
+
+      queueExpenseAdjustments(collector, db, expenseId, adjs, extgItemIds, deps);
+
+      expect(deps.upsertExpenseAdjustments).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...adjs[0], expenseId, sequence: 0 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
+        expectMockDatabase(),
+        schema.expenseAdjustmentsTable,
+        expenseId,
+        new Set([deletingId]),
+      );
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+    });
+
+    it('should treat isDeleted record in input as gone', () => {
+      const deletingId = 'id1';
+      const extgItemIds = new Set<string>([deletingId]);
+      const adjs: SaveExpenseInput['adjustments'] = [
+        { id: 'id1', isDeleted: true, name: 'name1', amountCents: 4000, rateBps: 0, expenseItemId: undefined },
+      ];
+      const batchItem0 = 'Expense Adjustments mark deleted';
+
+      deps.upsertExpenseAdjustments.mockThrow('shouldnt have been called');
+      deps.markExpenseChildAsDeleted.mockReturnValue(batchItem0);
+
+      queueExpenseAdjustments(collector, db, expenseId, adjs, extgItemIds, deps);
+
+      expect(deps.upsertExpenseAdjustments).not.toHaveBeenCalled();
+      expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
+        expectMockDatabase(),
+        schema.expenseAdjustmentsTable,
         expenseId,
         new Set([deletingId]),
       );
