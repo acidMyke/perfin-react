@@ -10,6 +10,7 @@ import { nanoid } from 'nanoid';
 import {
   CREATE_ID,
   getExistingChildrenData,
+  queueExpenseItems,
   queueMainExpenseRecord,
   verifyExpenseVersion,
   type SaveExpenseInput,
@@ -103,7 +104,7 @@ describe('helpers', async () => {
       vi.clearAllMocks();
     });
 
-    it('should call save values accordingly base on info and push it into batch collector', async () => {
+    it('should call upsertMainExpense to save values base on info and push return into batch collector', async () => {
       const netTotalCents = 60_00;
       const expectedBoxId = 2903487923848;
       const mockedCalculateExpense = vi
@@ -254,6 +255,111 @@ describe('helpers', async () => {
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
       expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+    });
+  });
+
+  describe(queueExpenseItems, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    const deps = { generateId: vi.fn(), upsertExpenseItems: vi.fn(), markExpenseChildAsDeleted: vi.fn() };
+    let expenseId: string;
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+    });
+
+    it('should map items and call upsertExpenseItems with the correct values', () => {
+      const extgItemIds = new Set<string>();
+      const items: SaveExpenseInput['items'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', priceCents: 500, quantity: 2 },
+        { id: 'id2', isDeleted: false, name: 'name2', priceCents: 300, quantity: 3 },
+      ];
+      const batchItem0 = 'Expense Items Upserted';
+
+      deps.upsertExpenseItems.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+
+      expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
+        expect.objectContaining({ ...items[1], expenseId, sequence: 1 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
+    });
+
+    it('should treat generate new id if input id is create', () => {
+      const extgItemIds = new Set<string>([]);
+      const items: SaveExpenseInput['items'] = [
+        { id: CREATE_ID, isDeleted: false, name: 'name1', priceCents: 500, quantity: 2 },
+      ];
+      const batchItem0 = 'Expense Items Upserted';
+      const expectedId = nanoid();
+      deps.generateId.mockReturnValue(expectedId);
+      deps.upsertExpenseItems.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+
+      expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...items[0], id: expectedId, expenseId, sequence: 0 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
+    });
+
+    it('should call markExpenseChildAsDeleted when there is extg ids missing from input', () => {
+      const deletingId = 'deleting1';
+      const extgItemIds = new Set<string>([deletingId]);
+      const items: SaveExpenseInput['items'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', priceCents: 500, quantity: 2 },
+      ];
+      const batchItem0 = 'Expense Items Upserted';
+      const batchItem1 = 'Expense Items mark deleted';
+
+      deps.upsertExpenseItems.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockReturnValue(batchItem1);
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+
+      expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
+        expectMockDatabase(),
+        schema.expenseItemsTable,
+        expenseId,
+        new Set([deletingId]),
+      );
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+    });
+
+    it('should treat isDeleted record in input as gone', () => {
+      const deletingId = 'id1';
+      const extgItemIds = new Set<string>([deletingId]);
+      const items: SaveExpenseInput['items'] = [
+        { id: 'id1', isDeleted: true, name: 'name1', priceCents: 500, quantity: 2 },
+      ];
+      const batchItem0 = 'Expense Items mark deleted';
+
+      deps.upsertExpenseItems.mockThrow('shouldnt have been called');
+      deps.markExpenseChildAsDeleted.mockReturnValue(batchItem0);
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+
+      expect(deps.upsertExpenseItems).not.toHaveBeenCalled();
+      expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
+        expectMockDatabase(),
+        schema.expenseItemsTable,
+        expenseId,
+        new Set([deletingId]),
+      );
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
     });
   });
 });
