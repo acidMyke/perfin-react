@@ -1,6 +1,8 @@
 import type { AppDatabase } from '#server/lib/db';
 import {
+  createDynamicMock,
   createMockProtectedContext,
+  expectDynamicMock,
   expectMockDatabase,
   mockDrizzleOrm,
   mockSchemaModule,
@@ -10,16 +12,21 @@ import { nanoid } from 'nanoid';
 import {
   CREATE_ID,
   getExistingChildrenData,
+  processSaveExpense,
   queueExpenseAdjustments,
   queueExpenseItems,
   queueMainExpenseRecord,
+  saveExpenseInputSchema,
   verifyExpenseVersion,
+  type SaveExpenseHelpers,
   type SaveExpenseInput,
+  type SaveExpenseRepo,
 } from './saveExpense';
 import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
 import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
 import { getLocationBoxId } from '../../lib/utils';
+import { zocker } from 'zocker';
 
 vi.mock(import('drizzle-orm'), importOriginal => {
   return mockDrizzleOrm(importOriginal);
@@ -31,6 +38,7 @@ vi.mock(import('#schema'), importOriginal => {
 
 vi.mock(import('../../lib/expenseHelper'), () => ({ calculateExpense: vi.fn() }));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
+vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
 
 describe('helpers', async () => {
   const [schema] = await Promise.all([import('#schema')]);
@@ -469,5 +477,137 @@ describe('helpers', async () => {
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
     });
+  });
+});
+
+describe(processSaveExpense, async () => {
+  let deps = createDynamicMock<SaveExpenseHelpers & SaveExpenseRepo>('deps');
+  const expectDeps = () => expectDynamicMock('deps');
+  const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
+  const mockedIndexing = vi.mocked(processSaveExpenseSearchIndexing);
+  const inputGenerator = zocker(saveExpenseInputSchema)
+    .supply(saveExpenseInputSchema.shape.expenseId, () => nanoid())
+    .supply(saveExpenseInputSchema.shape.items.element.shape.id, () => nanoid())
+    .supply(saveExpenseInputSchema.shape.adjustments.element.shape.id, () => nanoid())
+    .supply(saveExpenseInputSchema.shape.expenseId, () => nanoid())
+    .array({ min: 2, max: 2 });
+  let mockContext: MockProtectedContext;
+  let userId: string;
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockContext = createMockProtectedContext({ dbMode: 'mock' });
+    userId = mockContext.userId;
+  });
+
+  it('should call helper verify and fetch extg record, when input.expenseId is not create', async () => {
+    const input = inputGenerator.generate();
+    await processSaveExpense(mockContext, input, deps);
+
+    expect(deps.verifyExpenseVersion).toHaveBeenCalledExactlyOnceWith(
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input.version,
+      expectDeps(),
+    );
+
+    expect(deps.getExistingChildrenData).toHaveBeenCalledExactlyOnceWith(
+      expectMockDatabase(),
+      input.expenseId,
+      expect.any(Set),
+      expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(deps.queueMainExpenseRecord).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseItems).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      input.expenseId,
+      input.items,
+      expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseAdjustments).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      input.expenseId,
+      input.adjustments,
+      expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(mockedIndexing).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      expect.objectContaining({ id: input.expenseId, userId }),
+    );
+  });
+
+  it('should call generateId when input.expenseId is create and use the id when calling helper methods', async () => {
+    const expectedExpenseId = nanoid();
+    deps.generateId.mockReturnValue(expectedExpenseId);
+    const input = inputGenerator.generate();
+    input.expenseId = CREATE_ID;
+    await processSaveExpense(mockContext, input, deps);
+    expect(deps.generateId).toHaveBeenCalled();
+
+    expect(deps.queueMainExpenseRecord).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      input,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseItems).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      expectedExpenseId,
+      input.items,
+      expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseAdjustments).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      expectedExpenseId,
+      input.adjustments,
+      expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(mockedIndexing).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      expect.objectContaining({ id: expectedExpenseId, userId }),
+    );
+  });
+
+  it('should exectue batch with collected statements', async () => {
+    const input = inputGenerator.generate();
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueMainExpenseRecord.mockImplementation(collector => collector.push('Test 1', 'Test 1'));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseItems.mockImplementation(collector => collector.push('Test 2', 'Test 2'));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseAdjustments.mockImplementation(collector => collector.push('Test 3', 'Test 3'));
+    mockContext.addDbResult(['Result 1', 'Result 2', 'Result 3']);
+
+    await processSaveExpense(mockContext, input, deps);
+
+    expect(mockContext.dbSpies.batch).toHaveBeenCalledExactlyOnceWith(['Test 1', 'Test 2', 'Test 3']);
   });
 });

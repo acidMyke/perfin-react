@@ -143,6 +143,28 @@ function createForbiddenStub<T>(value?: Partial<T>) {
   ) as T;
 }
 
+export function createDynamicMock<T extends Record<string, Parameters<typeof vi.fn>[0]>>(
+  name: string,
+  impls?: Partial<T>,
+) {
+  const dynamicMocks: Record<string | symbol, Mock> = {};
+  return new Proxy(
+    { _dynamicMockName: name },
+    {
+      get(_, p) {
+        if (p === '_dynamicMockName') return name;
+
+        if (!dynamicMocks[p])
+          // @ts-ignore
+          dynamicMocks[p] = impls && p in impls ? vi.fn(impls[p]) : vi.fn();
+        return dynamicMocks[p];
+      },
+    },
+  ) as unknown as { [K in keyof T]: Mock<Exclude<T[K], undefined>> };
+}
+
+export const expectDynamicMock = (name: string) => expect.objectContaining({ _dynamicMockName: name });
+
 type CreateMockContextOption = CreateMockDatabaseOption & {
   url?: string;
   deviceId?: string;
@@ -189,7 +211,7 @@ type CreateMockProtectedContextOption = CreateMockContextOption & {
 };
 
 export function createMockProtectedContext(options: CreateMockProtectedContextOption = {}) {
-  const mockContext = createMockContext();
+  const mockContext = createMockContext(options);
   const { userId = nanoid(), userName = 'unmocked', isCsrfValid = true, isAllowElevated = false } = options;
   const user = { id: userId, name: userName };
   return {
