@@ -1,4 +1,5 @@
-import { BatchCollector, createDatabase, type AppDatabase } from '#server/lib/db';
+import { createDatabase, type AppDatabase } from '#server/lib/db';
+import BatchCollector from '#server/lib/BatchCollector';
 import { WorkflowEntrypoint, WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { expenseAdjustmentsTable, expenseItemsTable, expensesTable, searchIndexVersionTable } from '../../db/schema';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
