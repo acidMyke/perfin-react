@@ -335,6 +335,7 @@ export type ComboBoxProps = {
   readOnly?: boolean;
   triggerChangeOnFocus?: boolean;
   hideError?: boolean;
+  setValueOnly?: boolean;
   onSuggestionSelected?: (suggestion: string) => void;
 };
 
@@ -349,6 +350,7 @@ function ComboBox({
   readOnly = false,
   triggerChangeOnFocus = false,
   hideError,
+  setValueOnly,
   onSuggestionSelected,
 }: ComboBoxProps) {
   const [query, setQuery] = useState('');
@@ -400,8 +402,8 @@ function ComboBox({
               field.handleChange(suggestion);
             }
           } else {
-            field.handleChange(option); // store Option object
-            setQuery(option.label);
+            field.handleChange(setValueOnly ? option.value : option); // store Option object
+            setQuery(setValueOnly ? option.value : option.label);
           }
         }}
         disabled={readOnly}

@@ -1,6 +1,8 @@
 import { useAppForm } from '#client/components/Form';
+import { ImagePreview } from '#client/components/ImagePreview';
 import { PageHeader } from '#client/components/PageHeader';
 import { queryClient, trpc } from '#client/trpc';
+import { generateId } from '#client/utils';
 import { formOptions } from '@tanstack/react-form';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
@@ -11,9 +13,13 @@ export const Route = createFileRoute('/_authenticated/expenses/agent/create')({
 });
 
 type AgentImageFile = {
-  kind: string;
+  id: string;
+  kind: undefined | string;
   file: Blob;
 };
+
+const imageKind = ['recipe', 'statement'];
+const imageKindOptions = imageKind.map(value => ({ label: value.charAt(0).toUpperCase() + value.slice(1), value }));
 
 const agentCreateFormOptions = formOptions({
   defaultValues: {
@@ -21,6 +27,13 @@ const agentCreateFormOptions = formOptions({
     customInstruction: '',
     accountIds: [] as string[],
     categoryIds: [] as string[],
+  },
+  validators: {
+    onChange: ({ value }) => {
+      if (value.uploadedImages.length === 0) {
+        return { form: 'Must include at least 1 image' };
+      }
+    },
   },
 });
 
@@ -33,17 +46,54 @@ function RouteComponent() {
   return (
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expense agent' />
-
-      <form.AppForm>
-        <div className='mt-4 flex flex-wrap gap-4'>
-          <form.AppField name='accountIds'>
-            {({ MultiSelectBox }) => <MultiSelectBox label='Account' options={accountOptions} containerCn='flex-1' />}
-          </form.AppField>
-          <form.AppField name='categoryIds'>
-            {({ MultiSelectBox }) => <MultiSelectBox label='Category' options={categoryOptions} containerCn='flex-1' />}
-          </form.AppField>
+      <div className='space-y-2'>
+        <div className='flex flex-row gap-2'>
+          <input
+            type='file'
+            className='file-input file-input-ghost'
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length > 0) {
+                form.setFieldValue('uploadedImages', cur => [
+                  ...cur,
+                  ...files.map(file => ({ id: generateId(), kind: undefined, file })),
+                ]);
+              }
+            }}
+          />
         </div>
-      </form.AppForm>
+        <form.AppForm>
+          <form.Field name='uploadedImages' mode='array'>
+            {field =>
+              field.state.value.map(({ id, file, kind }, idx) => (
+                <div key={id} className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
+                  <input type='checkbox' />
+                  <div className='collapse-title font-medium'>
+                    {kind ?? 'Not set'} • Image #{idx + 1}
+                  </div>
+                  <form.AppField name={`uploadedImages[${idx}].kind`}>
+                    {({ ComboBox }) => <ComboBox label='Kind' options={imageKindOptions} setValueOnly />}
+                  </form.AppField>
+                  <div className='collapse-content space-y-4'>
+                    <ImagePreview blob={file} />
+                  </div>
+                </div>
+              ))
+            }
+          </form.Field>
+
+          <div className='mt-4 flex flex-wrap gap-4'>
+            <form.AppField name='accountIds'>
+              {({ MultiSelectBox }) => <MultiSelectBox label='Account' options={accountOptions} containerCn='flex-1' />}
+            </form.AppField>
+            <form.AppField name='categoryIds'>
+              {({ MultiSelectBox }) => (
+                <MultiSelectBox label='Category' options={categoryOptions} containerCn='flex-1' />
+              )}
+            </form.AppField>
+          </div>
+        </form.AppForm>
+      </div>
     </div>
   );
 }
