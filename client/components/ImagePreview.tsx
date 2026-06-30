@@ -10,5 +10,13 @@ export function ImagePreview({ blob, alt = 'preview' }: { blob: Blob; alt?: stri
     return () => URL.revokeObjectURL(objectUrl);
   }, [blob]);
 
-  return <img src={url} alt={alt} className='max-h-72 w-full rounded-lg border object-contain' />;
+  if (!url) {
+    return <ImagePreviewSkeleton />;
+  }
+
+  return <img src={url} alt={alt} className='max-h-72 w-full rounded-lg object-contain' />;
+}
+
+export function ImagePreviewSkeleton() {
+  return <div className='skeleton h-72 max-h-72 w-full rounded-lg' />;
 }

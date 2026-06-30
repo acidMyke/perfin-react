@@ -1,11 +1,13 @@
 import { useAppForm, type Option } from '#client/components/Form';
-import { ImagePreview } from '#client/components/ImagePreview';
+import { ImagePreview, ImagePreviewSkeleton } from '#client/components/ImagePreview';
 import { PageHeader } from '#client/components/PageHeader';
 import { queryClient, trpc } from '#client/trpc';
 import { generateId } from '#client/utils';
 import { formOptions } from '@tanstack/react-form';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery, useMutation } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
+import imageCompression, { type Options as BicOptions } from 'browser-image-compression';
+import bicLibUrl from 'browser-image-compression/dist/browser-image-compression.js?url';
 
 export const Route = createFileRoute('/_authenticated/expenses/agent/create')({
   component: RouteComponent,
@@ -20,8 +22,8 @@ type AgentImageFile = {
 
 const imageKind = ['recipe', 'statement'];
 const imageKindOptions: Option[] = imageKind.map(value => ({
-label: value.charAt(0).toUpperCase() + value.slice(1),
-value,
+  label: value.charAt(0).toUpperCase() + value.slice(1),
+  value,
 }));
 
 const agentCreateFormOptions = formOptions({
@@ -40,9 +42,40 @@ const agentCreateFormOptions = formOptions({
   },
 });
 
+const bicOptions: BicOptions = {
+  useWebWorker: true,
+  libURL: bicLibUrl,
+  maxSizeMB: 0.5,
+  maxWidthOrHeight: 1024,
+};
+
 function RouteComponent() {
   const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = options;
+  const compressImagesMutation = useMutation({
+    mutationFn: (files: File[]) => {
+      const imgCpsPrs: Promise<{ id: string; file: File | undefined }>[] = [];
+      const newUploadedFile: AgentImageFile[] = [];
+      for (const file of files) {
+        const id = generateId();
+        imgCpsPrs.push(
+          imageCompression(file, bicOptions)
+            .then(cFile => ({ id, file: cFile instanceof Blob ? cFile : undefined }))
+            .catch(() => ({ id, file: undefined })),
+        );
+        newUploadedFile.push({ id, kind: undefined });
+      }
+      form.setFieldValue('uploadedImages', cur => [...cur, ...newUploadedFile]);
+      return Promise.all(imgCpsPrs);
+    },
+    onSuccess: compressedImgs => {
+      form.setFieldValue('uploadedImages', cur =>
+        cur
+          .map(info => (info.file ? info : { ...info, file: compressedImgs.find(({ id }) => id === info.id)?.file }))
+          .filter(({ file }) => !!file),
+      );
+    },
+  });
 
   const form = useAppForm(agentCreateFormOptions);
 
@@ -50,42 +83,41 @@ function RouteComponent() {
     <div className='mx-auto max-w-lg px-2'>
       <PageHeader title='Expense agent' />
       <div className='space-y-2'>
-        <div className='flex flex-row gap-2'>
-          <input
-            type='file'
-            className='file-input file-input-ghost'
-            onChange={e => {
-              const files = Array.from(e.target.files ?? []);
-              if (files.length > 0) {
-                form.setFieldValue('uploadedImages', cur => [
-                  ...cur,
-                  ...files.map(file => ({ id: generateId(), kind: undefined, file })),
-                ]);
-              }
-            }}
-          />
-        </div>
         <form.AppForm>
           <form.Field name='uploadedImages' mode='array'>
             {field =>
               field.state.value.map(({ id }, idx) => (
-<form.AppField key={id} name={`uploadedImages[${idx}].kind`}>
+                <form.AppField key={id} name={`uploadedImages[${idx}].kind`}>
                   {({ ComboBox, state }) => (
-                <div className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
-                  <input type='radio' name='open-file' />
-                  <div className='collapse-title font-medium'>
-                    {state.value?.label ?? 'Not set'} • Image #{idx + 1}
-                  </div>
-                  <div className='collapse-content space-y-2'>
-<ComboBox label='Kind' options={imageKindOptions} />
-                        <ImagePreview blob={file} />
-                                    </div>
-                </div>
-)}
+                    <div className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
+                      <input type='radio' name='open-file' />
+                      <div className='collapse-title font-medium'>
+                        {state.value?.label ?? 'Not set'} • Image #{idx + 1}
+                      </div>
+                      <div className='collapse-content space-y-2'>
+                        <ComboBox label='Kind' options={imageKindOptions} />
+                        <form.AppField name={`uploadedImages[${idx}].file`}>
+                          {({ state: { value } }) => (value ? <ImagePreview blob={value} /> : <ImagePreviewSkeleton />)}
+                        </form.AppField>
+                      </div>
+                    </div>
+                  )}
                 </form.AppField>
               ))
             }
           </form.Field>
+
+          <input
+            type='file'
+            multiple
+            accept='image/*'
+            className='file-input file-input-ghost file-input-xl w-full'
+            disabled={compressImagesMutation.isPending}
+            onChange={e => {
+              const files = Array.from(e.target.files ?? []);
+              if (files.length > 0) compressImagesMutation.mutate(files);
+            }}
+          />
 
           <div className='mt-4 flex flex-wrap gap-4'>
             <form.AppField name='accountIds'>
