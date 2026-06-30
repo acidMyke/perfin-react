@@ -1,4 +1,4 @@
-import { useAppForm } from '#client/components/Form';
+import { useAppForm, type Option } from '#client/components/Form';
 import { ImagePreview } from '#client/components/ImagePreview';
 import { PageHeader } from '#client/components/PageHeader';
 import { queryClient, trpc } from '#client/trpc';
@@ -14,12 +14,15 @@ export const Route = createFileRoute('/_authenticated/expenses/agent/create')({
 
 type AgentImageFile = {
   id: string;
-  kind: undefined | string;
-  file: Blob;
+  kind: undefined | Option;
+  file?: Blob;
 };
 
 const imageKind = ['recipe', 'statement'];
-const imageKindOptions = imageKind.map(value => ({ label: value.charAt(0).toUpperCase() + value.slice(1), value }));
+const imageKindOptions: Option[] = imageKind.map(value => ({
+label: value.charAt(0).toUpperCase() + value.slice(1),
+value,
+}));
 
 const agentCreateFormOptions = formOptions({
   defaultValues: {
@@ -66,18 +69,20 @@ function RouteComponent() {
           <form.Field name='uploadedImages' mode='array'>
             {field =>
               field.state.value.map(({ id, file, kind }, idx) => (
+<form.AppField name={`uploadedImages[${idx}].kind`}>
+                  {({ ComboBox }) => (
                 <div key={id} className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
-                  <input type='checkbox' />
+                  <input type='radio' name='open-file' />
                   <div className='collapse-title font-medium'>
-                    {kind ?? 'Not set'} • Image #{idx + 1}
+                    {kind?.label ?? 'Not set'} • Image #{idx + 1}
                   </div>
-                  <form.AppField name={`uploadedImages[${idx}].kind`}>
-                    {({ ComboBox }) => <ComboBox label='Kind' options={imageKindOptions} setValueOnly />}
-                  </form.AppField>
-                  <div className='collapse-content space-y-4'>
-                    <ImagePreview blob={file} />
-                  </div>
+                  <div className='collapse-content space-y-2'>
+<ComboBox label='Kind' options={imageKindOptions} />
+                        <ImagePreview blob={file} />
+                                    </div>
                 </div>
+)}
+                </form.AppField>
               ))
             }
           </form.Field>
