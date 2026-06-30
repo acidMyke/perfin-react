@@ -35,7 +35,7 @@ const agentCreateFormOptions = formOptions({
   },
   validators: {
     onChange: ({ value }) => {
-      if (value.uploadedImages.length === 0) {
+      if (value.uploadedImages.some(({ file }) => !!file)) {
         return { form: 'Must include at least 1 image' };
       }
     },
@@ -99,6 +99,9 @@ function RouteComponent() {
                         <form.AppField name={`uploadedImages[${idx}].file`}>
                           {({ state: { value } }) => (value ? <ImagePreview blob={value} /> : <ImagePreviewSkeleton />)}
                         </form.AppField>
+                        <button className='btn btn-error' onClick={() => field.removeValue(idx)}>
+                          Remove
+                        </button>
                       </div>
                     </div>
                   )}
