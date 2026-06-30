@@ -400,6 +400,7 @@ function ComboBox({
               field.handleChange(suggestion);
             }
           } else {
+            field.handleChange(option); // store Option object
             setQuery(option.label);
           }
         }}

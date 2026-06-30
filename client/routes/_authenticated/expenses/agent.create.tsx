@@ -68,13 +68,13 @@ function RouteComponent() {
         <form.AppForm>
           <form.Field name='uploadedImages' mode='array'>
             {field =>
-              field.state.value.map(({ id, file, kind }, idx) => (
-<form.AppField name={`uploadedImages[${idx}].kind`}>
-                  {({ ComboBox }) => (
-                <div key={id} className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
+              field.state.value.map(({ id }, idx) => (
+<form.AppField key={id} name={`uploadedImages[${idx}].kind`}>
+                  {({ ComboBox, state }) => (
+                <div className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
                   <input type='radio' name='open-file' />
                   <div className='collapse-title font-medium'>
-                    {kind?.label ?? 'Not set'} • Image #{idx + 1}
+                    {state.value?.label ?? 'Not set'} • Image #{idx + 1}
                   </div>
                   <div className='collapse-content space-y-2'>
 <ComboBox label='Kind' options={imageKindOptions} />
