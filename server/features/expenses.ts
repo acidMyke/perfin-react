@@ -396,28 +396,29 @@ export const expenseRouter = createIttyAppRouter({ base: '/expense' }).post(
       body: zfd.formData({
         accountIds: zfd.repeatable(z.array(zfd.text()).default([])),
         categoryIds: zfd.repeatable(z.array(zfd.text()).default([])),
-        items: zfd.repeatable(
+        uploadedImages: zfd.repeatable(
           z
             .array(
               z.object({
-                type: zfd.text(),
+                kind: zfd.text(),
                 image: z.instanceof(Blob, { message: 'An image file asset is required' }),
                 description: zfd.text(z.string().optional()),
               }),
             )
             .min(1),
         ),
+        customInstruction: zfd.text(),
       }),
     }),
   ),
   async request => {
     const { context, validated } = request;
     const { db, env, userId } = context;
-    const { items } = validated.body;
+    const { uploadedImages } = validated.body;
 
     const r2Promises: Promise<R2Object | null>[] = [];
 
-    for (const { type, image, description } of items) {
+    for (const { image, description } of uploadedImages) {
       const putOptions: R2PutOptions = {
         httpMetadata: { contentType: image.type },
         customMetadata: { userId, uploadedAt: Date.now().toString() },

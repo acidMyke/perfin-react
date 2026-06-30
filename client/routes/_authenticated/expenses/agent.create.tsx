@@ -42,6 +42,8 @@ const agentCreateFormOptions = formOptions({
   },
 });
 
+type AgentCreateFormData = typeof agentCreateFormOptions.defaultValues;
+
 const bicOptions: BicOptions = {
   useWebWorker: true,
   libURL: bicLibUrl,
@@ -77,6 +79,30 @@ function RouteComponent() {
     },
   });
 
+  const submitMutation = useMutation({
+    mutationFn: async (data: AgentCreateFormData) => {
+      const { accountIds, categoryIds, uploadedImages, customInstruction } = data;
+      const formData = new FormData();
+      let atLeastOneFile = false;
+      accountIds.forEach(id => formData.append('accountIds', id));
+      categoryIds.forEach(id => formData.append('categoryIds', id));
+      uploadedImages.forEach(({ kind, file }, index) => {
+        if (!file) return;
+        atLeastOneFile = true;
+        formData.append(`uploadedImages.${index}.kind`, kind?.value ?? '');
+        formData.append(`uploadedImages.${index}.image`, file);
+      });
+      if (customInstruction) {
+        formData.append('customInstruction', customInstruction);
+      }
+
+      if (atLeastOneFile) {
+        const response = await fetch('/expenses/agent-create', { method: 'POST', body: formData });
+        if (!response.ok) throw new Error('Submission failed');
+        return response.json();
+      }
+    },
+  });
   const form = useAppForm(agentCreateFormOptions);
 
   return (
@@ -132,6 +158,8 @@ function RouteComponent() {
               )}
             </form.AppField>
           </div>
+
+          <form.SubmitButton disabled={compressImagesMutation.isPending} label='Submit' />
         </form.AppForm>
       </div>
     </div>
