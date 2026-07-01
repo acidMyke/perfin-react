@@ -400,14 +400,14 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
           z
             .array(
               z.object({
-                kind: zfd.text(),
+                kind: zfd.text().optional(),
                 image: z.instanceof(Blob, { message: 'An image file asset is required' }),
                 description: zfd.text(z.string().optional()),
               }),
             )
             .min(1),
         ),
-        customInstruction: zfd.text(),
+        customInstruction: zfd.text().optional(),
       }),
     }),
   ),

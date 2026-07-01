@@ -89,7 +89,7 @@ function RouteComponent() {
       uploadedImages.forEach(({ kind, file }, index) => {
         if (!file) return;
         atLeastOneFile = true;
-        formData.append(`uploadedImages.${index}.kind`, kind?.value ?? '');
+        if (kind?.value) formData.append(`uploadedImages.${index}.kind`, kind.value);
         formData.append(`uploadedImages.${index}.image`, file);
       });
       if (customInstruction) {
