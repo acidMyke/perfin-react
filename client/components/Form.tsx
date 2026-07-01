@@ -216,6 +216,48 @@ function TextInput(props: TextInputProps) {
   );
 }
 
+type TextAreaProps = {
+  label?: string;
+  containerCn?: string;
+  labelCn?: string;
+  textareaCn?: string;
+  readOnly?: boolean;
+  nullIfEmpty?: boolean;
+  autoComplete?: string;
+  hideError?: boolean;
+  autoFocus?: boolean;
+  rows?: number;
+};
+
+function TextArea(props: TextAreaProps) {
+  const { label, containerCn, labelCn, textareaCn, nullIfEmpty, autoComplete, hideError, autoFocus, rows } = props;
+  const field = useFieldContext<string | null>();
+
+  return (
+    <label htmlFor={field.name} className={cn('floating-label mt-8', containerCn)}>
+      {label && <span className={labelCn}>{label}</span>}
+      <textarea
+        id={field.name}
+        name={field.name}
+        className={cn('textarea textarea-primary w-full text-xl', textareaCn)}
+        rows={rows ?? 5}
+        autoFocus={autoFocus}
+        autoComplete={autoComplete}
+        value={field.state.value ?? ''}
+        onChange={e => {
+          const value = e.target.value as string;
+          if (nullIfEmpty && value === '') {
+            field.handleChange(() => null);
+          } else {
+            field.handleChange(() => value);
+          }
+        }}
+      />
+      {!hideError && <FieldError field={field} />}
+    </label>
+  );
+}
+
 type OtpInputProps = {
   length?: number;
 };
@@ -648,5 +690,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     BooleanInput,
     OtpInput,
     MultiSelectBox,
+    TextArea,
   },
 });

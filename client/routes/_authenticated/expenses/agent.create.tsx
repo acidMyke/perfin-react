@@ -18,6 +18,7 @@ type AgentImageFile = {
   id: string;
   kind: undefined | Option;
   file?: Blob;
+  description?: string | null;
 };
 
 const imageKind = ['recipe', 'statement'];
@@ -30,8 +31,8 @@ const agentCreateFormOptions = formOptions({
   defaultValues: {
     uploadedImages: [] as AgentImageFile[],
     customInstruction: '',
-    accountIds: [] as string[],
-    categoryIds: [] as string[],
+    accountIds: [] as Option[],
+    categoryIds: [] as Option[],
   },
   validators: {
     onChange: ({ value }) => {
@@ -84,8 +85,8 @@ function RouteComponent() {
       const { accountIds, categoryIds, uploadedImages, customInstruction } = data;
       const formData = new FormData();
       let atLeastOneFile = false;
-      accountIds.forEach(id => formData.append('accountIds', id));
-      categoryIds.forEach(id => formData.append('categoryIds', id));
+      accountIds.forEach(({ value }) => formData.append('accountIds', value));
+      categoryIds.forEach(({ value }) => formData.append('categoryIds', value));
       uploadedImages.forEach(({ kind, file }, index) => {
         if (!file) return;
         atLeastOneFile = true;
@@ -106,8 +107,8 @@ function RouteComponent() {
   const form = useAppForm({ ...agentCreateFormOptions, onSubmit: ({ value }) => submitMutation.mutateAsync(value) });
 
   return (
-    <div className='mx-auto max-w-lg px-2'>
-      <PageHeader title='Expense agent' />
+    <div className='mx-auto max-w-lg px-2 pb-20'>
+      <PageHeader title='Expense agent create' />
       <div className='space-y-2'>
         <form.AppForm>
           <form.Field name='uploadedImages' mode='array'>
@@ -116,7 +117,7 @@ function RouteComponent() {
                 <form.AppField key={id} name={`uploadedImages[${idx}].kind`}>
                   {({ ComboBox, state }) => (
                     <div className='collapse-arrow border-base-300 bg-base-100 collapse w-full border'>
-                      <input type='radio' name='open-file' />
+                      <input type='checkbox' name='open-file' />
                       <div className='collapse-title font-medium'>
                         {state.value?.label ?? 'Not set'} • Image #{idx + 1}
                       </div>
@@ -124,6 +125,9 @@ function RouteComponent() {
                         <ComboBox label='Kind' options={imageKindOptions} />
                         <form.AppField name={`uploadedImages[${idx}].file`}>
                           {({ state: { value } }) => (value ? <ImagePreview blob={value} /> : <ImagePreviewSkeleton />)}
+                        </form.AppField>
+                        <form.AppField name={`uploadedImages[${idx}].description`}>
+                          {({ TextInput }) => <TextInput type='text' label='Description' nullIfEmpty />}
                         </form.AppField>
                         <button className='btn btn-error' onClick={() => field.removeValue(idx)}>
                           Remove
@@ -140,7 +144,7 @@ function RouteComponent() {
             type='file'
             multiple
             accept='image/*'
-            className='file-input file-input-ghost file-input-xl w-full'
+            className='file-input file-input-ghost file-input-lg w-full'
             disabled={compressImagesMutation.isPending || submitMutation.isPending}
             onChange={e => {
               const files = Array.from(e.target.files ?? []);
@@ -158,6 +162,10 @@ function RouteComponent() {
               )}
             </form.AppField>
           </div>
+
+          <form.AppField name='customInstruction'>
+            {({ TextArea }) => <TextArea textareaCn='textarea-lg' label='Instructions' nullIfEmpty />}
+          </form.AppField>
 
           <form.SubmitButton disabled={compressImagesMutation.isPending} label='Submit' />
         </form.AppForm>
