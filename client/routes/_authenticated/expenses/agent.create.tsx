@@ -1,7 +1,7 @@
 import { useAppForm, type Option } from '#client/components/Form';
 import { ImagePreview, ImagePreviewSkeleton } from '#client/components/ImagePreview';
 import { PageHeader } from '#client/components/PageHeader';
-import { queryClient, trpc } from '#client/trpc';
+import { queryClient, trpc, withCsrf } from '#client/trpc';
 import { generateId } from '#client/utils';
 import { formOptions } from '@tanstack/react-form';
 import { useSuspenseQuery, useMutation } from '@tanstack/react-query';
@@ -97,7 +97,7 @@ function RouteComponent() {
       }
 
       if (atLeastOneFile) {
-        const response = await fetch('/expenses/agent-create', { method: 'POST', body: formData });
+        const response = await fetch('/expenses/agent-create', { method: 'POST', body: formData, headers: withCsrf() });
         if (!response.ok) throw new Error('Submission failed');
         return response.json();
       }
