@@ -35,7 +35,7 @@ const agentCreateFormOptions = formOptions({
   },
   validators: {
     onChange: ({ value }) => {
-      if (value.uploadedImages.some(({ file }) => !!file)) {
+      if (!value.uploadedImages.some(({ file }) => !!file)) {
         return { form: 'Must include at least 1 image' };
       }
     },
@@ -103,7 +103,7 @@ function RouteComponent() {
       }
     },
   });
-  const form = useAppForm(agentCreateFormOptions);
+  const form = useAppForm({ ...agentCreateFormOptions, onSubmit: ({ value }) => submitMutation.mutateAsync(value) });
 
   return (
     <div className='mx-auto max-w-lg px-2'>
@@ -141,7 +141,7 @@ function RouteComponent() {
             multiple
             accept='image/*'
             className='file-input file-input-ghost file-input-xl w-full'
-            disabled={compressImagesMutation.isPending}
+            disabled={compressImagesMutation.isPending || submitMutation.isPending}
             onChange={e => {
               const files = Array.from(e.target.files ?? []);
               if (files.length > 0) compressImagesMutation.mutate(files);

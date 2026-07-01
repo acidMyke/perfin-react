@@ -389,7 +389,7 @@ export const expenseProcedures = {
   reindexList: listReindexHistoryProcedure,
 };
 
-export const expenseRouter = createIttyAppRouter({ base: '/expense' }).post(
+export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
   '/agent-create',
   chainHandler(withAuth()).then(
     withZod({

@@ -36,7 +36,7 @@ export const router = createIttyAppRouter()
     return response;
   })
   .all('/admin/*', adminApiRouter.fetch)
-  .all('/expense/*', expenseRouter.fetch)
+  .all('/expenses/*', expenseRouter.fetch)
   .all('*', () => error(404));
 
 export default router;
