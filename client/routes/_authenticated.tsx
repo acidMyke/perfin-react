@@ -1,10 +1,10 @@
 import { createFileRoute, redirect, useRouter, type ErrorComponentProps } from '@tanstack/react-router';
 import { Link, linkOptions, Outlet } from '@tanstack/react-router';
-import { Bot, ChartLine, PencilLine, Plus, ScrollText, Settings, Undo2 } from 'lucide-react';
+import { ArrowDown, Bot, ChartLine, PencilLine, Plus, ScrollText, Settings } from 'lucide-react';
 import { queryClient } from '#client/trpc';
 import { whoamiQueryOptions } from '#client/queryOptions';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { PageHeader } from '#components/PageHeader';
 
 export const Route = createFileRoute('/_authenticated')({
@@ -55,24 +55,20 @@ function NavDock() {
   );
 }
 
-export default function FloatingActionButton() {
+function FloatingActionButton() {
   const [expanded, setExpanded] = useState(false);
+  const toggle = useCallback(() => setExpanded(v => !v), [setExpanded]);
 
   return (
     <div className='fixed right-2 bottom-24 z-50 -translate-x-1/2'>
       <div className='flex flex-col items-center gap-3'>
-        {/* Expanded buttons */}
         <div
           className={`flex flex-col items-center gap-3 transition-all duration-300 ${
             expanded ? 'translate-y-0 opacity-100' : 'pointer-events-none translate-y-4 opacity-0'
           }`}
         >
-          <button
-            onClick={() => setExpanded(false)}
-            className='btn btn-lg btn-circle btn-secondary shadow-lg'
-            title='Undo'
-          >
-            <Undo2 size={22} />
+          <button onClick={toggle} className='btn btn-lg btn-circle btn-secondary shadow-lg' title='Undo'>
+            <ArrowDown size={22} />
           </button>
 
           <Link
@@ -80,6 +76,7 @@ export default function FloatingActionButton() {
             params={{ expenseId: 'create' }}
             className='btn btn-lg btn-circle btn-accent shadow-lg'
             title='Manual Create'
+            onClick={toggle}
           >
             <PencilLine size={22} />
           </Link>
@@ -90,15 +87,12 @@ export default function FloatingActionButton() {
             to='/expenses/agent/create'
             className='btn btn-lg btn-circle btn-primary shadow-xl'
             title='Agent Create'
+            onClick={toggle}
           >
             <Bot size={24} />
           </Link>
         ) : (
-          <button
-            onClick={() => setExpanded(true)}
-            className='btn btn-lg btn-circle btn-primary shadow-xl'
-            title='Create'
-          >
+          <button onClick={toggle} className='btn btn-lg btn-circle btn-primary shadow-xl' title='Create'>
             <Plus size={26} />
           </button>
         )}

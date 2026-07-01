@@ -108,8 +108,8 @@ function RouteComponent() {
 
   return (
     <div className='mx-auto max-w-lg px-2 pb-20'>
-      <PageHeader title='Expense agent create' />
-      <div className='space-y-2'>
+      <PageHeader title='Expense agent create' showBackButton />
+      <div className='mt-4 space-y-2'>
         <form.AppForm>
           <form.Field name='uploadedImages' mode='array'>
             {field =>
