@@ -449,6 +449,7 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
     ]);
 
     await Promise.all([...r2Promises, dbBatchPr]);
+    await env.EXPENSE_AGENT_WORKFLOW.create({ params: { agentRequestId, userId } });
 
     return json({ ok: true });
   },

@@ -43,6 +43,11 @@
       "binding": "EXPENSE_REINDEXER",
       "class_name": "UserExpenseReindexer",
     },
+    {
+      "name": "perfin-expense-agent-workflow",
+      "binding": "EXPENSE_AGENT_WORKFLOW",
+      "class_name": "ExpenseAgentWorkflow",
+    },
   ],
   "r2_buckets": [
     {
@@ -97,6 +102,11 @@
           "binding": "EXPENSE_REINDEXER",
           "class_name": "UserExpenseReindexer",
         },
+        {
+          "name": "perfin-expense-agent-workflow",
+          "binding": "EXPENSE_AGENT_WORKFLOW",
+          "class_name": "ExpenseAgentWorkflow",
+        },
       ],
     },
     "staging": {
@@ -131,6 +141,11 @@
           "name": "perfin-staging-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
           "class_name": "UserExpenseReindexer",
+        },
+        {
+          "name": "perfin-staging-expense-agent-workflow",
+          "binding": "EXPENSE_AGENT_WORKFLOW",
+          "class_name": "ExpenseAgentWorkflow",
         },
       ],
     },
