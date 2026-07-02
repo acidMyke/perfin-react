@@ -1,5 +1,6 @@
 import { protectedProcedure } from '../lib/trpc';
 import {
+  generateId,
   accountsTable,
   categoriesTable,
   expenseAdjustmentsTable,
@@ -8,11 +9,13 @@ import {
   expenseTextsTable,
   searchIndexVersionTable,
   textChunksTable,
+  agentImagesTable,
+  agentRequestsTable,
 } from '../../db/schema';
 import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
-import { differenceInDays, endOfMonth } from 'date-fns';
+import { differenceInDays, endOfMonth, formatDate } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
@@ -414,19 +417,38 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
   async request => {
     const { context, validated } = request;
     const { db, env, userId } = context;
-    const { uploadedImages } = validated.body;
+    const { accountIds, categoryIds, uploadedImages, customInstruction } = validated.body;
+    const agentRequestId = generateId();
 
     const r2Promises: Promise<R2Object | null>[] = [];
+    const agentImages: (typeof agentImagesTable.$inferInsert)[] = [];
 
-    for (const { image, description } of uploadedImages) {
+    for (const { image, kind, description } of uploadedImages) {
+      const imageId = generateId();
+      const now = new Date();
+      const r2Path = `agent-request/${formatDate(new Date(), 'yyyy-MM')}/${userId}/${imageId}`;
+
       const putOptions: R2PutOptions = {
         httpMetadata: { contentType: image.type },
-        customMetadata: { userId, uploadedAt: Date.now().toString() },
+        customMetadata: { userId, uploadedAt: Math.floor(now.getTime() / 1000).toString() },
       };
-      r2Promises.push(env.bk!.put(`agent-request/${userId}/${nanoid()}`, image, putOptions));
+      agentImages.push({ agentRequestId, r2Path, kind, description });
+      r2Promises.push(env.bk!.put(r2Path, image, putOptions));
     }
 
-    await Promise.all(r2Promises);
+    const dbBatchPr = db.batch([
+      db.insert(agentRequestsTable).values({
+        id: agentRequestId,
+        userId,
+        accountIds,
+        categoryIds,
+        customInstruction,
+        imageCount: uploadedImages.length,
+      }),
+      db.insert(agentImagesTable).values(agentImages),
+    ]);
+
+    await Promise.all([...r2Promises, dbBatchPr]);
 
     return json({ ok: true });
   },

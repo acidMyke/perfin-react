@@ -368,7 +368,7 @@ export const agentRequestsTable = sqliteTable(
     userId: idColumn(),
     accountIds: text({ mode: 'json' }).$type<string[]>(),
     categoryIds: text({ mode: 'json' }).$type<string[]>(),
-    customInstructions: text(),
+    customInstruction: text(),
     status: text().notNull().default('pending'),
     createdAt: createdAtColumn(),
     settledAt: integer({ mode: 'timestamp' }),
@@ -386,6 +386,7 @@ export const agentImagesTable = sqliteTable(
     agentRequestId: idColumn(),
     r2Path: text('r2_path').notNull(),
     kind: text(),
+    description: text(),
   },
   t => [index('idx_agent_images_ar_id').on(t.agentRequestId)],
 );
