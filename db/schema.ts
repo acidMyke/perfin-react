@@ -405,6 +405,8 @@ export const agentExpenseDraftsTable = sqliteTable(
   t => [index('idx_agent_expense_drafts_user_id').on(t.userId)],
 );
 
+export type TargetFieldValues = 'accountId' | 'categoryId' | 'shopName' | 'shopMall' | 'itemName' | 'adjustmentName';
+
 export const agentKeywordLookupsTable = sqliteTable(
   'agent_keyword_lookups',
   {
@@ -412,7 +414,7 @@ export const agentKeywordLookupsTable = sqliteTable(
     userId: idColumn(),
     keyword: text().notNull(),
     expenseId: idColumn(),
-    targetField: text().notNull(),
+    targetField: text().notNull().$type<TargetFieldValues>(),
     value: text().notNull(),
     createdAt: createdAtColumn(),
   },
