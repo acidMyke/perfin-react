@@ -162,15 +162,19 @@ ${textCategories}
     });
 
     let turn = 0;
-    const messages: ChatCompletionMessageParam[] = [
-      { role: 'system', content: preparationResult.systemContent },
-      { role: 'user', content: [{ type: 'text', text: preparationResult.userContent0Text }] },
-    ];
+    const conversationMessages: ChatCompletionMessageParam[] = [];
 
     while (turn < MAX_TURN) {
       const llmRunOutput = await step.do(`llm-run-turn-${turn}`, async () => {
+        const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: preparationResult.systemContent }];
+        const userContent: UserMessageContentPart[] = [{ type: 'text', text: preparationResult.userContent0Text }];
+
         if (turn === 0) {
-          const userContent = messages[1].content as UserMessageContentPart[];
+          userContent.push({
+            type: 'text',
+            text: 'The images are available this time, analyzed it. You MUST extract all visible text verbatim, ignore all background noise',
+          });
+
           const imagesAsContent = await Promise.all(
             preparationResult.imagePaths.map(path =>
               this.getAgentImageAsBase64(path).then(
@@ -179,14 +183,10 @@ ${textCategories}
             ),
           );
 
-          userContent.push(
-            {
-              type: 'text',
-              text: 'The images are available this time, analyzed it. You MUST extract all visible text verbatim, ignore all background noise',
-            },
-            ...imagesAsContent,
-          );
+          userContent.push(...imagesAsContent);
         }
+
+        messages.push({ role: 'user', content: userContent }, ...conversationMessages);
 
         return await this.env.ai.run('@cf/moonshotai/kimi-k2.6', {
           messages,
