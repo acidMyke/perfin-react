@@ -1,4 +1,11 @@
-import { accountsTable, agentAnchorLookupsTable, agentImagesTable, agentRequestsTable, categoriesTable } from '#schema';
+import {
+  accountsTable,
+  agentAnchorLookupsTable,
+  agentImagesTable,
+  agentRequestsTable,
+  categoriesTable,
+  generateId,
+} from '#schema';
 import { createDatabase, jsonGroupArray } from '#server/lib/db';
 import { WorkflowEntrypoint, type WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -12,10 +19,12 @@ const expenseAgentWorkflowParamSchema = z.object({
 
 type ExpenseAgentWorkflowParam = z.infer<typeof expenseAgentWorkflowParamSchema>;
 
+const MAX_TURN = 20;
+
 export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWorkflowParam> {
   async run(event: WorkflowEvent<ExpenseAgentWorkflowParam>, step: WorkflowStep) {
-    const agentRequestInfo = await step.do('prepare', async () => {
-      const db = createDatabase(this.env);
+    const db = createDatabase(this.env);
+    const preparationResult = await step.do('prepare', async () => {
       const parseResult = expenseAgentWorkflowParamSchema.safeParse(event.payload);
 
       if (!parseResult.success) {
@@ -127,12 +136,80 @@ ${textCategories}
 
 ### Tool & Error Guidelines
 * Batching: All your tools accept arrays. Batch your requests.
-* Self-Correction: Fix data structures and retry if any tools returns validation errors.`;
+* Self-Correction: Fix data structures and retry if any tools returns validation errors.
+`;
+
+      type ImageInfo = { id: string; kind?: string; description?: string };
+      const aiImageInfos: ImageInfo[] = [];
+      const imageIdToPathMap: Record<string, string> = {};
+      const imagePaths: string[] = [];
+
+      for (const { r2Path, kind, description } of agentRequestImages) {
+        const id = generateId();
+        const info: ImageInfo = { id };
+        if (kind) info.kind = kind;
+        if (description) info.description = description;
+        aiImageInfos.push(info);
+        imageIdToPathMap[id] = r2Path;
+        imagePaths.push(r2Path);
+      }
+
+      const textImageInfo = '```json\n' + JSON.stringify(aiImageInfos) + '\n```';
+      let userContent0Text = `Please process the following documents:\n${textImageInfo}\n`;
 
       return {
+        imagePaths,
         systemContent,
-        r2Paths: agentRequestImages.map(({ r2Path }) => r2Path),
+        userContent0Text,
+        imageIdToPathMap,
+        customInstruction: agentRequest.customInstruction,
+        agentRequestImages: agentRequestImages.map(i => ({ ...i, id: generateId() })),
       };
     });
+
+    let runLlm = true;
+    let turn = 0;
+    const messages: ChatCompletionMessageParam[] = [
+      { role: 'system', content: preparationResult.systemContent },
+      { role: 'user', content: [{ type: 'text', text: preparationResult.userContent0Text }] },
+    ];
+
+    while (runLlm) {
+      const llmRunResult = await step.do(`llm-run-turn-${turn}`, async () => {
+        if (turn === 0) {
+          const userContent = messages[1].content as UserMessageContentPart[];
+          const imagesAsContent = await Promise.all(
+            preparationResult.imagePaths.map(path =>
+              this.getAgentImageAsBase64(path).then(
+                url => ({ type: 'image_url', image_url: { url } }) satisfies UserMessageContentPart,
+              ),
+            ),
+          );
+
+          userContent.push(
+            {
+              type: 'text',
+              text: 'The images are available this time, analyzed it. You MUST extract all visible text verbatim, ignore all background noise',
+            },
+            ...imagesAsContent,
+          );
+        }
+      });
+
+      // tools executions
+    }
+  }
+
+  async getAgentImageAsBase64(r2Path: string) {
+    const object = await this.env.bk.get(r2Path);
+
+    if (!object) {
+      throw new NonRetryableError(`failed to retrieve image for ${r2Path}`);
+    }
+    const contentType = object.httpMetadata?.contentType || 'image/jpeg';
+
+    const arrayBuffer = await object.arrayBuffer();
+    const base64String = new Uint8Array(arrayBuffer).toBase64();
+    return `data:${contentType};base64,${base64String}`;
   }
 }
