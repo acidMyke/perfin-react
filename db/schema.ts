@@ -407,16 +407,16 @@ export const agentExpenseDraftsTable = sqliteTable(
 
 export type TargetFieldValues = 'accountId' | 'categoryId' | 'shopName' | 'shopMall' | 'itemName' | 'adjustmentName';
 
-export const agentKeywordLookupsTable = sqliteTable(
-  'agent_keyword_lookups',
+export const agentAnchorLookupsTable = sqliteTable(
+  'agent_anchor_lookups',
   {
     id: integer().primaryKey({ autoIncrement: true }),
     userId: idColumn(),
-    keyword: text().notNull(),
+    anchor: citext().notNull(),
     expenseId: idColumn(),
     targetField: text().notNull().$type<TargetFieldValues>(),
     value: text().notNull(),
     createdAt: createdAtColumn(),
   },
-  t => [index('idx_agent_keyword_lookups_user_id_keyword').on(t.userId, t.keyword)],
+  t => [index('idx_agent_anchor_lookups_user_id_anchor').on(t.userId, t.anchor)],
 );
