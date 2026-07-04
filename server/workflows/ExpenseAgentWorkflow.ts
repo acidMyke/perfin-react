@@ -19,20 +19,14 @@ const expenseAgentWorkflowParamSchema = z.object({
 
 type ExpenseAgentWorkflowParam = z.infer<typeof expenseAgentWorkflowParamSchema>;
 
-const MAX_TURN = 20;
+const MAX_TURN = 10;
 
 export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWorkflowParam> {
   async run(event: WorkflowEvent<ExpenseAgentWorkflowParam>, step: WorkflowStep) {
     const db = createDatabase(this.env);
+    const { agentRequestId, userId } = expenseAgentWorkflowParamSchema.parse(event.payload);
+
     const preparationResult = await step.do('prepare', async () => {
-      const parseResult = expenseAgentWorkflowParamSchema.safeParse(event.payload);
-
-      if (!parseResult.success) {
-        throw new NonRetryableError('Invalid payload');
-      }
-
-      const { agentRequestId, userId } = parseResult.data;
-
       const [[agentRequest], agentRequestImages, accounts, categories, subjectsAnchors] = await db.batch([
         db
           .select({
@@ -167,15 +161,14 @@ ${textCategories}
       };
     });
 
-    let runLlm = true;
     let turn = 0;
     const messages: ChatCompletionMessageParam[] = [
       { role: 'system', content: preparationResult.systemContent },
       { role: 'user', content: [{ type: 'text', text: preparationResult.userContent0Text }] },
     ];
 
-    while (runLlm) {
-      const llmRunResult = await step.do(`llm-run-turn-${turn}`, async () => {
+    while (turn < MAX_TURN) {
+      const llmRunOutput = await step.do(`llm-run-turn-${turn}`, async () => {
         if (turn === 0) {
           const userContent = messages[1].content as UserMessageContentPart[];
           const imagesAsContent = await Promise.all(
@@ -194,9 +187,36 @@ ${textCategories}
             ...imagesAsContent,
           );
         }
+
+        return await this.env.ai.run('@cf/moonshotai/kimi-k2.6', {
+          messages,
+          temperature: 0.1,
+          reasoning_effort: 'medium',
+          parallel_tool_calls: true,
+          user: userId,
+          tool_choice: turn < 2 ? 'required' : 'auto',
+          n: 1,
+        });
       });
 
       // tools executions
+      const outproResult = await step.do(`turn-${turn}-outpro`, async () => {
+        const messagesToAppend: ChatCompletionMessageParam[] = [];
+        const { message } = llmRunOutput.choices[0];
+        if (message.tool_calls?.length) {
+          const toolMessages = await this.executeToolCalls(agentRequestId, userId, message.tool_calls);
+          messagesToAppend.push({ ...message, function_call: undefined }, ...toolMessages);
+          return { breakLoop: false, messagesToAppend };
+        }
+
+        return { breakLoop: true };
+      });
+
+      if (outproResult.breakLoop) {
+        break;
+      }
+
+      turn++;
     }
   }
 
@@ -211,5 +231,13 @@ ${textCategories}
     const arrayBuffer = await object.arrayBuffer();
     const base64String = new Uint8Array(arrayBuffer).toBase64();
     return `data:${contentType};base64,${base64String}`;
+  }
+
+  async executeToolCalls(
+    agentRequestId: string,
+    userId: string,
+    toolCalls: ChatCompletionMessageToolCall[],
+  ): Promise<ToolMessage[]> {
+    const db = createDatabase(this.env);
   }
 }
