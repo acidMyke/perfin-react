@@ -6,6 +6,7 @@ import {
   categoriesTable,
   generateId,
 } from '#schema';
+import { agentToolDefinitions, executeChatToolCalls } from '#server/lib/agent-tools';
 import { createDatabase, jsonGroupArray } from '#server/lib/db';
 import { WorkflowEntrypoint, type WorkflowStep, type WorkflowEvent } from 'cloudflare:workers';
 import { NonRetryableError } from 'cloudflare:workflows';
@@ -195,6 +196,7 @@ ${textCategories}
           parallel_tool_calls: true,
           user: userId,
           tool_choice: turn < 2 ? 'required' : 'auto',
+          tools: agentToolDefinitions,
           n: 1,
         });
       });
@@ -204,7 +206,11 @@ ${textCategories}
         const messagesToAppend: ChatCompletionMessageParam[] = [];
         const { message } = llmRunOutput.choices[0];
         if (message.tool_calls?.length) {
-          const toolMessages = await this.executeToolCalls(agentRequestId, userId, message.tool_calls);
+          const toolMessages = await executeChatToolCalls(message.tool_calls, {
+            env: this.env,
+            agentRequestId,
+            userId,
+          });
           messagesToAppend.push({ ...message, function_call: undefined }, ...toolMessages);
           return { breakLoop: false, messagesToAppend };
         }
@@ -231,13 +237,5 @@ ${textCategories}
     const arrayBuffer = await object.arrayBuffer();
     const base64String = new Uint8Array(arrayBuffer).toBase64();
     return `data:${contentType};base64,${base64String}`;
-  }
-
-  async executeToolCalls(
-    agentRequestId: string,
-    userId: string,
-    toolCalls: ChatCompletionMessageToolCall[],
-  ): Promise<ToolMessage[]> {
-    const db = createDatabase(this.env);
   }
 }
