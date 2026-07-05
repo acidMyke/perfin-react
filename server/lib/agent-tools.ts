@@ -7,6 +7,7 @@ function defineTool<TSchema extends z.ZodTypeAny, TContext, TResult>(config: {
   name: string;
   description: string;
   schema: TSchema;
+  disableUpfrontValidation: boolean;
   execute(args: z.infer<TSchema>, ctx: TContext): Promise<TResult>;
 }) {
   return config;
@@ -38,16 +39,23 @@ async function executeFunctionToolCall(
       content: `Unknown tool: ${call.function.name}`,
     };
   }
-  const parsed = tool.schema.safeParse(JSON.parse(call.function.arguments));
+  const { schema, disableUpfrontValidation } = tool;
+  let args = JSON.parse(call.function.arguments);
+  if (!disableUpfrontValidation) {
+    const parsed = schema.safeParse(args);
 
-  if (!parsed.success) {
-    return {
-      role: 'tool',
-      tool_call_id: call.id,
-      content: JSON.stringify({ error: 'Invalid arguments', issues: parsed.error.issues }),
-    };
+    if (!parsed.success) {
+      return {
+        role: 'tool',
+        tool_call_id: call.id,
+        content: JSON.stringify({ error: 'Invalid arguments', issues: parsed.error.issues }),
+      };
+    }
+
+    args = parsed.data;
   }
-  const result = await tool.execute(parsed.data, ctx);
+
+  const result = await tool.execute(args, ctx);
 
   return {
     role: 'tool',
