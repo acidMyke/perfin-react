@@ -1,7 +1,7 @@
 import z from 'zod';
 import { createDatabase, omitColumns, type AppDatabase } from './db';
 import { and, eq, getColumns, gte, inArray, lte, or } from 'drizzle-orm';
-import { expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '#schema';
+import { agentAnchorLookupsTable, expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '#schema';
 import { endOfDay, startOfDay } from 'date-fns';
 import { getLocationBoxId } from './utils';
 
@@ -19,11 +19,7 @@ function defineTool<TSchema extends z.ZodTypeAny, TResult>(config: {
 
 const queryExistingExpenseRecordTool = defineTool({
   name: 'query_existing_records',
-  description: `Retrieve existing expenses using exactly one mutually exclusive filter:
-
-- \`{ fromDate, toDate }\`
-- \`{ expenseIds }\`
-- \`{ latitude, longitude }\` (≈222m radius)`,
+  description: `Retrieve multiple existing expenses`,
   schema: z.array(
     z.union([
       z
@@ -118,7 +114,31 @@ const queryExistingExpenseRecordTool = defineTool({
   },
 });
 
-const tools: ReturnType<typeof defineTool>[] = [queryExistingExpenseRecordTool];
+const lookupAnchorsTool = defineTool({
+  name: 'lookup_anchors',
+  description: 'Find actual value using historical anchor',
+  schema: z.array(
+    z.strictObject({
+      anchors: z.array(z.string()).describe('value to look up'),
+      targetField: z
+        .enum(['accountId', 'categoryId', 'shopName', 'shopMall', 'itemName', 'adjustmentName'])
+        .describe('Specifies which field the anchors should be resolved into'),
+    }),
+  ),
+  async execute(args, ctx) {
+    const { db, userId } = ctx;
+    const anyOf = args.map(({ anchors, targetField }) =>
+      and(inArray(agentAnchorLookupsTable.anchor, anchors), eq(agentAnchorLookupsTable.targetField, targetField)),
+    );
+
+    return await db
+      .select(omitColumns(getColumns(agentAnchorLookupsTable), 'id', 'userId'))
+      .from(agentAnchorLookupsTable)
+      .where(and(eq(agentAnchorLookupsTable.userId, userId), or(...anyOf)));
+  },
+});
+
+const tools: ReturnType<typeof defineTool>[] = [queryExistingExpenseRecordTool, lookupAnchorsTool];
 const toolMap = Object.fromEntries(tools.map(tool => [tool.name, tool]));
 
 export const agentToolDefinitions: ChatCompletionTool[] = tools.map(tool => ({
