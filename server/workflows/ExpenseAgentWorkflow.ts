@@ -243,6 +243,7 @@ export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWo
             accountIds: agentRequestsTable.accountIds,
             categoryIds: agentRequestsTable.categoryIds,
             customInstruction: agentRequestsTable.customInstruction,
+            submittedAt: agentRequestsTable.createdAt,
           })
           .from(agentRequestsTable)
           .where(and(eq(agentRequestsTable.id, agentRequestId), eq(agentRequestsTable.userId, userId)))
@@ -283,26 +284,29 @@ export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWo
         throw new NonRetryableError('Request not found');
       }
 
+      const { accountIds, categoryIds, customInstruction, ...submissionContext } = agentRequest;
+
       const anchorsMap = new Map<string, string[]>();
       for (const { anchors, value } of subjectsAnchors) {
         anchorsMap.set(value, anchors);
       }
 
       let eligibleAccounts = accounts.map(a => ({ ...a, anchors: anchorsMap.get(a.id) }));
-      if (agentRequest.accountIds && agentRequest.accountIds.length > 0) {
-        eligibleAccounts = eligibleAccounts.filter(({ id }) => agentRequest.accountIds!.includes(id));
+      if (accountIds && accountIds.length > 0) {
+        eligibleAccounts = eligibleAccounts.filter(({ id }) => accountIds!.includes(id));
       }
 
       let eligibleCategories = categories.map(c => ({ ...c, anchors: anchorsMap.get(c.id) }));
-      if (agentRequest.categoryIds && agentRequest.categoryIds.length > 0) {
-        eligibleCategories = eligibleCategories.filter(({ id }) => agentRequest.categoryIds!.includes(id));
+      if (categoryIds && categoryIds.length > 0) {
+        eligibleCategories = eligibleCategories.filter(({ id }) => categoryIds!.includes(id));
       }
 
       return {
         eligibleAccounts,
         eligibleCategories,
-        customInstruction: agentRequest.customInstruction,
+        customInstruction,
         agentRequestImages,
+        submissionContext,
       };
     });
 
@@ -349,12 +353,97 @@ ${metadata ?? 'Not provided'}
       });
 
       return {
-        responseMessage: response.choices[0].message,
+        resMsg: response.choices[0].message,
       };
     });
 
-    let turn = 0;
     const conversationMessages: ChatCompletionMessageParam[] = [];
+    for (let turn = 0; turn < MAX_TURN; turn++) {
+      const enrichmentTurnResult = await step.do(`enrich-turn-${turn}`, async () => {
+        const { eligibleAccounts, eligibleCategories, customInstruction, submissionContext } = preparationResult;
+        const { resMsg } = extractionResult;
+        const userContext = `### Extracted Data
+
+${resMsg}
+
+---
+
+### Submission Context
+\`\`\`json
+${JSON.stringify(submissionContext)}
+\`\`\`
+
+---
+
+### Existing accounts
+\`\`\`json
+${JSON.stringify(eligibleAccounts)}
+\`\`\`
+
+---
+
+### Existing categories
+\`\`\`json
+${JSON.stringify(eligibleCategories)}
+\`\`\`
+
+---
+
+### User custom instruction
+
+${customInstruction}
+`;
+        const response = await this.env.ai.run(
+          '@cf/moonshotai/kimi-k2.6',
+          {
+            messages: [
+              { role: 'system', content: enrichmentSystemContent },
+              { role: 'user', content: userContext },
+              ...conversationMessages,
+            ],
+            n: 1,
+            temperature: 0.1,
+            top_p: 1,
+            reasoning_effort: 'medium',
+            user: userId,
+            tools: agentToolDefinitions,
+            parallel_tool_calls: true,
+            tool_choice: 'auto',
+            presence_penalty: 0,
+            frequency_penalty: 0,
+            logprobs: false,
+            stream: false,
+          },
+          {
+            extraHeaders: { 'x-session-affinity': agentRequestId },
+          },
+        );
+
+        return {
+          resMsg: response.choices[0].message,
+        };
+      });
+
+      const turnOutproResult = await step.do(`turn-${turn}-outpro`, async () => {
+        const messagesToAppend: ChatCompletionMessageParam[] = [];
+        const { resMsg: message } = enrichmentTurnResult;
+        if (message.tool_calls?.length) {
+          const toolMessages = await executeChatToolCalls(message.tool_calls, {
+            env: this.env,
+            agentRequestId,
+            userId,
+          });
+          messagesToAppend.push({ ...message, function_call: undefined }, ...toolMessages);
+          return { breakLoop: false, messagesToAppend };
+        }
+
+        return { breakLoop: true };
+      });
+
+      if (turnOutproResult.breakLoop) {
+        break;
+      }
+    }
   }
 
   async getAgentImageAsBase64(r2Path: string) {
