@@ -387,6 +387,7 @@ export const agentImagesTable = sqliteTable(
     r2Path: text('r2_path').notNull(),
     kind: text(),
     description: text(),
+    metadata: text(),
   },
   t => [index('idx_agent_images_ar_id').on(t.agentRequestId)],
 );

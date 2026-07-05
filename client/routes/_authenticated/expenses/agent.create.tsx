@@ -102,10 +102,11 @@ function RouteComponent() {
       let atLeastOneFile = false;
       accountIds.forEach(({ value }) => formData.append('accountIds', value));
       categoryIds.forEach(({ value }) => formData.append('categoryIds', value));
-      uploadedImages.forEach(({ kind, file }, index) => {
+      uploadedImages.forEach(({ kind, file, tags }, index) => {
         if (!file) return;
         atLeastOneFile = true;
         if (kind?.value) formData.append(`uploadedImages.${index}.kind`, kind.value);
+        if (tags) formData.append(`uploadedImages.${index}.metadata`, JSON.stringify(tags));
         formData.append(`uploadedImages.${index}.image`, file);
       });
       if (customInstruction) {

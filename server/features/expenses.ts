@@ -406,6 +406,7 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
                 kind: zfd.text().optional(),
                 image: z.instanceof(Blob, { message: 'An image file asset is required' }),
                 description: zfd.text(z.string().optional()),
+                metadata: zfd.text(z.string().optional()),
               }),
             )
             .min(1),
@@ -423,7 +424,7 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
     const r2Promises: Promise<R2Object | null>[] = [];
     const agentImages: (typeof agentImagesTable.$inferInsert)[] = [];
 
-    for (const { image, kind, description } of uploadedImages) {
+    for (const { image, kind, description, metadata } of uploadedImages) {
       const imageId = generateId();
       const now = new Date();
       const r2Path = `agent-request/${formatDate(new Date(), 'yyyy-MM')}/${userId}/${imageId}`;
@@ -432,7 +433,7 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
         httpMetadata: { contentType: image.type },
         customMetadata: { userId, uploadedAt: Math.floor(now.getTime() / 1000).toString() },
       };
-      agentImages.push({ agentRequestId, r2Path, kind, description });
+      agentImages.push({ agentRequestId, r2Path, kind, description, metadata });
       r2Promises.push(env.bk!.put(r2Path, image, putOptions));
     }
 
