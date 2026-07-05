@@ -20,52 +20,46 @@ const expenseAgentWorkflowParamSchema = z.object({
 
 type ExpenseAgentWorkflowParam = z.infer<typeof expenseAgentWorkflowParamSchema>;
 
-const MAX_TURN = 10;
-const ocrSystemContent = `### Role
+const MAX_TURN = 4;
+const extractionSystemContent = `### Role
 You are an expert document extraction assistant for a Singapore expense tracking application.
 
 Your sole responsibility is to extract every piece of information from the supplied document as accurately and completely as possible.
-Do not perform business decisions such as duplicate detection, account matching, category selection, or persistence.
+Do not perform duplicate detection, account matching, category selection, merchant normalization, or any other business logic.
 
-Your output will be used by a later validation and enrichment stage.
+This is the first stage of a multi-stage pipeline. Your output will be consumed by another AI assistant for reconciliation, validation, enrichment and draft creation.
 
 ---
 
-### First-Pass Document Extraction
+### Input
+
+Each document is provided in this order:
+
+1. Optional user metadata (JSON)
+2. EXIF metadata
+3. Image
+
+User metadata (\`kind\`, \`description\`) and EXIF are supplemental context only. If they conflict with the document, always trust the document.
+
+Priority:
+1. Document
+2. User metadata
+3. EXIF
+
+
+---
+
+### Extraction
 
 Maximize recall over interpretation.
 
-Extract every visible document element in a single pass.
+Extract every visible document element, preserving the original wording, spelling, capitalization, punctuation, numbers, dates and formatting whenever possible.
 
-Preserve text verbatim wherever possible, including:
-- spelling
-- capitalization
-- punctuation
-- dates
-- numbers
-- receipt numbers
-- reference numbers
-- account numbers
-- merchant names
-- addresses
-- GST registration numbers
-- tables
-- line items
-- balances
-- totals
-- taxes
-- fees
-- discounts
-- payment information
-- notes
-- footer text
+Capture all document details, including document information, merchant or institution, references, addresses, account/payment information, transactions, line items, taxes, fees, discounts, totals, balances and notes.
 
-Maintain the original reading order and table structure whenever possible.
+Preserve reading order and table structure.
 
-Do not summarize.
-Do not normalize.
-Do not infer missing values.
-Do not silently omit information.
+Do not summarize, normalize, infer or omit information.
 
 If text is partially unreadable, extract the visible portion and indicate uncertainty instead of inventing missing characters.
 Ignore only non-document background elements such as shadows, fingers, desks or surrounding objects.
@@ -76,24 +70,13 @@ If a reliable English translation is obvious, you may provide it as an additiona
 
 ---
 
-### EXIF Metadata
+### Multiple Images
 
-Image EXIF metadata is provided as supplemental evidence. Compare it against the document.
+Process every image.
 
-Examples include:
+Merge images belonging to the same document, avoid duplicate extraction, preserve document order, and continue tables across pages.
 
-- receipt date vs capture date
-- statement period vs capture date
-- merchant location vs GPS
-- timezone consistency
-
-Never overwrite document values using EXIF.
-
-Use EXIF only to:
-
-- increase confidence
-- explain inconsistencies
-- fill contextual metadata when the document is silent.
+If unrelated documents are detected, extract each separately.
 
 ---
 
@@ -104,6 +87,27 @@ If the document explicitly uses a currency other than SGD, reject it.
 If no currency is shown, assume SGD.
 
 Never convert currencies.
+
+---
+
+### Output
+
+Produce a structured Markdown document. Use clear section headings.
+
+Do not output JSON. Do not include explanations, reasoning, confidence scores, or commentary unless explicitly requested.
+
+Your output will be consumed by another AI assistant. It MUST be complete, deterministic and optimized for completeness, consistency, and readability rather than brevity.
+
+Include sections when applicable but not limited to:
+
+## Document Type
+## Merchant / Account
+## Document Information
+## Transactions or Line Items
+## Adjustments
+## Totals / Balances
+## EXIF Observations
+## Raw OCR
 `;
 
 const enrichmentSystemContent = `### Role
@@ -224,7 +228,8 @@ Before saving, ensure:
 - duplicate detection completed
 - merchant, account and category resolution attempted
 
-Only call \`save_expense_draft\` once validation is complete and no further tool calls are likely to improve the draft.`;
+Only call \`save_expense_draft\` once validation is complete and no further tool calls are likely to improve the draft.
+`;
 
 export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWorkflowParam> {
   async run(event: WorkflowEvent<ExpenseAgentWorkflowParam>, step: WorkflowStep) {
@@ -247,6 +252,7 @@ export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWo
             r2Path: agentImagesTable.r2Path,
             kind: agentImagesTable.kind,
             description: agentImagesTable.description,
+            metadata: agentImagesTable.metadata,
           })
           .from(agentImagesTable)
           .where(eq(agentImagesTable.agentRequestId, agentRequestId)),
@@ -286,147 +292,69 @@ export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWo
       if (agentRequest.accountIds && agentRequest.accountIds.length > 0) {
         eligibleAccounts = eligibleAccounts.filter(({ id }) => agentRequest.accountIds!.includes(id));
       }
-      const textAccounts = '```json\n' + JSON.stringify(eligibleAccounts) + '\n```';
 
       let eligibleCategories = categories.map(c => ({ ...c, anchors: anchorsMap.get(c.id) }));
       if (agentRequest.categoryIds && agentRequest.categoryIds.length > 0) {
         eligibleCategories = eligibleCategories.filter(({ id }) => agentRequest.categoryIds!.includes(id));
       }
-      const textCategories = '```json\n' + JSON.stringify(eligibleCategories) + '\n```';
-
-      let systemContent = `### Role
-You are an expert expense-tracking assistant. Your job is to extract financial data from documents then either create new drafts or edit existing records using the \`save_expense_draft\` tool.
-
-### Image Data Retrieval
-* First-Pass Extraction: Extract all necessary data completely during the first pass, visible text verbatim, ignore background noise. Make best guess if text is unclear or blurry. Do not truncate. Do not summarize
-
-### Creation vs. Editing Logic
-Always use \`query_existing_records\` to find existing record first before creating or when processing statements.
-* If NO matching record exists: Set the root \`id\` of expense draft to \`null\`.
-* If a matching record EXISTS: 
-1. Set root \`id\` to the existing ID. Update incorrect values. 
-2. Preserve existing valid IDs for items and adjustments. 
-3. If an item/adjustment was removed, set \`isDeleted: true\`. 
-4. Add new items with a temporary ID
-
-### Structural Rules
-* Naming: You MUST use english names, make the best guess for names not in english or heavily abbriviated
-* Internal Names: You MUST use \`_gst\` for GST and \`_service\` for service charges.
-* Currency & Math: Convert all monetary values to cents (multiply by 100) and percentage to basis-points (1 basis point = 0.01%). Discounts are negative in \`amountCents\` or \`rateBps\`.
-* If document is not a statement, every expense can have child items (individual products / services) and adjustments (GST, service charges, vouchers, discounts). Make sure to separate these out.
-* If document is a statement, audit existing expense records for the earliest - latest records of the statement, specify \`netAmountCents\` and empty array for items & adjustments 
-* Ajustment:
-  * set \`rateBps\` to \`null\` if the adjustment are flat adjustment
-  * for rate adjustment, set \`expenseItemId\` to the item if an adjustment only applies for 1 item
-  * if \`rateBps\` is not null, calculation system will ignore \`amountCents\`
-
-### Anchors Feedback Loop
-* Extraction: Populate \`anchors\` arrays with the exact, literal text found on the documents that led to your match. Multiple anchors are allowed. Non-english anchors are allowed 
-* You may use the \`lookup_anchors\` tool to find anchors that has been previously found for all name fields.
-
-### Accounts & Categories
-* Try to match existing accounts & categories, if found set the \`value\` as \`id\`, \`label\` will be ignored, If not found, suggest new ones by setting \`value\` to \`null\`.
-* If there is only 1 provided value in existing, you must assume as that option and populate anchors.
-* Existing accounts
-${textAccounts}
-* Existing categories
-${textCategories}
-
-### Tool & Error Guidelines
-* Batching: All your tools accept arrays. Batch your requests.
-* Self-Correction: Fix data structures and retry if any tools returns validation errors.
-`;
-
-      type ImageInfo = { id: string; kind?: string; description?: string };
-      const aiImageInfos: ImageInfo[] = [];
-      const imageIdToPathMap: Record<string, string> = {};
-      const imagePaths: string[] = [];
-
-      for (const { r2Path, kind, description } of agentRequestImages) {
-        const id = generateId();
-        const info: ImageInfo = { id };
-        if (kind) info.kind = kind;
-        if (description) info.description = description;
-        aiImageInfos.push(info);
-        imageIdToPathMap[id] = r2Path;
-        imagePaths.push(r2Path);
-      }
-
-      const textImageInfo = '```json\n' + JSON.stringify(aiImageInfos) + '\n```';
-      let userContent0Text = `Please process the following documents:\n${textImageInfo}\n`;
 
       return {
-        imagePaths,
-        systemContent,
-        userContent0Text,
-        imageIdToPathMap,
+        eligibleAccounts,
+        eligibleCategories,
         customInstruction: agentRequest.customInstruction,
-        agentRequestImages: agentRequestImages.map(i => ({ ...i, id: generateId() })),
+        agentRequestImages,
+      };
+    });
+
+    const extractionResult = await step.do('extract', async () => {
+      const { agentRequestImages } = preparationResult;
+      const userContentParts = await Promise.all(
+        agentRequestImages.flatMap(
+          ({ kind, description, metadata, r2Path }, index) =>
+            [
+              {
+                type: 'text',
+                text: `# Submission Document ${index}
+Metadata
+${kind || description ? JSON.stringify({ kind, description }) : 'Not provided'}
+
+EXIF
+${metadata ?? 'Not provided'} 
+`,
+              },
+              this.getAgentImageAsBase64(r2Path).then(url => ({
+                type: 'image_url',
+                image_url: { url },
+              })),
+            ] satisfies (Promise<UserMessageContentPart> | UserMessageContentPart)[],
+        ),
+      );
+
+      const response = await this.env.ai.run('@cf/moonshotai/kimi-k2.6', {
+        messages: [
+          { role: 'system', content: extractionSystemContent },
+          { role: 'user', content: userContentParts },
+        ],
+        n: 1,
+        temperature: 0.05,
+        top_p: 1,
+        reasoning_effort: 'medium',
+        user: userId,
+        tool_choice: 'none',
+        presence_penalty: 0,
+        frequency_penalty: 0,
+        logprobs: false,
+        parallel_tool_calls: false,
+        stream: false,
+      });
+
+      return {
+        responseMessage: response.choices[0].message,
       };
     });
 
     let turn = 0;
     const conversationMessages: ChatCompletionMessageParam[] = [];
-
-    while (turn < MAX_TURN) {
-      const llmRunOutput = await step.do(`llm-run-turn-${turn}`, async () => {
-        const messages: ChatCompletionMessageParam[] = [{ role: 'system', content: preparationResult.systemContent }];
-        const userContent: UserMessageContentPart[] = [{ type: 'text', text: preparationResult.userContent0Text }];
-
-        if (turn === 0) {
-          userContent.push({
-            type: 'text',
-            text: 'The images are available this time, analyzed it. You MUST extract all visible text verbatim, ignore all background noise',
-          });
-
-          const imagesAsContent = await Promise.all(
-            preparationResult.imagePaths.map(path =>
-              this.getAgentImageAsBase64(path).then(
-                url => ({ type: 'image_url', image_url: { url } }) satisfies UserMessageContentPart,
-              ),
-            ),
-          );
-
-          userContent.push(...imagesAsContent);
-        }
-
-        messages.push({ role: 'user', content: userContent }, ...conversationMessages);
-
-        return await this.env.ai.run('@cf/moonshotai/kimi-k2.6', {
-          messages,
-          temperature: 0.1,
-          reasoning_effort: 'medium',
-          parallel_tool_calls: true,
-          user: userId,
-          tool_choice: turn < 2 ? 'required' : 'auto',
-          tools: agentToolDefinitions,
-          n: 1,
-        });
-      });
-
-      // tools executions
-      const outproResult = await step.do(`turn-${turn}-outpro`, async () => {
-        const messagesToAppend: ChatCompletionMessageParam[] = [];
-        const { message } = llmRunOutput.choices[0];
-        if (message.tool_calls?.length) {
-          const toolMessages = await executeChatToolCalls(message.tool_calls, {
-            env: this.env,
-            agentRequestId,
-            userId,
-          });
-          messagesToAppend.push({ ...message, function_call: undefined }, ...toolMessages);
-          return { breakLoop: false, messagesToAppend };
-        }
-
-        return { breakLoop: true };
-      });
-
-      if (outproResult.breakLoop) {
-        break;
-      }
-
-      turn++;
-    }
   }
 
   async getAgentImageAsBase64(r2Path: string) {
