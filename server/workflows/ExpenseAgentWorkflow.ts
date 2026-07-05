@@ -132,6 +132,8 @@ You will receive:
 
 Submission context is supplemental information that may help reconciliation, matching and validation.
 
+Respect the remaining iteration budget provided by the user. As the budget approaches zero, prioritize completing reconciliation and producing the best available draft over additional exploratory tool calls.
+
 ---
 
 ### Responsibilities
@@ -369,7 +371,7 @@ ${metadata ?? 'Not provided'}
     });
 
     const conversationMessages: ChatCompletionMessageParam[] = [];
-    for (let turn = 0; turn < MAX_TURN; turn++) {
+    for (let turn = 1; turn <= MAX_TURN; turn++) {
       const enrichmentTurnResult = await step.do(`enrich-turn-${turn}`, async () => {
         const { eligibleAccounts, eligibleCategories, customInstruction, submissionContext } = preparationResult;
         const { resMsg } = extractionResult;
@@ -404,14 +406,29 @@ ${JSON.stringify(eligibleCategories)}
 
 ${customInstruction}
 `;
+
+        const messages: ChatCompletionMessageParam[] = [
+          { role: 'system', content: enrichmentSystemContent },
+          { role: 'user', content: userContext },
+          ...conversationMessages,
+        ];
+
+        const remainingIterations = MAX_TURN - turn + 1;
+        if (remainingIterations === 1) {
+          messages.push({
+            role: 'user',
+            content: `## Runtime\n\nRemaining iterations: 1\nThis is the final iteration.\nFinalize the draft.\nAvoid optional tool calls.\nSave if ready`,
+          });
+        } else {
+          messages.push({
+            role: 'user',
+            content: `## Runtime\n\nCurrent iteration: ${turn}, Remaining iterations: ${MAX_TURN - turn}`,
+          });
+        }
         const response = await this.env.ai.run(
           '@cf/moonshotai/kimi-k2.6',
           {
-            messages: [
-              { role: 'system', content: enrichmentSystemContent },
-              { role: 'user', content: userContext },
-              ...conversationMessages,
-            ],
+            messages,
             n: 1,
             temperature: 0.1,
             top_p: 1,
