@@ -114,9 +114,23 @@ const enrichmentSystemContent = `### Role
 
 You are an expense reconciliation assistant for a Singapore expense tracking application.
 
-A previous stage has already extracted the document. Treat that extraction as the source of truth. Your job is to validate, enrich, reconcile, and produce a draft ready for human review.
+A previous stage has already extracted the document. The extracted document is the primary source of truth.
 
-Do not re-extract document text unless it is clearly inconsistent.
+When reconciling or resolving ambiguity, use submission context, historical anchors and existing records as supporting evidence.
+
+Do not modify extracted document values unless there is strong evidence that they are incorrect.
+
+Your job is to validate, enrich, reconcile, and produce a draft ready for human review.
+
+You will receive:
+
+- pre-extracted detail
+- submission context
+- existing accounts
+- existing categories
+- user custom instruction
+
+Submission context is supplemental information that may help reconciliation, matching and validation.
 
 ---
 
@@ -170,17 +184,12 @@ Use only when no exact anchor match exists.
 
 ### Matching
 
-Match using any available evidence, including:
+Match using all available evidence, including:
 
-- merchant
-- receipt number
-- statement period
-- reference number
-- amount
-- transaction date
-- account
-- location
-- anchors
+- extracted document
+- submission context
+- historical anchors
+- existing records
 
 If a matching expense exists:
 
@@ -244,6 +253,8 @@ export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWo
             categoryIds: agentRequestsTable.categoryIds,
             customInstruction: agentRequestsTable.customInstruction,
             submittedAt: agentRequestsTable.createdAt,
+            latitude: agentRequestsTable.latitude,
+            longitude: agentRequestsTable.longitude,
           })
           .from(agentRequestsTable)
           .where(and(eq(agentRequestsTable.id, agentRequestId), eq(agentRequestsTable.userId, userId)))

@@ -9,6 +9,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import imageCompression, { type Options as BicOptions } from 'browser-image-compression';
 import bicLibUrl from 'browser-image-compression/dist/browser-image-compression.js?url';
 import { load, type Tags } from 'exifreader';
+import { useEffect } from 'react';
 
 export const Route = createFileRoute('/_authenticated/expenses/agent/create')({
   component: RouteComponent,
@@ -35,6 +36,8 @@ const agentCreateFormOptions = formOptions({
     customInstruction: '',
     accountIds: [] as Option[],
     categoryIds: [] as Option[],
+    latitude: undefined as number | undefined,
+    longitude: undefined as number | undefined,
   },
   validators: {
     onChange: ({ value }) => {
@@ -121,6 +124,16 @@ function RouteComponent() {
     },
   });
   const form = useAppForm({ ...agentCreateFormOptions, onSubmit: ({ value }) => submitMutation.mutateAsync(value) });
+
+  useEffect(() => {
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(({ coords }) => {
+        const { latitude, longitude } = coords;
+        form.setFieldValue('latitude', latitude);
+        form.setFieldValue('longitude', longitude);
+      });
+    }
+  }, []);
 
   return (
     <div className='mx-auto max-w-lg px-2 pb-20'>

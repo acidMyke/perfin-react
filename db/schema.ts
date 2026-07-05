@@ -369,6 +369,8 @@ export const agentRequestsTable = sqliteTable(
     accountIds: text({ mode: 'json' }).$type<string[]>(),
     categoryIds: text({ mode: 'json' }).$type<string[]>(),
     customInstruction: text(),
+    latitude: real(),
+    longitude: real(),
     status: text().notNull().default('pending'),
     createdAt: createdAtColumn(),
     settledAt: integer({ mode: 'timestamp' }),

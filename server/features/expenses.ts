@@ -412,13 +412,15 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
             .min(1),
         ),
         customInstruction: zfd.text().optional(),
+        latitude: zfd.numeric(z.number().optional()),
+        longitude: zfd.numeric(z.number().optional()),
       }),
     }),
   ),
   async request => {
     const { context, validated } = request;
     const { db, env, userId } = context;
-    const { accountIds, categoryIds, uploadedImages, customInstruction } = validated.body;
+    const { accountIds, categoryIds, uploadedImages, customInstruction, latitude, longitude } = validated.body;
     const agentRequestId = generateId();
 
     const r2Promises: Promise<R2Object | null>[] = [];
@@ -445,6 +447,8 @@ export const expenseRouter = createIttyAppRouter({ base: '/expenses' }).post(
         categoryIds,
         customInstruction,
         imageCount: uploadedImages.length,
+        latitude,
+        longitude,
       }),
       db.insert(agentImagesTable).values(agentImages),
     ]);
