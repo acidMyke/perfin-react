@@ -8,6 +8,7 @@ import { useSuspenseQuery, useMutation } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import imageCompression, { type Options as BicOptions } from 'browser-image-compression';
 import bicLibUrl from 'browser-image-compression/dist/browser-image-compression.js?url';
+import { load, type Tags } from 'exifreader';
 
 export const Route = createFileRoute('/_authenticated/expenses/agent/create')({
   component: RouteComponent,
@@ -19,6 +20,7 @@ type AgentImageFile = {
   kind: undefined | Option;
   file?: Blob;
   description?: string | null;
+  tags?: Tags;
 };
 
 const imageKind = ['recipe', 'statement'];
@@ -52,29 +54,42 @@ const bicOptions: BicOptions = {
   maxWidthOrHeight: 1024,
 };
 
+async function processImageFile(id: string, file: File) {
+  const [compressionResult, exifResult] = await Promise.allSettled([imageCompression(file, bicOptions), load(file)]);
+  return {
+    id,
+    file:
+      compressionResult.status === 'fulfilled' && compressionResult.value instanceof Blob
+        ? compressionResult.value
+        : undefined,
+    tags: exifResult.status === 'fulfilled' ? exifResult.value : undefined,
+  };
+}
+
 function RouteComponent() {
   const { data: options } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = options;
   const compressImagesMutation = useMutation({
     mutationFn: (files: File[]) => {
-      const imgCpsPrs: Promise<{ id: string; file: File | undefined }>[] = [];
+      const promises: ReturnType<typeof processImageFile>[] = [];
       const newUploadedFile: AgentImageFile[] = [];
       for (const file of files) {
         const id = generateId();
-        imgCpsPrs.push(
-          imageCompression(file, bicOptions)
-            .then(cFile => ({ id, file: cFile instanceof Blob ? cFile : undefined }))
-            .catch(() => ({ id, file: undefined })),
-        );
+        promises.push(processImageFile(id, file));
         newUploadedFile.push({ id, kind: undefined });
       }
       form.setFieldValue('uploadedImages', cur => [...cur, ...newUploadedFile]);
-      return Promise.all(imgCpsPrs);
+      return Promise.all(promises);
     },
     onSuccess: compressedImgs => {
       form.setFieldValue('uploadedImages', cur =>
         cur
-          .map(info => (info.file ? info : { ...info, file: compressedImgs.find(({ id }) => id === info.id)?.file }))
+          .map(info => {
+            if (info.file) return info;
+            const result = compressedImgs.find(({ id }) => id === info.id);
+            if (!result || !result.file) return { ...info, file: null! };
+            return { ...info, file: result.file!, tags: result.tags };
+          })
           .filter(({ file }) => !!file),
       );
     },
