@@ -4,8 +4,9 @@ import { and, eq, getColumns, gte, inArray, lte, or } from 'drizzle-orm';
 import { agentAnchorLookupsTable, expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '#schema';
 import { endOfDay, startOfDay } from 'date-fns';
 import { getLocationBoxId } from './utils';
+import { getSuggestionInputSchema, getSuggestions } from '#server/features/expenses/indexing';
 
-type AgentToolCallContext = { env: Env; db: AppDatabase; agentRequestId: string; userId: string };
+export type AgentToolCallContext = { env: Env; db: AppDatabase; agentRequestId: string; userId: string };
 
 function defineTool<TSchema extends z.ZodTypeAny, TResult>(config: {
   name: string;
@@ -138,7 +139,33 @@ const lookupAnchorsTool = defineTool({
   },
 });
 
-const tools: ReturnType<typeof defineTool>[] = [queryExistingExpenseRecordTool, lookupAnchorsTool];
+const fnltSchemaElement = getSuggestionInputSchema.omit({ context: true });
+
+const fuzzyNamesLookupTool = defineTool({
+  name: 'fuzzy_names_lookup',
+  description: 'Get autocomplete suggestions for a field from historical values',
+  schema: z.array(fnltSchemaElement),
+  disableUpfrontValidation: true,
+  execute(args, ctx): Promise<any> {
+    if (!Array.isArray(args)) {
+      return Promise.resolve({ issues: ['not an array'] });
+    }
+
+    return Promise.all(
+      args.map(arg => {
+        const parsed = fnltSchemaElement.safeParse(arg);
+        if (parsed.success) return getSuggestions(ctx, parsed.data);
+        return parsed.error;
+      }),
+    );
+  },
+});
+
+const tools: ReturnType<typeof defineTool>[] = [
+  queryExistingExpenseRecordTool,
+  lookupAnchorsTool,
+  fuzzyNamesLookupTool,
+];
 const toolMap = Object.fromEntries(tools.map(tool => [tool.name, tool]));
 
 export const agentToolDefinitions: ChatCompletionTool[] = tools.map(tool => ({
