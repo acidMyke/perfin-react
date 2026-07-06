@@ -161,7 +161,6 @@ Retrieve existing expenses using exactly one mutually exclusive filter:
 
 - \`{ fromDate, toDate }\`
 - \`{ expenseIds }\`
-- \`{ latitude, longitude }\` (≈222m radius)
 
 For statements, retrieve expenses covering the statement period with a reasonable grace period, then reconcile every statement transaction against existing records.
 
@@ -180,7 +179,11 @@ Use when resolving merchants, accounts or categories. Reuse historical anchors w
 
 #### fuzzy_names_lookup
 
-Use only when no exact anchor match exists.
+Use when the text is unclear or name suggestions for a field from historical values
+
+### location_lookup
+
+Use when resolving location from historical values
 
 ---
 
@@ -239,7 +242,7 @@ Before saving, ensure:
 - duplicate detection completed
 - merchant, account and category resolution attempted
 
-Only call \`save_expense_draft\` once validation is complete and no further tool calls are likely to improve the draft.
+Only call \`save_expense_drafts\` once validation is complete and no further tool calls are likely to improve the draft.
 `;
 
 export class ExpenseAgentWorkflow extends WorkflowEntrypoint<Env, ExpenseAgentWorkflowParam> {
