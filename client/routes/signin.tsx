@@ -33,7 +33,7 @@ export const Route = createFileRoute('/signin')({
     if (search.redirect) {
       throw redirect({ href: search.redirect });
     } else {
-      throw redirect({ to: '/dashboard' });
+      throw redirect({ to: '/expenses' });
     }
   },
 });
@@ -47,7 +47,7 @@ function RouteComponent() {
         if (search.redirect) {
           await router.navigate({ href: search.redirect });
         } else {
-          await router.navigate({ to: '/dashboard', from: '/signin' });
+          await router.navigate({ to: '/expenses', from: '/signin' });
         }
       }),
     [router.navigate],

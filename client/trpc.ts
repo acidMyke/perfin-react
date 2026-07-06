@@ -88,6 +88,16 @@ const errorHandlingLink: TRPCLink<AppRouter> = () => {
   };
 };
 
+export const withCsrf = (init?: HeadersInit) => {
+  let headers = new Headers(init);
+  let csrf = undefined as string | undefined;
+  const value = `; ${document.cookie}`;
+  const parts = value.split(`; csrf=`);
+  if (parts.length === 2) csrf = parts?.pop()?.split(';')?.shift();
+  if (csrf) headers.append('X-CSRF-Token', csrf);
+  return headers;
+};
+
 const trpcClient = createTRPCClient<AppRouter>({
   links: [
     loggerLink({ enabled: () => import.meta.env.DEV }),
@@ -95,13 +105,7 @@ const trpcClient = createTRPCClient<AppRouter>({
     httpBatchLink({
       url: '/trpc',
       headers() {
-        let csrf = undefined as string | undefined;
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; csrf=`);
-        if (parts.length === 2) csrf = parts?.pop()?.split(';')?.shift();
-
-        if (!csrf) return {};
-        return { 'X-CSRF-Token': csrf };
+        return withCsrf();
       },
     }),
   ],

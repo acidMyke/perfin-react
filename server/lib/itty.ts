@@ -99,26 +99,17 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
         const result = schemas.body.safeParse(payload);
 
         if (!result.success) {
-          return new Response(
-            JSON.stringify({
-              error: 'Invalid body',
-              issue: result.error.issues,
-            }),
-            {
-              status: 415,
-              headers: { 'Content-Type': 'application/json' },
-            },
-          );
+          return new Response(JSON.stringify({ error: 'Invalid body', issue: result.error.issues }), {
+            status: 400,
+            headers: { 'Content-Type': 'application/json' },
+          });
         }
         parsedBody = result.data;
       } catch (err: any) {
-        return new Response(
-          JSON.stringify({
-            error: 'Invalid body',
-            issues: err?.issues ?? [],
-          }),
-          { status: 400, headers: { 'Content-Type': 'application/json' } },
-        );
+        return new Response(JSON.stringify({ error: 'Invalid body' }), {
+          status: 400,
+          headers: { 'Content-Type': 'application/json' },
+        });
       }
     }
 

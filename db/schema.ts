@@ -360,3 +360,66 @@ export const expenseTextsTable = sqliteTable(
     index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
   ],
 );
+
+export const agentRequestsTable = sqliteTable(
+  'agent_requests',
+  {
+    id: pkIdColumn(),
+    userId: idColumn(),
+    accountIds: text({ mode: 'json' }).$type<string[]>(),
+    categoryIds: text({ mode: 'json' }).$type<string[]>(),
+    customInstruction: text(),
+    latitude: real(),
+    longitude: real(),
+    status: text().notNull().default('pending'),
+    createdAt: createdAtColumn(),
+    settledAt: integer({ mode: 'timestamp' }),
+    imageCount: integer(),
+    draftCount: integer(),
+    errorMessage: text(),
+  },
+  t => [index('idx_agent_requests_user_id').on(t.userId)],
+);
+
+export const agentImagesTable = sqliteTable(
+  'agent_images',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    agentRequestId: idColumn(),
+    r2Path: text('r2_path').notNull(),
+    kind: text(),
+    description: text(),
+    metadata: text(),
+  },
+  t => [index('idx_agent_images_ar_id').on(t.agentRequestId)],
+);
+
+export const agentExpenseDraftsTable = sqliteTable(
+  'agent_expense_drafts',
+  {
+    id: pkIdColumn(),
+    userId: idColumn(),
+    agentRequestId: idColumn(),
+    data: text({ mode: 'json' }),
+    confidenceScore: integer(),
+    expenseId: nullableIdColumn(),
+    createdAt: createdAtColumn(),
+  },
+  t => [index('idx_agent_expense_drafts_user_id').on(t.userId)],
+);
+
+export type TargetFieldValues = 'accountId' | 'categoryId' | 'shopName' | 'shopMall' | 'itemName' | 'adjustmentName';
+
+export const agentAnchorLookupsTable = sqliteTable(
+  'agent_anchor_lookups',
+  {
+    id: integer().primaryKey({ autoIncrement: true }),
+    userId: idColumn(),
+    anchor: citext().notNull(),
+    expenseId: idColumn(),
+    targetField: text().notNull().$type<TargetFieldValues>(),
+    value: text().notNull(),
+    createdAt: createdAtColumn(),
+  },
+  t => [index('idx_agent_anchor_lookups_user_id_anchor').on(t.userId, t.anchor)],
+);

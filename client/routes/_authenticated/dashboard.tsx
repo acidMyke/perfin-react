@@ -17,6 +17,7 @@ export const Route = createFileRoute('/_authenticated/dashboard')({
     ]);
   },
   pendingComponent: PendingComponent,
+  preload: false,
 });
 
 function RouteComponent() {

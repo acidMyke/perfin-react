@@ -11,7 +11,7 @@ const config = {
   jsxSingleQuote: true,
   trailingComma: 'all',
   quoteProps: 'consistent',
-  plugins: ['prettier-plugin-tailwindcss'],
+  plugins: ['daisyui', 'prettier-plugin-tailwindcss'],
 };
 
 export default config;
