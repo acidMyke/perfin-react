@@ -145,7 +145,7 @@ const fnltSchemaElement = getSuggestionInputSchema.omit({ context: true });
 
 const fuzzyNamesLookupTool = defineTool({
   name: 'fuzzy_names_lookup',
-  description: 'Get autocomplete suggestions for a field from historical values',
+  description: 'search for name suggestions for a field from historical values',
   schema: z.array(fnltSchemaElement),
   disableUpfrontValidation: true,
   execute(args, ctx): Promise<any> {
@@ -170,7 +170,7 @@ const lltElementSchema = z.object({ latitude: z.number(), longitude: z.number() 
 
 const locationLookupTool = defineTool({
   name: 'location_lookup',
-  description: 'Get information about current location from historical values',
+  description: 'Get information about location from historical values',
   schema: z.array(lltElementSchema),
   disableUpfrontValidation: true,
   async execute(args, ctx): Promise<any> {
