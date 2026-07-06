@@ -380,7 +380,7 @@ ${metadata ?? 'Not provided'}
         const { resMsg } = extractionResult;
         const userContext = `### Extracted Data
 
-${resMsg}
+${resMsg.content}
 
 ---
 
