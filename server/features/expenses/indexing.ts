@@ -15,6 +15,7 @@ import {
 import z from 'zod';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { ProtectedContext } from '#server/lib/trpc';
+import type { AgentToolCallContext } from '#server/lib/agent-tools';
 
 type ExpenseInfoChildrenForIndexing = {
   id: string;
@@ -215,14 +216,16 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
 }
 
 export const getSuggestionInputSchema = z.object({
-  scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
-  search: z.string(),
+  scope: z
+    .enum(['shopName', 'shopMall', 'itemName', 'adjName', 'adjustmentName'])
+    .describe('Field to generate suggestions for.'),
+  search: z.string().describe('Partial text or keyword to search for suggestions.'),
   context: z.string().optional(),
 });
 
 type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
 
-export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
+export async function getSuggestions(ctx: ProtectedContext | AgentToolCallContext, input: GetSuggestionInput) {
   const { db, userId } = ctx;
   const search = input.search.trim();
   const context = input.context?.trim();
@@ -248,6 +251,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       sourceTable = expenseItemsTable;
       break;
     case 'adjName':
+    case 'adjustmentName':
       textColumn = expenseAdjustmentsTable.name;
       sourceTable = expenseAdjustmentsTable;
       break;

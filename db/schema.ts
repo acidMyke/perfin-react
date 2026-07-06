@@ -400,12 +400,15 @@ export const agentExpenseDraftsTable = sqliteTable(
     id: pkIdColumn(),
     userId: idColumn(),
     agentRequestId: idColumn(),
-    data: text({ mode: 'json' }),
-    confidenceScore: integer(),
+    data: text({ mode: 'json' }).notNull(),
+    confidenceScore: real().notNull(),
     expenseId: nullableIdColumn(),
     createdAt: createdAtColumn(),
   },
-  t => [index('idx_agent_expense_drafts_user_id').on(t.userId)],
+  t => [
+    index('idx_agent_expense_drafts_user_id').on(t.userId),
+    index('idx_agent_expense_drafts_agent_request_id').on(t.agentRequestId),
+  ],
 );
 
 export type TargetFieldValues = 'accountId' | 'categoryId' | 'shopName' | 'shopMall' | 'itemName' | 'adjustmentName';
@@ -420,6 +423,10 @@ export const agentAnchorLookupsTable = sqliteTable(
     targetField: text().notNull().$type<TargetFieldValues>(),
     value: text().notNull(),
     createdAt: createdAtColumn(),
+    textHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
   },
-  t => [index('idx_agent_anchor_lookups_user_id_anchor').on(t.userId, t.anchor)],
+  t => [
+    index('idx_agent_anchor_lookups_user_field_anchor').on(t.userId, t.targetField, t.anchor),
+    index('idx_agent_anchor_lookups_text').on(t.textHash, t.targetField),
+  ],
 );

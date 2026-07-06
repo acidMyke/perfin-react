@@ -3,6 +3,19 @@ import { drizzle } from 'drizzle-orm/d1';
 import { defineRelations } from 'drizzle-orm';
 import * as schema from '../../db/schema';
 
+export function omitColumns<T extends Record<string, any>, K extends keyof T>(
+  columns: T,
+  ...keys: readonly K[]
+): Omit<T, K> {
+  const result = { ...columns };
+
+  for (const key of keys) {
+    delete result[key];
+  }
+
+  return result;
+}
+
 export const sankeCaseFromCamelCase = (camelCase: string) =>
   camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
 
