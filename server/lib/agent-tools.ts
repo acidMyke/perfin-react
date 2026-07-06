@@ -253,10 +253,7 @@ const locationLookupTool = defineTool({
 
 const expenseDraftsElementSchema = z.object({
   id: z.string().nullable().describe('Existing expense ID, else null'),
-  billedAt: z.iso
-    .datetime()
-    .transform(val => parseISO(val))
-    .describe('Receipt date/time in ISO-8601'),
+  billedAt: z.iso.datetime().describe('Receipt date/time in ISO-8601'),
   account: z
     .object({
       value: z.string().nullable().describe('Account ID'),
