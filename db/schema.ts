@@ -397,12 +397,15 @@ export const agentExpenseDraftsTable = sqliteTable(
     id: pkIdColumn(),
     userId: idColumn(),
     agentRequestId: idColumn(),
-    data: text({ mode: 'json' }),
-    confidenceScore: integer(),
+    data: text({ mode: 'json' }).notNull(),
+    confidenceScore: real().notNull(),
     expenseId: nullableIdColumn(),
     createdAt: createdAtColumn(),
   },
-  t => [index('idx_agent_expense_drafts_user_id').on(t.userId)],
+  t => [
+    index('idx_agent_expense_drafts_user_id').on(t.userId),
+    index('idx_agent_expense_drafts_agent_request_id').on(t.agentRequestId),
+  ],
 );
 
 export type TargetFieldValues = 'accountId' | 'categoryId' | 'shopName' | 'shopMall' | 'itemName' | 'adjustmentName';

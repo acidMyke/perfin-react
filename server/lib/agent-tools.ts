@@ -1,10 +1,18 @@
 import z, { ZodError } from 'zod';
 import { createDatabase, jsonGroupArray, omitColumns, type AppDatabase } from './db';
 import { and, avg, eq, getColumns, gte, inArray, isNotNull, lte, or } from 'drizzle-orm';
-import { agentAnchorLookupsTable, expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '#schema';
-import { endOfDay, startOfDay } from 'date-fns';
+import {
+  agentAnchorLookupsTable,
+  agentExpenseDraftsTable,
+  expenseAdjustmentsTable,
+  expenseItemsTable,
+  expensesTable,
+  generateId,
+} from '#schema';
+import { endOfDay, parseISO, startOfDay } from 'date-fns';
 import { getLocationBoxId, getTextsHashes } from './utils';
 import { getSuggestionInputSchema, getSuggestions } from '#server/features/expenses/indexing';
+import type { BatchItem } from 'drizzle-orm/batch';
 
 export type AgentToolCallContext = { env: Env; db: AppDatabase; agentRequestId: string; userId: string };
 
@@ -200,7 +208,11 @@ const locationLookupTool = defineTool({
       const arg = args[argIndex];
       const parsed = lltElementSchema.safeParse(arg);
       if (!parsed.success) argsWithError.push({ index: argIndex, error: parsed.error });
-      queries.push(getNerbyShops(arg));
+      else queries.push(getNerbyShops(arg));
+    }
+
+    if (queries.length === 0) {
+      return { argsWithError };
     }
 
     // @ts-ignore
@@ -239,11 +251,114 @@ const locationLookupTool = defineTool({
   },
 });
 
+const expenseDraftsElementSchema = z.object({
+  id: z.string().nullable().describe('Existing expense ID, else null'),
+  billedAt: z.iso
+    .datetime()
+    .transform(val => parseISO(val))
+    .describe('Receipt date/time in ISO-8601'),
+  account: z
+    .object({
+      value: z.string().nullable().describe('Account ID'),
+      label: z.string().trim().nullable().describe('Account name'),
+    })
+    .nullable()
+    .describe('Payment method/account, else null'),
+
+  category: z
+    .object({
+      value: z.string().nullable().describe('Category ID'),
+      label: z.string().trim().nullable().describe('Category name'),
+    })
+    .nullable()
+    .describe('Expense category, else null'),
+
+  latitude: z.number().nullable().describe('Shop latitude, else null'),
+  longitude: z.number().nullable().describe('Shop longitude, else null'),
+  shopName: z.string().trim().nullable().describe('Merchant name'),
+  shopNameAnchors: z.array(z.string()).describe('Merchant aliases/keywords'),
+  shopMall: z.string().trim().nullable().describe('Mall or venue name'),
+  shopMallAnchors: z.array(z.string()).describe('Mall aliases/keywords'),
+  type: z.enum(['online', 'physical']).describe('Purchase type'),
+  netAmountCents: z.int().min(0).nullable().describe('Final paid amount in cents'),
+  items: z
+    .array(
+      z.object({
+        id: z.string().nullable().describe('Existing item ID, else null'),
+        name: z.string().trim().describe('Item name'),
+        priceCents: z.int().min(0).describe('Line total in cents'),
+        quantity: z.int().min(0).describe('Item quantity'),
+        nameAnchors: z.array(z.string()).describe('Item aliases/keywords'),
+      }),
+    )
+    .describe('Purchased line items'),
+  adjustments: z
+    .array(
+      z.object({
+        id: z.string().nullable().describe('Existing adjustment ID, else null'),
+        name: z.string().trim().describe('Adjustment name'),
+        amountCents: z.int().default(0).describe('Amount in cents (+/-)'),
+        rateBps: z.int().nullable().describe('Rate in basis points, else null'),
+        expenseItemId: z.string().trim().nullable().describe('Related item ID, else null'),
+        nameAnchors: z.array(z.string()).describe('Adjustment aliases/keywords'),
+      }),
+    )
+    .describe('Taxes, discounts, fees, etc'),
+  confidenceScore: z.number().min(0).max(1).describe('Extraction confidence (0-1).'),
+});
+
+const saveExpenseDraftsTool = defineTool({
+  name: 'save_expense_drafts',
+  description: 'Save drafts of expenses',
+  schema: z.array(expenseDraftsElementSchema),
+  disableUpfrontValidation: true,
+  async execute(args, ctx) {
+    if (!Array.isArray(args)) {
+      return Promise.resolve({ issues: ['not an array'] });
+    }
+    if (args.length === 0) {
+      return Promise.resolve({ issues: ['should not be empty'] });
+    }
+    const { db, userId, agentRequestId } = ctx;
+    const argsWithError: { index: number; error: ZodError }[] = [];
+    const successDraftIds: { index: number; draftId: string }[] = [];
+    const valuesToInsert: (typeof agentExpenseDraftsTable.$inferInsert)[] = [];
+
+    for (let argIndex = 0; argIndex < args.length; argIndex++) {
+      const arg = args[argIndex];
+      const parsed = lltElementSchema.safeParse(arg);
+      if (!parsed.success) argsWithError.push({ index: argIndex, error: parsed.error });
+      else {
+        const draftId = generateId();
+        successDraftIds.push({ index: argIndex, draftId });
+        valuesToInsert.push({
+          userId,
+          agentRequestId,
+          data: arg,
+          confidenceScore: arg.confidenceScore,
+        });
+      }
+    }
+
+    if (valuesToInsert.length == 0) {
+      return { argsWithError };
+    }
+
+    await db.insert(agentExpenseDraftsTable).values(valuesToInsert);
+
+    return {
+      argsWithError,
+      successDraftIds,
+    };
+  },
+});
+
 const tools: ReturnType<typeof defineTool>[] = [
   queryExistingExpenseRecordTool,
   lookupAnchorsTool,
   fuzzyNamesLookupTool,
   locationLookupTool,
+  saveExpenseDraftsTool,
 ];
 const toolMap = Object.fromEntries(tools.map(tool => [tool.name, tool]));
 
