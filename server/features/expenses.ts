@@ -24,7 +24,6 @@ import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 import { chainHandler, createIttyAppRouter, withAuth, withZod } from '#server/lib/itty';
 import { zfd } from 'zod-form-data';
 import { json } from 'itty-router';
-import { nanoid } from 'nanoid';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([

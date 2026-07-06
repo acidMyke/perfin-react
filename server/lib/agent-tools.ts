@@ -1,9 +1,9 @@
-import z from 'zod';
-import { createDatabase, omitColumns, type AppDatabase } from './db';
-import { and, eq, getColumns, gte, inArray, lte, or } from 'drizzle-orm';
+import z, { ZodError } from 'zod';
+import { createDatabase, jsonGroupArray, omitColumns, type AppDatabase } from './db';
+import { and, avg, eq, getColumns, gte, inArray, isNotNull, lte, or } from 'drizzle-orm';
 import { agentAnchorLookupsTable, expenseAdjustmentsTable, expenseItemsTable, expensesTable } from '#schema';
 import { endOfDay, startOfDay } from 'date-fns';
-import { getLocationBoxId } from './utils';
+import { getLocationBoxId, getTextsHashes } from './utils';
 import { getSuggestionInputSchema, getSuggestions } from '#server/features/expenses/indexing';
 
 export type AgentToolCallContext = { env: Env; db: AppDatabase; agentRequestId: string; userId: string };
@@ -27,9 +27,6 @@ const queryExistingExpenseRecordTool = defineTool({
         .strictObject({ fromDate: z.iso.date().describe('Start date.'), toDate: z.iso.date().describe('End date.') })
         .describe('both inclusive, in YYYY-MM-DD'),
       z.strictObject({ expenseIds: z.array(z.string()).min(1).describe('Expense IDs.') }),
-      z
-        .strictObject({ latitude: z.number().describe('Latitude'), longitude: z.number().describe('Longitude.') })
-        .describe('in degrees'),
     ]),
   ),
   async execute(args, ctx) {
@@ -42,9 +39,6 @@ const queryExistingExpenseRecordTool = defineTool({
         );
       } else if ('expenseIds' in criteria) {
         return inArray(expensesTable.id, criteria.expenseIds);
-      } else if ('latitude' in criteria) {
-        const queryBoxIds = getLocationBoxId(criteria);
-        return inArray(expensesTable.boxId, queryBoxIds);
       }
     });
 
@@ -150,6 +144,9 @@ const fuzzyNamesLookupTool = defineTool({
     if (!Array.isArray(args)) {
       return Promise.resolve({ issues: ['not an array'] });
     }
+    if (args.length === 0) {
+      return Promise.resolve({ issues: ['should not be empty'] });
+    }
 
     return Promise.all(
       args.map(arg => {
@@ -161,10 +158,92 @@ const fuzzyNamesLookupTool = defineTool({
   },
 });
 
+const lltElementSchema = z.object({ latitude: z.number(), longitude: z.number() }).describe('in degrees');
+
+const locationLookupTool = defineTool({
+  name: 'location_lookup',
+  description: 'Get information about current location from historical values',
+  schema: z.array(lltElementSchema),
+  disableUpfrontValidation: true,
+  async execute(args, ctx): Promise<any> {
+    if (!Array.isArray(args)) {
+      return Promise.resolve({ issues: ['not an array'] });
+    }
+    if (args.length === 0) {
+      return Promise.resolve({ issues: ['should not be empty'] });
+    }
+    const { db, userId } = ctx;
+    const getNerbyShops = (arg: z.infer<typeof lltElementSchema>) =>
+      db
+        .select({
+          shopName: expensesTable.shopName,
+          shopMall: expensesTable.shopMall,
+          latitude: avg(expensesTable.latitude).mapWith(Number),
+          longitude: avg(expensesTable.longitude).mapWith(Number),
+        })
+        .from(expensesTable)
+        .where(
+          and(
+            eq(expensesTable.userId, userId),
+            isNotNull(expensesTable.shopName),
+            inArray(expensesTable.boxId, getLocationBoxId(arg)),
+          ),
+        )
+        .groupBy(expensesTable.shopMall, expensesTable.shopName);
+
+    type Query = ReturnType<typeof getNerbyShops>;
+    type QueryReturn = Awaited<Query>;
+    const argsWithError: { index: number; error: ZodError }[] = [];
+    const queries: Query[] = [];
+
+    for (let argIndex = 0; argIndex < args.length; argIndex++) {
+      const arg = args[argIndex];
+      const parsed = lltElementSchema.safeParse(arg);
+      if (!parsed.success) argsWithError.push({ index: argIndex, error: parsed.error });
+      queries.push(getNerbyShops(arg));
+    }
+
+    // @ts-ignore
+    const batchMatches: QueryReturn[] = await db.batch(queries);
+    const flattenMatches: QueryReturn = [];
+    const nameSet = new Set<string>();
+    for (const matches of batchMatches) {
+      for (const match of matches) {
+        flattenMatches.push(match);
+        const { shopName, shopMall } = match;
+        if (shopName) nameSet.add(shopName);
+        if (shopMall) nameSet.add(shopMall);
+      }
+    }
+    const hashes = (await getTextsHashes(userId, nameSet.values())).values().toArray();
+    const anchors = await db
+      .select({
+        value: agentAnchorLookupsTable.value,
+        targetField: agentAnchorLookupsTable.targetField,
+        anchors: jsonGroupArray(agentAnchorLookupsTable.anchor, { distinct: true }),
+      })
+      .from(agentAnchorLookupsTable)
+      .where(
+        and(
+          inArray(agentAnchorLookupsTable.textHash, hashes),
+          inArray(agentAnchorLookupsTable.targetField, ['shopName', 'shopMall']),
+        ),
+      )
+      .groupBy(agentAnchorLookupsTable.targetField, agentAnchorLookupsTable.value);
+
+    return {
+      argsWithError,
+      matches: flattenMatches,
+      anchors,
+    };
+  },
+});
+
 const tools: ReturnType<typeof defineTool>[] = [
   queryExistingExpenseRecordTool,
   lookupAnchorsTool,
   fuzzyNamesLookupTool,
+  locationLookupTool,
 ];
 const toolMap = Object.fromEntries(tools.map(tool => [tool.name, tool]));
 

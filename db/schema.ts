@@ -417,6 +417,10 @@ export const agentAnchorLookupsTable = sqliteTable(
     targetField: text().notNull().$type<TargetFieldValues>(),
     value: text().notNull(),
     createdAt: createdAtColumn(),
+    textHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
   },
-  t => [index('idx_agent_anchor_lookups_user_id_anchor').on(t.userId, t.anchor)],
+  t => [
+    index('idx_agent_anchor_lookups_user_field_anchor').on(t.userId, t.targetField, t.anchor),
+    index('idx_agent_anchor_lookups_text').on(t.textHash, t.targetField),
+  ],
 );
