@@ -451,19 +451,18 @@ ${customInstruction}
         );
 
         return {
-          resMsg: response.choices[0].message,
+          assistantMessage: response.choices[0].message,
         };
       });
 
       const turnOutproResult = await step.do(`turn-${turn}-outpro`, async () => {
         const messagesToAppend: ChatCompletionMessageParam[] = [];
-        const {
-          resMsg: { function_call, ...message },
-        } = enrichmentTurnResult;
+        const { role, content, tool_calls } = enrichmentTurnResult.assistantMessage;
 
-        if (message.tool_calls?.length) {
-          messagesToAppend.push(message);
-          const toolMessages = await executeChatToolCalls(message.tool_calls, {
+        messagesToAppend.push({ role, content });
+
+        if (tool_calls?.length) {
+          const toolMessages = await executeChatToolCalls(tool_calls, {
             env: this.env,
             agentRequestId,
             userId,
@@ -472,8 +471,7 @@ ${customInstruction}
           return { breakLoop: false, messagesToAppend };
         }
 
-        if (!message.content) {
-          messagesToAppend.push(message);
+        if (!content) {
           return { breakLoop: false, messagesToAppend };
         }
 

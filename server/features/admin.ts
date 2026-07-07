@@ -5,6 +5,7 @@ import { error, json, status, type IRequest, type RequestHandler } from 'itty-ro
 import z from 'zod';
 import { createDatabase } from '#server/lib/db';
 import { getWebPushSubscription, processWebPushResult, triggerWebPush } from '#server/lib/webpush';
+import { agentToolDefinitions } from '#server/lib/agent-tools';
 
 const withAdminCheck: RequestHandler<IRequest, IttyCfArgs> = (request, env) => {
   const authHeader = request.headers.get('authorization');
@@ -82,3 +83,7 @@ adminApiRouter.post(
     return json(result);
   },
 );
+
+adminApiRouter.get('/tooldef', async (request, env) => {
+  return json(agentToolDefinitions);
+});
