@@ -125,7 +125,7 @@ const lookupAnchorsTool = defineTool({
       anchors: z.array(z.string()).describe('value to look up'),
       targetField: z
         .enum(['accountId', 'categoryId', 'shopName', 'shopMall', 'itemName', 'adjustmentName'])
-        .describe('Specifies which field the anchors should be resolved into'),
+        .describe('for which field'),
     }),
   ),
   async execute(args, ctx) {

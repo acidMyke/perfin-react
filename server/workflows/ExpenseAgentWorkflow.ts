@@ -457,14 +457,23 @@ ${customInstruction}
 
       const turnOutproResult = await step.do(`turn-${turn}-outpro`, async () => {
         const messagesToAppend: ChatCompletionMessageParam[] = [];
-        const { resMsg: message } = enrichmentTurnResult;
+        const {
+          resMsg: { function_call, ...message },
+        } = enrichmentTurnResult;
+
         if (message.tool_calls?.length) {
+          messagesToAppend.push(message);
           const toolMessages = await executeChatToolCalls(message.tool_calls, {
             env: this.env,
             agentRequestId,
             userId,
           });
-          messagesToAppend.push({ ...message, function_call: undefined }, ...toolMessages);
+          messagesToAppend.push(...toolMessages);
+          return { breakLoop: false, messagesToAppend };
+        }
+
+        if (!message.content) {
+          messagesToAppend.push(message);
           return { breakLoop: false, messagesToAppend };
         }
 
@@ -473,6 +482,10 @@ ${customInstruction}
 
       if (turnOutproResult.breakLoop) {
         break;
+      }
+
+      if (turnOutproResult.messagesToAppend.length) {
+        conversationMessages.push(...turnOutproResult.messagesToAppend);
       }
     }
   }
