@@ -37,6 +37,7 @@
     "drizzle-orm": "1.0.0-beta.4-4605abe",
     "itty-router": "^5.0.24",
     "lucide-react": "^1.24.0",
+    "magic-bytes.js": "^1.13.0",
     "nanoid": "^5.1.16",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
