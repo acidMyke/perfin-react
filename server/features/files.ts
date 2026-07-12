@@ -115,26 +115,30 @@ filesRouter.post(
     wctx.waitUntil(
       Promise.all(
         r2UploadParams.map(async ({ fileId, path, file, putOptions }) => {
-          const object = await env.bk.put(path, file, putOptions);
-          if (!object || !object.checksums.sha256) {
-            return { fileId };
+          try {
+            const object = await env.bk.put(path, file, putOptions);
+            if (!object) {
+              return { fileId, failureReason: 'object_missing' };
+            }
+            if (!object.checksums.sha256) {
+              return { fileId, failureReason: 'checksum_missing' };
+            }
+            return { fileId, checksum: Buffer.from(object.checksums.sha256) };
+          } catch (err) {
+            console.error('R2 upload failed', { fileId, err });
+            return { fileId, failureReason: 'r2_put_failed' };
           }
-          return { fileId, checksum: Buffer.from(object.checksums.sha256) };
         }),
       ).then(async props => {
-        const updates = props
-          .filter(p => p.checksum != null)
-          .map(({ fileId, checksum }) =>
+        await db.batch(
+          // @ts-expect-error Drizzle's batch() typing doesn't accept mapped query arrays.
+          props.map(({ fileId, checksum, failureReason }) =>
             db
               .update(uploadedFilesTable)
-              .set({ uploadedAt: new Date(), checksum })
+              .set(failureReason ? { failedAt: new Date(), failureReason } : { uploadedAt: new Date(), checksum })
               .where(eq(uploadedFilesTable.id, fileId)),
-          );
-
-        if (updates.length > 0) {
-          // @ts-ignore
-          await db.batch(updates);
-        }
+          ),
+        );
       }),
     );
     return { requestId };
