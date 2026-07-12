@@ -7,6 +7,8 @@ CREATE TABLE `uploaded_files` (
 	`size` integer NOT NULL,
 	`created_at` integer NOT NULL,
 	`uploaded_at` integer,
+	`failed_at` integer,
+	`failure_reason` text,
 	`attached_at` integer,
 	`original_name` text,
 	`checksum` blob

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "cf5d68e4-0371-4a55-a62a-8c0228ea5f4a",
+  "id": "91af1e6a-dd78-4df3-8266-e418ea3e3395",
   "prevIds": [
     "969470bc-2325-480d-b7d6-5c58f2f720be"
   ],
@@ -1609,6 +1609,26 @@
       "default": null,
       "generated": null,
       "name": "checksum",
+      "entityType": "columns",
+      "table": "uploaded_files"
+    },
+    {
+      "type": "integer",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "failed_at",
+      "entityType": "columns",
+      "table": "uploaded_files"
+    },
+    {
+      "type": "text",
+      "notNull": false,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "failure_reason",
       "entityType": "columns",
       "table": "uploaded_files"
     },

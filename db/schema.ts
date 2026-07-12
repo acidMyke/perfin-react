@@ -156,6 +156,8 @@ export const uploadedFilesTable = sqliteTable(
     createdAt: createdAtColumn(),
     uploadedAt: timestampColumn(),
     attachedAt: timestampColumn(),
+    failedAt: timestampColumn(),
+    failureReason: text(),
     originalName: text(),
     checksum: blob({ mode: 'buffer' }),
   },
