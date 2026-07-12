@@ -1,10 +1,10 @@
 import { chainHandler, createIttyAppRouter, withAuth, withZod } from '#server/lib/itty';
-import { z, type RefinementCtx } from 'zod';
+import { file, z, type RefinementCtx } from 'zod';
 import { zfd } from 'zod-form-data';
 import { filetypeinfo } from 'magic-bytes.js';
 import { generateId, uploadedFilesTable } from '#schema';
 import { and, eq, sql } from 'drizzle-orm';
-import type { AppDatabase } from '#server/lib/db';
+import { concat, type AppDatabase } from '#server/lib/db';
 import { json } from 'itty-router';
 
 export const FILES_ROUTE_BASE = '/api/files';
@@ -46,14 +46,22 @@ const MIME_EXTENSIONS: Record<string, string> = {
   'application/json': 'json',
 };
 
+const MAGIC_BYTES_SAFE_RANGE = 262;
+const MAX_FILE_SIZE = 10485760;
+
 const checkFileMime = async (file: File, ctx: RefinementCtx<File>) => {
   if (!BINARY_MIME_TYPES.has(file.type) && !TEXT_MIME_TYPES.has(file.type)) {
     ctx.addIssue({ code: 'custom', message: 'Unsupported file type.' });
     return;
   }
 
+  if (file.size > MAX_FILE_SIZE) {
+    ctx.addIssue({ code: 'too_big', maximum: MAX_FILE_SIZE, origin: 'file' });
+    return;
+  }
+
   if (BINARY_MIME_TYPES.has(file.type)) {
-    const detected = filetypeinfo(await file.bytes());
+    const detected = filetypeinfo(await file.slice(0, MAGIC_BYTES_SAFE_RANGE).bytes());
 
     if (!detected.some(({ mime }) => mime === file.type)) {
       ctx.addIssue({ code: 'custom', message: 'The file contents do not match its MIME type.' });
@@ -72,9 +80,7 @@ const checkFileMime = async (file: File, ctx: RefinementCtx<File>) => {
 };
 
 type FileUploadParams = { fileId: string; path: string; file: File; putOptions: R2PutOptions };
-type UploadResult =
-  | { fileId: string; checksum: Buffer }
-  | { fileId: string; failureReason: 'object_missing' | 'checksum_missing' | 'r2_put_failed' };
+type UploadResult = { fileId: string; failureReason?: 'object_missing' | 'r2_put_failed' };
 
 const putFile = async (bk: R2Bucket, param: FileUploadParams): Promise<UploadResult> => {
   const { fileId, path, file, putOptions } = param;
@@ -86,11 +92,7 @@ const putFile = async (bk: R2Bucket, param: FileUploadParams): Promise<UploadRes
       return { fileId, failureReason: 'object_missing' };
     }
 
-    if (!object.checksums.sha256) {
-      return { fileId, failureReason: 'checksum_missing' };
-    }
-
-    return { fileId, checksum: Buffer.from(object.checksums.sha256) };
+    return { fileId };
   } catch (err) {
     console.error('R2 upload failed', { fileId, err });
     return { fileId, failureReason: 'r2_put_failed' };
@@ -102,10 +104,10 @@ const putFilesAndUpdateDb = async (db: AppDatabase, bk: R2Bucket, params: FileUp
 
   await db.batch(
     // @ts-expect-error Drizzle's batch() typing doesn't accept mapped query arrays.
-    props.map(({ fileId, checksum, failureReason }) =>
+    props.map(({ fileId, failureReason }) =>
       db
         .update(uploadedFilesTable)
-        .set(failureReason ? { failedAt: new Date(), failureReason } : { uploadedAt: new Date(), checksum })
+        .set(failureReason ? { failedAt: new Date(), failureReason } : { uploadedAt: new Date() })
         .where(eq(uploadedFilesTable.id, fileId)),
     ),
   );
@@ -126,9 +128,13 @@ filesApiRouter.post(
 
     const fileUploadParams: FileUploadParams[] = [];
     const uploadedFilesInserts: (typeof uploadedFilesTable.$inferInsert)[] = [];
-
+    const checksums = await Promise.all(
+      uploadedFiles.map(file => file.bytes().then(bytes => crypto.subtle.digest('SHA-256', bytes))),
+    );
     const requestId = generateId();
-    for (const file of uploadedFiles) {
+    for (let idx = 0; idx < uploadedFiles.length; idx++) {
+      const file = uploadedFiles[idx];
+      const checksum = checksums[idx];
       const fileId = generateId();
 
       const ext = MIME_EXTENSIONS[file.type];
@@ -136,6 +142,7 @@ filesApiRouter.post(
       const putOptions: R2PutOptions = {
         httpMetadata: { contentType: file.type, contentDisposition: `inline; filename="${file.name}"` },
         customMetadata: { userId, requestId, fileId },
+        sha256: checksum,
       };
       fileUploadParams.push({ fileId, path, file, putOptions });
       uploadedFilesInserts.push({
@@ -146,12 +153,13 @@ filesApiRouter.post(
         size: file.size,
         mimeType: file.type,
         originalName: file.name,
+        checksum: Buffer.from(checksum),
       });
     }
 
     await db.insert(uploadedFilesTable).values(uploadedFilesInserts);
     wctx.waitUntil(putFilesAndUpdateDb(db, env.bk, fileUploadParams));
-    return json({ requestId });
+    return json({ requestId, detailLink: `${FILES_ROUTE_BASE}/requests/${requestId}` });
   },
 );
 
@@ -165,13 +173,14 @@ filesApiRouter.get(
     const uploadedFilesData = await db
       .select({
         fileId: uploadedFilesTable.id,
-        links: { image: sql<string>`concat('/files/', ${uploadedFilesTable.id})` },
+        fileLink: concat(FILES_ROUTE_BASE, '/', uploadedFilesTable.id, '/', uploadedFilesTable.originalName),
         createdAt: uploadedFilesTable.createdAt,
         uploadedAt: uploadedFilesTable.uploadedAt,
         attachedAt: uploadedFilesTable.attachedAt,
         failedAt: uploadedFilesTable.failedAt,
+        failureReason: uploadedFilesTable.failureReason,
         originalName: uploadedFilesTable.originalName,
-        checksum: uploadedFilesTable.checksum,
+        sha256: sql<string>`lower(hex(${uploadedFilesTable.checksum}))`,
         mimeType: uploadedFilesTable.mimeType,
         size: uploadedFilesTable.size,
       })
@@ -183,10 +192,10 @@ filesApiRouter.get(
 );
 
 filesApiRouter.get(
-  '/:fileId',
+  '/:fileId/:filename?',
   chainHandler(withAuth()).then(
     withZod({
-      params: z.object({ fileId: z.string() }),
+      params: z.object({ fileId: z.string(), filename: z.string().optional() }),
       query: z.object({ download: z.enum(['true', 'false']).optional().transform(Boolean) }),
     }),
   ),
@@ -221,7 +230,10 @@ filesApiRouter.get(
     headers.set('Content-Length', object.size.toString());
 
     if (validated.query.download) {
-      headers.set('Content-Disposition', `attachment; filename="${uploadedFile.originalName}"`);
+      headers.set(
+        'Content-Disposition',
+        `attachment; filename="${validated.params.filename ?? uploadedFile.originalName}"`,
+      );
     }
 
     return new Response(object.body, { headers });
