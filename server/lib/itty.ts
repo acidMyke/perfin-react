@@ -96,7 +96,7 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
           });
         }
 
-        const result = schemas.body.safeParse(payload);
+        const result = await schemas.body.safeParseAsync(payload);
 
         if (!result.success) {
           return new Response(JSON.stringify({ error: 'Invalid body', issue: result.error.issues }), {
@@ -117,7 +117,7 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
     }
 
     if (schemas.query) {
-      const result = schemas.query.safeParse(request.query);
+      const result = await schemas.query.safeParseAsync(request.query);
 
       if (!result.success) {
         return new Response(
@@ -132,7 +132,7 @@ export const withZod = <T extends WithZodSchemas>(schemas: T): Middleware<Valida
     }
 
     if (schemas.params) {
-      const result = schemas.params.safeParse(request.params);
+      const result = await schemas.params.safeParseAsync(request.params);
 
       if (!result.success) {
         return new Response(
