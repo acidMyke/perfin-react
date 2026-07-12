@@ -8,6 +8,7 @@ import webpushProcedures from './features/webpush';
 import { createIttyAppRouter, withContext } from './lib/itty';
 import { fetchRequestHandler } from '@trpc/server/adapters/fetch';
 import { adminApiRouter } from './features/admin';
+import { FILES_ROUTE_BASE, filesApiRouter } from './features/files';
 import { error } from 'itty-router';
 
 export const trpcRouter = createTrpcRouter({
@@ -36,6 +37,7 @@ export const router = createIttyAppRouter()
     return response;
   })
   .all('/admin/*', adminApiRouter.fetch)
+  .all(`${FILES_ROUTE_BASE}/*`, filesApiRouter.fetch)
   .all('*', () => error(404));
 
 export default router;

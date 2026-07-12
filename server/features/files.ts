@@ -1,13 +1,14 @@
 import { chainHandler, createIttyAppRouter, withAuth, withZod } from '#server/lib/itty';
 import { z, type RefinementCtx } from 'zod';
 import { zfd } from 'zod-form-data';
-import filetype from 'magic-bytes.js';
+import { filetypeinfo } from 'magic-bytes.js';
 import { generateId, uploadedFilesTable } from '#schema';
-import { eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import type { AppDatabase } from '#server/lib/db';
+import { json } from 'itty-router';
 
-export const FILES_ROUTE_BASE = '/files';
-export const filesRouter = createIttyAppRouter({ base: FILES_ROUTE_BASE });
+export const FILES_ROUTE_BASE = '/api/files';
+export const filesApiRouter = createIttyAppRouter({ base: FILES_ROUTE_BASE });
 
 const BINARY_MIME_TYPES = new Set([
   'image/jpeg',
@@ -52,7 +53,7 @@ const checkFileMime = async (file: File, ctx: RefinementCtx<File>) => {
   }
 
   if (BINARY_MIME_TYPES.has(file.type)) {
-    const detected = filetype(await file.bytes());
+    const detected = filetypeinfo(await file.bytes());
 
     if (!detected.some(({ mime }) => mime === file.type)) {
       ctx.addIssue({ code: 'custom', message: 'The file contents do not match its MIME type.' });
@@ -110,7 +111,7 @@ const putFilesAndUpdateDb = async (db: AppDatabase, bk: R2Bucket, params: FileUp
   );
 };
 
-filesRouter.post(
+filesApiRouter.post(
   '/upload',
   chainHandler(withAuth()).then(
     withZod({
@@ -150,6 +151,79 @@ filesRouter.post(
 
     await db.insert(uploadedFilesTable).values(uploadedFilesInserts);
     wctx.waitUntil(putFilesAndUpdateDb(db, env.bk, fileUploadParams));
-    return { requestId };
+    return json({ requestId });
+  },
+);
+
+filesApiRouter.get(
+  '/requests/:requestId',
+  chainHandler(withAuth()).then(withZod({ params: z.object({ requestId: z.string() }) })),
+  async request => {
+    const { validated, context } = request;
+    const { db, userId } = context;
+
+    const uploadedFilesData = await db
+      .select({
+        fileId: uploadedFilesTable.id,
+        links: { image: sql<string>`concat('/files/', ${uploadedFilesTable.id})` },
+        createdAt: uploadedFilesTable.createdAt,
+        uploadedAt: uploadedFilesTable.uploadedAt,
+        attachedAt: uploadedFilesTable.attachedAt,
+        failedAt: uploadedFilesTable.failedAt,
+        originalName: uploadedFilesTable.originalName,
+        checksum: uploadedFilesTable.checksum,
+        mimeType: uploadedFilesTable.mimeType,
+        size: uploadedFilesTable.size,
+      })
+      .from(uploadedFilesTable)
+      .where(and(eq(uploadedFilesTable.requestId, validated.params.requestId), eq(uploadedFilesTable.userId, userId)));
+
+    return json(uploadedFilesData);
+  },
+);
+
+filesApiRouter.get(
+  '/:fileId',
+  chainHandler(withAuth()).then(
+    withZod({
+      params: z.object({ fileId: z.string() }),
+      query: z.object({ download: z.enum(['true', 'false']).optional().transform(Boolean) }),
+    }),
+  ),
+  async request => {
+    const { validated, context } = request;
+    const { db, env, userId } = context;
+
+    const [uploadedFile] = await db
+      .select({
+        id: uploadedFilesTable.id,
+        path: uploadedFilesTable.path,
+        originalName: uploadedFilesTable.originalName,
+      })
+      .from(uploadedFilesTable)
+      .where(and(eq(uploadedFilesTable.id, validated.params.fileId), eq(uploadedFilesTable.userId, userId)));
+
+    if (!uploadedFile) {
+      return new Response(null, { status: 404 });
+    }
+
+    const object = await env.bk.get(uploadedFile.path);
+
+    if (!object) {
+      return new Response(null, { status: 404 });
+    }
+
+    const headers = new Headers();
+    object.writeHttpMetadata(headers);
+
+    headers.set('Cache-Control', 'private, max-age=3600');
+    headers.set('ETag', object.httpEtag);
+    headers.set('Content-Length', object.size.toString());
+
+    if (validated.query.download) {
+      headers.set('Content-Disposition', `attachment; filename="${uploadedFile.originalName}"`);
+    }
+
+    return new Response(object.body, { headers });
   },
 );
