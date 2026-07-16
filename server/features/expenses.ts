@@ -189,26 +189,39 @@ const getShopDetailProcedure = protectedProcedure
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
     const shopNameHash = await getTextHash(userId, input.shopName);
-    const expenseIdCte = db.$with('expense_id_cte').as(
+    const expensesCte = db.$with('expense_id_cte').as(
       db
-        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
+        .select({
+          expenseId: expenseTextsTable.expenseId.as('expense_id'),
+          accountId: expensesTable.accountId.as('account_id'),
+          categoryId: expensesTable.categoryId.as('category_id'),
+        })
         .from(expenseTextsTable)
-        .where(eq(expenseTextsTable.textHash, shopNameHash)),
+        .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
+        .where(eq(expenseTextsTable.textHash, shopNameHash))
+        .groupBy(expenseTextsTable.expenseId)
+        .orderBy(desc(expensesTable.billedAt))
+        .limit(1),
     );
 
     const data = await db
-      .with(expenseIdCte)
-      .selectDistinct({
-        accountId: expensesTable.accountId,
-        categoryId: expensesTable.categoryId,
+      .with(expensesCte)
+      .select({
+        accountId: expensesCte.accountId,
+        categoryId: expensesCte.categoryId,
         isGstExcluded: max(caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`)),
         serviceChargeBps: max(
           caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
         ),
       })
-      .from(expenseIdCte)
-      .innerJoin(expensesTable, eq(expenseIdCte.expenseId, expensesTable.id))
-      .leftJoin(expenseAdjustmentsTable, eq(expenseIdCte.expenseId, expenseAdjustmentsTable.expenseId))
+      .from(expensesCte)
+      .leftJoin(
+        expenseAdjustmentsTable,
+        and(
+          eq(expenseAdjustmentsTable.isInferable, true),
+          eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
+        ),
+      )
       .groupBy(expenseAdjustmentsTable.expenseId);
 
     return data;
