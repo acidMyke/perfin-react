@@ -222,8 +222,7 @@ const getShopDetailProcedure = protectedProcedure
           eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
         ),
       )
-      .groupBy(expenseAdjustmentsTable.expenseId)
-      .orderBy(desc(expensesTable.billedAt));
+      .groupBy(expenseAdjustmentsTable.expenseId);
 
     return data;
   });
