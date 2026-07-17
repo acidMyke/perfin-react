@@ -154,7 +154,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const extgItemIds = new Set<string>();
   const extgAdjIds = new Set<string>();
 
-  if (expenseId !== CREATE_ID) {
+  if (expenseId != null) {
     await deps.verifyExpenseVersion(db, userId, expenseId, input.version, deps);
     await deps.getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds, deps);
   } else {
@@ -225,12 +225,12 @@ export function queueMainExpenseRecord(
   let accountId = input.account?.value ?? null;
   let categoryId = input.category?.value ?? null;
 
-  if (input.account?.value === CREATE_ID) {
+  if (input.account?.value === null) {
     accountId = deps.generateId();
     collector.push(deps.insertSubject(db, accountsTable, accountId, input.account.label, userId));
   }
 
-  if (input.category?.value === CREATE_ID) {
+  if (input.category?.value === null) {
     categoryId = deps.generateId();
     collector.push(deps.insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
   }
