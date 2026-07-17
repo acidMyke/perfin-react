@@ -407,7 +407,7 @@ function ComboBox({
         disabled={readOnly}
         immediate
       >
-        <div className='relative'>
+        <div className='relative w-full'>
           <ComboboxInput
             className={cn('input input-primary w-full text-lg', inputCn)}
             placeholder={label}
