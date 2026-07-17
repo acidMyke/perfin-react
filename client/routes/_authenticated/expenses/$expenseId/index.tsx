@@ -228,7 +228,7 @@ const ShopDetailSubForm = withForm({
       return (
         <>
           <button
-            className='btn btn-link col-span-8'
+            className='btn btn-link col-span-8 mt-4'
             onClick={() => {
               form.setFieldValue('type', 'physical');
               if (isCreate) setCurrentLocation(form);
@@ -242,7 +242,7 @@ const ShopDetailSubForm = withForm({
             scope='shopName'
             getContext={() => form.getFieldValue('shopMall')}
             label='Shop name'
-            containerCn='col-span-8 mt-2'
+            containerCn='col-span-8 mt-4'
             triggerChangeOnFocus
             hideError
           />
@@ -256,7 +256,7 @@ const ShopDetailSubForm = withForm({
           {field => {
             const geolocation = field.state.value;
             return (
-              <p className='col-span-5 mt-2 mb-4'>
+              <p className='col-span-5 mt-6 h-10'>
                 Coordinate:{' '}
                 {geolocation.latitude && geolocation.longitude
                   ? `${geolocation.latitude.toPrecision(8)}, ${geolocation.longitude.toPrecision(8)}`
@@ -268,7 +268,7 @@ const ShopDetailSubForm = withForm({
           }}
         </form.AppField>
         <button
-          className='btn btn-link btn-secondary'
+          className='btn btn-link btn-secondary mt-4 mb-2'
           onClick={() => {
             form.setFieldValue('type', 'online');
             form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false });
@@ -277,7 +277,7 @@ const ShopDetailSubForm = withForm({
           Online
         </button>
         <Link
-          className='btn btn-sm btn-primary col-span-2 mt-2 mb-4'
+          className='btn btn-sm btn-primary col-span-2 mt-5 mb-2'
           to='/expenses/$expenseId/geolocation'
           params={{ expenseId }}
         >
