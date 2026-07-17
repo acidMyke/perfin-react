@@ -18,15 +18,15 @@ import { calculateExpense } from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
 
 export const saveExpenseInputSchema = z.object({
-  expenseId: z.string(),
+  expenseId: z.string().nullable(),
   version: z.int().optional().default(0),
   billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
   account: z
-    .object({ value: z.string(), label: z.string().trim() })
+    .object({ value: z.string().nullable(), label: z.string().trim() })
     .nullish()
     .transform(v => v ?? null),
   category: z
-    .object({ value: z.string(), label: z.string().trim() })
+    .object({ value: z.string().nullable(), label: z.string().trim() })
     .nullish()
     .transform(v => v ?? null),
   latitude: z.number().nullish(),
