@@ -112,7 +112,7 @@ function RouteComponent() {
         const { billedAt, geolocation, ui, history, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
-            expenseId,
+            expenseId: isCreate ? null : expenseId,
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
@@ -124,7 +124,7 @@ function RouteComponent() {
         await invalidateAndRedirectBackToList({
           expenseId,
           navigate,
-          optionsCreated: [value.account?.value, value.category?.value].includes('create'),
+          optionsCreated: [value.account?.value, value.category?.value].includes(null),
           billedAt,
         });
       },

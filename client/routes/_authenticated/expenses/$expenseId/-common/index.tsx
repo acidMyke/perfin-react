@@ -20,6 +20,14 @@ export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
 
+type NullableValueExpenseOptions = {
+  [Key in keyof ExpenseOptions]: {
+    [InnerKey in keyof ExpenseOptions[Key][number]]: InnerKey extends 'value'
+      ? ExpenseOptions[Key][number][InnerKey] | null
+      : ExpenseOptions[Key][number][InnerKey];
+  }[];
+};
+
 export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
     id: generateId(),
@@ -43,7 +51,11 @@ export function defaultExpenseAdjustment(): ExpenseAdjustment {
 
 export const MAX_ITEMS_IN_MAIN = 2;
 
-function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
+function processApiResponse(
+  detail: LoadExpenseDetailResponse,
+  options: NullableValueExpenseOptions,
+  param?: { isCopy: boolean },
+) {
   const { accountOptions, categoryOptions } = options;
   const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
   const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
@@ -285,9 +297,7 @@ export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, naviga
 
 export type CreateAdjustmentOption = UpdateMetaOptions &
   (
-    | { special: typeof GST_NAME }
-    | { special: typeof SERVICE_CHARGE_NAME; rateBps?: number }
-    | { expenseItemId: string }
+    { special: typeof GST_NAME } | { special: typeof SERVICE_CHARGE_NAME; rateBps?: number } | { expenseItemId: string }
   );
 
 export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
