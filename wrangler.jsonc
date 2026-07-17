@@ -1,22 +1,27 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
-  "name": "perfin",
-  "compatibility_date": "2025-04-03",
+  "name": "perfin-local",
+  "compatibility_date": "2026-07-01",
   "workers_dev": false,
   "preview_urls": false,
   "compatibility_flags": ["nodejs_compat"],
   "assets": {
     "not_found_handling": "single-page-application",
+    "run_worker_first": ["/api/*", "/trpc/*"],
   },
   "main": "./server/index.ts",
-  "d1_databases": [
-    {
-      "binding": "db",
-      "database_name": "perfin-staging",
-      "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
-      "migrations_dir": "./db/migrations/d1-preprod",
-    },
-  ],
+  "vars": {
+    "TOKEN_EXPIRE_DAYS": 30,
+    "TOKEN_COOKIE_NAME": "token",
+    "EMAIL_SENDER_NAME": "PreProd-Perfin",
+    "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
+    "ORIGIN": "http://localhost:5173",
+    "PASSKEYS_RP_NAME": "Perfin",
+    "PASSKEYS_RP_ID": "localhost",
+    "ALLOW_SIGNUP": "true",
+    "REINDEXER_SLEEP": "20 seconds",
+    "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1,
@@ -32,42 +37,35 @@
       "persist": true,
     },
   },
+  "d1_databases": [
+    {
+      "binding": "db",
+      "database_name": "perfin-staging",
+      "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
+      "migrations_dir": "./db/migrations/d1-preprod",
+    },
+  ],
+  "r2_buckets": [
+    {
+      "binding": "bk",
+      "bucket_name": "perfin-staging",
+    },
+  ],
   "workflows": [
     {
-      "name": "perfin-v2-data-migrator",
+      "name": "perfin-staging-v2-data-migrator",
       "binding": "V2_MIGRATOR",
       "class_name": "VersionTwoDataMigrator",
     },
     {
-      "name": "perfin-expense-reindexer",
+      "name": "perfin-staging-expense-reindexer",
       "binding": "EXPENSE_REINDEXER",
       "class_name": "UserExpenseReindexer",
     },
   ],
-  "vars": {
-    "TOKEN_EXPIRE_DAYS": 30,
-    "TOKEN_COOKIE_NAME": "token",
-    "EMAIL_SENDER_NAME": "PreProd-Perfin",
-    "EMAIL_SENDER_ADDR": "no-reply@perfin.acidmyke.link",
-    "ORIGIN": "http://localhost:5173",
-    "PASSKEYS_RP_NAME": "Perfin",
-    "PASSKEYS_RP_ID": "localhost",
-    "ALLOW_SIGNUP": "true",
-    "REINDEXER_SLEEP": "20 seconds",
-    "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
-  },
   "env": {
     "production": {
       "name": "perfin",
-      "d1_databases": [
-        {
-          "binding": "db",
-          "database_name": "perfin",
-          "database_id": "1452e603-0196-4cd4-a9e2-33a2ec927411",
-          "preview_database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
-          "migrations_dir": "./db/migrations/d1-prod",
-        },
-      ],
       "vars": {
         "TOKEN_EXPIRE_DAYS": 4,
         "TOKEN_COOKIE_NAME": "__Host-Http-token",
@@ -80,6 +78,36 @@
         "REINDEXER_SLEEP": "8 hours",
         "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "invocation_logs": true,
+          "persist": true,
+        },
+        "traces": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "persist": true,
+        },
+      },
+      "d1_databases": [
+        {
+          "binding": "db",
+          "database_name": "perfin",
+          "database_id": "1452e603-0196-4cd4-a9e2-33a2ec927411",
+          "preview_database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
+          "migrations_dir": "./db/migrations/d1-prod",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "bk",
+          "bucket_name": "perfin",
+        },
+      ],
       "workflows": [
         {
           "name": "perfin-v2-data-migrator",
@@ -95,14 +123,6 @@
     },
     "staging": {
       "name": "perfin-staging",
-      "d1_databases": [
-        {
-          "binding": "db",
-          "database_name": "perfin-staging",
-          "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
-          "migrations_dir": "./db/migrations/d1-preprod",
-        },
-      ],
       "vars": {
         "TOKEN_EXPIRE_DAYS": 4,
         "TOKEN_COOKIE_NAME": "__Host-token",
@@ -115,6 +135,35 @@
         "REINDEXER_SLEEP": "8 hours",
         "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 1,
+        "logs": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "invocation_logs": true,
+          "persist": true,
+        },
+        "traces": {
+          "enabled": true,
+          "head_sampling_rate": 1,
+          "persist": true,
+        },
+      },
+      "d1_databases": [
+        {
+          "binding": "db",
+          "database_name": "perfin-staging",
+          "database_id": "0a2d735e-fa65-40dc-b3f9-a3a30ee48cb2",
+          "migrations_dir": "./db/migrations/d1-preprod",
+        },
+      ],
+      "r2_buckets": [
+        {
+          "binding": "bk",
+          "bucket_name": "perfin-staging",
+        },
+      ],
       "workflows": [
         {
           "name": "perfin-staging-v2-data-migrator",

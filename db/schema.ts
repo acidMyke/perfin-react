@@ -26,7 +26,8 @@ const versionColumn = () =>
     .notNull()
     .default(sql`1`)
     .$onUpdate(() => sql`version + 1`);
-const dateColumn = () => integer({ mode: 'timestamp' }).notNull();
+const timestampColumn = () => integer({ mode: 'timestamp' });
+const dateColumn = () => timestampColumn().notNull();
 const createdAtColumn = () => dateColumn().$default(() => new Date());
 const updatedAtColumn = () => dateColumn().$onUpdate(() => new Date());
 const centsColumn = () => integer().notNull().default(0);
@@ -141,6 +142,26 @@ export const sessionsTable = sqliteTable(
     index('idx_sessions_token_expires').on(t.token, t.expiresAt),
     index('idx_sessions_user_expires').on(t.userId, t.expiresAt),
   ],
+);
+
+export const uploadedFilesTable = sqliteTable(
+  'uploaded_files',
+  {
+    id: pkIdColumn(),
+    userId: idColumn(),
+    requestId: idColumn(),
+    path: text().notNull(),
+    mimeType: text().notNull(),
+    size: integer().notNull(),
+    createdAt: createdAtColumn(),
+    uploadedAt: timestampColumn(),
+    attachedAt: timestampColumn(),
+    failedAt: timestampColumn(),
+    failureReason: text(),
+    originalName: text(),
+    checksum: blob({ mode: 'buffer' }),
+  },
+  t => [index('idx_uploaded_files_request_id').on(t.userId, t.requestId)],
 );
 
 export const accountsTable = sqliteTable(
@@ -288,7 +309,7 @@ export const searchIndexVersionTable = sqliteTable(
     userId: idColumn(),
     version: integer().notNull(),
     createdAt: createdAtColumn(),
-    completedAt: integer({ mode: 'timestamp' }),
+    completedAt: timestampColumn(),
     recordsProcessed: integer().notNull().default(0),
     totalDeletedCount: integer().notNull().default(0),
     deletedExpenseTextsCount: integer().notNull().default(0),
