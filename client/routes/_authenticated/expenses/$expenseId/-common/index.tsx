@@ -108,8 +108,8 @@ export interface HistoryEntry {
 }
 
 export type CurrentCoordResult =
-  | { isError: false; latitude: number; longitude: number; accuracy: number }
-  | { isError: true; code: number; message: string };
+  | { isSuccess: true; latitude: number; longitude: number; accuracy: number }
+  | { isSuccess: false; code: number; message: string };
 
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
@@ -246,27 +246,28 @@ export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirec
   return navigate({ to: '/expenses', search: monthYear });
 }
 
-export function setCurrentLocation(form: ExpenseFormApi) {
+export function setCurrentLocation(form?: ExpenseFormApi): Promise<CurrentCoordResult> {
   if (!navigator.geolocation) {
-    form.setFieldValue('ui.currentCoordResult', {
-      isError: true,
-      code: 0,
-      message: 'Geolocation is not supported by this browser.',
-    });
-    return;
+    const result = { isSuccess: false, code: 0, message: 'Geolocation is not supported by this browser.' } as const;
+    form?.setFieldValue('ui.currentCoordResult', result);
+    return Promise.resolve(result);
   }
 
-  navigator.geolocation.getCurrentPosition(
-    ({ coords }) => {
-      const { latitude, longitude, accuracy } = coords;
-      form.setFieldValue('ui.currentCoordResult', { isError: false, latitude, longitude, accuracy });
-    },
-    e => {
-      const { code, message } = e;
-      form.setFieldValue('ui.currentCoordResult', { isError: true, code, message });
-    },
-    {},
-  );
+  return new Promise(resolve => {
+    navigator.geolocation.getCurrentPosition(
+      ({ coords }) => {
+        const { latitude, longitude, accuracy } = coords;
+        form?.setFieldValue('ui.currentCoordResult', { isSuccess: true, latitude, longitude, accuracy });
+        resolve({ isSuccess: true, latitude, longitude, accuracy });
+      },
+      e => {
+        const { code, message } = e;
+        form?.setFieldValue('ui.currentCoordResult', { isSuccess: false, code, message });
+        resolve({ isSuccess: false, code, message });
+      },
+      {},
+    );
+  });
 }
 
 export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, navigate: UseNavigateResult<string>) =>

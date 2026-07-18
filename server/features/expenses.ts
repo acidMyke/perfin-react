@@ -184,6 +184,31 @@ const suggestShopByLocationProcedure = protectedProcedure
     return data;
   });
 
+const queryShopSuggestionProcedure = protectedProcedure
+  .input(z.object({ latitude: z.number(), longitude: z.number() }))
+  .query(async ({ input, ctx }) => {
+    const { db, userId } = ctx;
+    const queryBoxIds = getLocationBoxId(input);
+    const result = await db
+      .select({
+        shopName: sql<string>`${expensesTable.shopName}`,
+        shopMall: expensesTable.shopMall,
+      })
+      .from(expensesTable)
+      .where(
+        and(
+          isNotNull(expensesTable.shopName),
+          eq(expensesTable.userId, userId),
+          inArray(expensesTable.boxId, queryBoxIds),
+        ),
+      )
+      .groupBy(expensesTable.shopName, expensesTable.shopMall);
+
+    return {
+      result,
+    };
+  });
+
 const getShopDetailProcedure = protectedProcedure
   .input(z.object({ shopName: z.string() }))
   .mutation(async ({ input, ctx }) => {
@@ -390,6 +415,7 @@ export const expenseProcedures = {
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
   suggestShopByLocation: suggestShopByLocationProcedure,
+  queryShopSuggestion: queryShopSuggestionProcedure,
   getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
