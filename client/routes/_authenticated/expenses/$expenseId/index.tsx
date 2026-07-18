@@ -9,6 +9,7 @@ import {
   useAdjustmentCallbacks,
   useExpenseForm,
   setCurrentLocation,
+  useCompleteShopDetailMutation,
 } from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
@@ -33,11 +34,15 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
+  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
     <div className='mb-20 grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
-      <ShopDetailSubForm form={form} />
+      <ShopDetailSubForm
+        form={form}
+        onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
+      />
       <form.Field name='billedAt'>
         {field => (
           <label htmlFor={field.name} className='floating-label col-span-8 mt-4'>
@@ -219,7 +224,8 @@ const ItemsDetailsSubForm = withForm({
 
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
-  render({ form }) {
+  props: { onShopNameSelect: (_shopName: string) => {} },
+  render({ form, onShopNameSelect }) {
     const isPhysical = useStore(form.store, state => state.values.type === 'physical');
     const isCreate = useStore(form.store, state => state.values.ui.isCreate);
     const { expenseId } = Route.useParams();
@@ -245,6 +251,7 @@ const ShopDetailSubForm = withForm({
             containerCn='col-span-8 mt-4'
             triggerChangeOnFocus
             hideError
+            onSuggestionSelected={onShopNameSelect}
           />
         </>
       );
