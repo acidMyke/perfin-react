@@ -57,7 +57,7 @@ function NavDock() {
 function FloatingButton() {
   return (
     <Link
-      to='/expenses/$expenseId'
+      to='/expenses/$expenseId/start'
       params={{ expenseId: 'create' }}
       className='btn btn-circle btn-xl btn-primary pointer-events-auto fixed right-8 bottom-24'
       activeProps={{ className: 'hidden' }}

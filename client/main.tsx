@@ -19,11 +19,17 @@ const expenseGeoSubpageMask = createRouteMask({
   to: '/expenses/$expenseId',
 });
 
+const expenseCreatePreSubpageMask = createRouteMask({
+  routeTree,
+  from: '/expenses/$expenseId/start',
+  to: '/expenses/$expenseId',
+});
+
 const router = createRouter({
   routeTree,
   defaultPreload: 'viewport',
   defaultPreloadStaleTime: 0,
-  routeMasks: [expenseItemSubpageMask, expenseGeoSubpageMask],
+  routeMasks: [expenseItemSubpageMask, expenseGeoSubpageMask, expenseCreatePreSubpageMask],
 });
 
 declare module '@tanstack/react-router' {

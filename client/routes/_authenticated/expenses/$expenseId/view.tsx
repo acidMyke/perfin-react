@@ -145,7 +145,7 @@ function ActionSection(props: { isDeleted: boolean; billedAt: Date }) {
           className='btn btn-secondary btn-lg col-span-2 mt-2 flex-1'
           onClick={() =>
             navigate({
-              to: '/expenses/$expenseId',
+              to: '/expenses/$expenseId/start',
               params: { expenseId: 'create' },
               search: { copyId: expenseId },
             })
