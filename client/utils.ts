@@ -29,3 +29,14 @@ export const coordinateFormat = new Intl.NumberFormat(SG_LOCALE, {
 
 export const SG_CENTER = { lat: 1.3521, lng: 103.8198 };
 export const generateId = () => nanoid();
+
+export function distanceBetween(lat1: number, lon1: number, lat2: number, lon2: number) {
+  const dx = (lon2 - lon1) * 111320 * Math.cos(((lat1 + lat2) * Math.PI) / 360);
+  const dy = (lat2 - lat1) * 110540;
+  return Math.hypot(dx, dy);
+}
+
+export function formatDistance(distance: number): string {
+  if (distance < 1000) return `${Math.round(distance)} m`;
+  return `${(distance / 1000).toFixed(1)} km`;
+}

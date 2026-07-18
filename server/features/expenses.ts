@@ -9,7 +9,7 @@ import {
   searchIndexVersionTable,
   textChunksTable,
 } from '../../db/schema';
-import { and, asc, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, avg, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
@@ -184,7 +184,7 @@ const suggestShopByLocationProcedure = protectedProcedure
     return data;
   });
 
-const queryShopSuggestionProcedure = protectedProcedure
+const searchShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))
   .query(async ({ input, ctx }) => {
     const { db, userId } = ctx;
@@ -193,6 +193,8 @@ const queryShopSuggestionProcedure = protectedProcedure
       .select({
         shopName: sql<string>`${expensesTable.shopName}`,
         shopMall: expensesTable.shopMall,
+        latitude: avg(expensesTable.latitude).mapWith(expensesTable.latitude),
+        longitude: avg(expensesTable.longitude).mapWith(expensesTable.longitude),
       })
       .from(expensesTable)
       .where(
@@ -415,7 +417,7 @@ export const expenseProcedures = {
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
   suggestShopByLocation: suggestShopByLocationProcedure,
-  queryShopSuggestion: queryShopSuggestionProcedure,
+  searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
   inferItemPrice: inferItemPricesProcedure,
   setDelete: setIsDeletedExpenseProcedure,
