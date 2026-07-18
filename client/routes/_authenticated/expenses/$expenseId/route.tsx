@@ -9,7 +9,6 @@ import {
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
   useAdjustmentCallbacks,
-  setCurrentLocation,
   type ExpenseFormData,
   type ExpenseFormApi,
   type HistoryEntry,
@@ -149,13 +148,6 @@ function RouteComponent() {
       form.reset(formData, { keepDefaultValues: isCopy });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError, isCopy]);
-
-  useEffect(() => {
-    if (isCreate) {
-      setCurrentLocation(form);
-      form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true, dontRunListeners: true });
-    }
-  }, [isCreate, form]);
 
   return (
     <div className='mx-auto max-w-md'>
