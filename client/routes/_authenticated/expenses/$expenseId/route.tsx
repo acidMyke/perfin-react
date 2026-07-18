@@ -5,21 +5,22 @@ import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '#clie
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import {
+  SET_VAL_ONLY,
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
   useAdjustmentCallbacks,
+  pushHistory,
   type ExpenseFormData,
   type ExpenseFormApi,
   type HistoryEntry,
+  type TrackableFieldName,
 } from './-common';
-import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
+import type { DeepKeys } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
-
-const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -54,26 +55,6 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   },
   preload: false,
 });
-
-type TrackableFieldName = Exclude<DeepKeys<ExpenseFormData>, 'ui' | 'history' | `ui${string}` | `history${string}`>;
-const pushHistory = (form: ExpenseFormApi, fieldNames: TrackableFieldName[]) => {
-  const { history, ui, ...currentValues } = form.state.values;
-  let { past } = history;
-  const lastPastEntry = history.past.at(-1);
-  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
-
-  const actions: HistoryEntry[] = [];
-  for (const fieldName of fieldNames) {
-    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
-      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
-      actions.push({ name: fieldName, value: prevValue });
-    }
-  }
-
-  if (actions.length > 0) {
-    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
-  }
-};
 
 function RouteComponent() {
   const navigate = Route.useNavigate();

@@ -354,3 +354,27 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
     }),
     [form],
   );
+
+export const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
+export type TrackableFieldName = Exclude<
+  DeepKeys<ExpenseFormData>,
+  'ui' | 'history' | `ui${string}` | `history${string}`
+>;
+export function pushHistory(form: ExpenseFormApi, fieldNames: TrackableFieldName[]) {
+  const { history, ui, ...currentValues } = form.state.values;
+  let { past } = history;
+  const lastPastEntry = history.past.at(-1);
+  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
+
+  const actions: HistoryEntry[] = [];
+  for (const fieldName of fieldNames) {
+    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
+      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
+      actions.push({ name: fieldName, value: prevValue });
+    }
+  }
+
+  if (actions.length > 0) {
+    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
+  }
+}
