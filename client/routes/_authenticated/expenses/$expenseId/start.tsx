@@ -37,6 +37,15 @@ function RouteComponent() {
       } else {
         const { shopMall, shopName } = args ?? {};
         const fields: TrackableFieldName[] = [];
+        if (currentLocationQuery.data?.isSuccess) {
+          fields.push('geolocation');
+          const { latitude, longitude, accuracy } = currentLocationQuery.data;
+          form.setFieldValue(
+            'geolocation',
+            { isError: false, latitude, longitude, accuracy },
+            { dontValidate: true, dontRunListeners: true },
+          );
+        }
         form.setFieldValue('type', 'physical', { dontValidate: true, dontRunListeners: true });
         if (shopName) {
           fields.push('shopName');
