@@ -9,7 +9,6 @@ import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
-  useAdjustmentCallbacks,
   pushHistory,
   type ExpenseFormData,
   type ExpenseFormApi,
@@ -17,8 +16,6 @@ import {
   type TrackableFieldName,
 } from './-common';
 import type { DeepKeys } from '@tanstack/react-form';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
 
@@ -79,11 +76,6 @@ function RouteComponent() {
         if (fieldApi.name.startsWith('ui')) return;
         pushHistory(form, [fieldApi.name as TrackableFieldName]);
       },
-      onBlurDebounceMs: 200,
-      onBlur: ({ fieldApi }) => {
-        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (fieldName === 'shopName') triggerFetchShopDetail(fieldApi.state.value);
-      },
     },
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
@@ -109,19 +101,6 @@ function RouteComponent() {
       },
     },
   });
-  const { createAdjustment } = useAdjustmentCallbacks(form);
-
-  const shopDetailPickerRef = useShopDetailPickerRef();
-  const triggerFetchShopDetail = useCallback(
-    (shopName?: string | null) => {
-      const source = form.getFieldValue('ui.shopDetailSource');
-      if (source !== 'user') {
-        shopName ??= form.getFieldValue('shopName');
-        if (shopName) shopDetailPickerRef.current?.fetchShopDetail({ shopName });
-      }
-    },
-    [form, shopDetailPickerRef],
-  );
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
@@ -140,36 +119,6 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
-        <ShopDetailPicker
-          ref={shopDetailPickerRef}
-          optionsData={optionsData}
-          onFinalized={data => {
-            const { accountOptions, categoryOptions } = optionsData;
-            const { accountId, categoryId, isGstExcluded, serviceChargeBps } = data;
-            if (accountId) {
-              form.setFieldValue(
-                'account',
-                accountOptions.find(({ value }) => value === accountId),
-                { dontUpdateMeta: true },
-              );
-            }
-            if (categoryId) {
-              form.setFieldValue(
-                'category',
-                categoryOptions.find(({ value }) => value === categoryId),
-                { dontUpdateMeta: true },
-              );
-            }
-            if (serviceChargeBps) {
-              createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
-            }
-            if (isGstExcluded) {
-              createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
-            }
-            form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-            pushHistory(form, ['account', 'category', 'adjustments']);
-          }}
-        />
         <DirtyFormBlockModel mainRouteId={Route.id} />
       </form.AppForm>
     </div>

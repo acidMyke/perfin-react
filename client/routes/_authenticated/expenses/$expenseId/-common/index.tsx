@@ -12,6 +12,7 @@ import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/exp
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 import { useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
@@ -377,4 +378,47 @@ export function pushHistory(form: ExpenseFormApi, fieldNames: TrackableFieldName
   if (actions.length > 0) {
     form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
   }
+}
+
+export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData: ExpenseOptions) {
+  const { createAdjustment } = useAdjustmentCallbacks(form);
+  const shopDetailMutation = useMutation(
+    trpc.expense.getShopDetail.mutationOptions({
+      onSuccess([shopDetail]) {
+        if (!shopDetail) return;
+        const { accountOptions, categoryOptions } = optionsData;
+        const { accountId, categoryId, isGstExcluded, serviceChargeBps } = shopDetail;
+        if (accountId) {
+          form.setFieldValue(
+            'account',
+            accountOptions.find(({ value }) => value === accountId),
+            { dontUpdateMeta: true },
+          );
+        }
+        if (categoryId) {
+          form.setFieldValue(
+            'category',
+            categoryOptions.find(({ value }) => value === categoryId),
+            { dontUpdateMeta: true },
+          );
+        }
+        if (serviceChargeBps) {
+          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
+        }
+        if (isGstExcluded) {
+          createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
+        }
+        form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+        pushHistory(form, ['account', 'category', 'adjustments']);
+      },
+    }),
+  );
+
+  return {
+    async mutateAsync(args?: { shopName: string }) {
+      const shopName = args?.shopName ?? form.getFieldValue('shopName');
+      if (!shopName) return;
+      await shopDetailMutation.mutateAsync({ shopName });
+    },
+  };
 }

@@ -1,8 +1,14 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { pushHistory, setCurrentLocation, useExpenseForm, type TrackableFieldName } from './-common';
+import {
+  pushHistory,
+  setCurrentLocation,
+  useCompleteShopDetailMutation,
+  useExpenseForm,
+  type TrackableFieldName,
+} from './-common';
 import { useCallback, useEffect, useMemo } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
-import { skipToken, useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
 import { Building, Store } from 'lucide-react';
 
@@ -21,6 +27,7 @@ type ShopResult = Shop & { distance: number };
 type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
 
 function RouteComponent() {
+  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const navigate = Route.useNavigate();
   const form = useExpenseForm();
   const currentLocationQuery = useQuery({ queryKey: ['current_coord'], queryFn: () => setCurrentLocation(form) });
@@ -29,6 +36,7 @@ function RouteComponent() {
       currentLocationQuery.data?.isSuccess ? currentLocationQuery.data : skipToken,
     ),
   );
+  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   const continueToMainForm = useCallback(
     (args?: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => {
@@ -48,6 +56,7 @@ function RouteComponent() {
         }
         form.setFieldValue('type', 'physical', { dontValidate: true, dontRunListeners: true });
         if (shopName) {
+          completeShopDetailMutation.mutateAsync({ shopName });
           fields.push('shopName');
           form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
         }
