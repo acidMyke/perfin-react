@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { setCurrentLocation, useExpenseForm } from './-common';
-import { useEffect, useMemo } from 'react';
+import { pushHistory, setCurrentLocation, useExpenseForm, type TrackableFieldName } from './-common';
+import { useCallback, useEffect, useMemo } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
@@ -21,12 +21,36 @@ type ShopResult = Shop & { distance: number };
 type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
 
 function RouteComponent() {
+  const navigate = Route.useNavigate();
   const form = useExpenseForm();
   const currentLocationQuery = useQuery({ queryKey: ['current_coord'], queryFn: () => setCurrentLocation(form) });
   const shopSuggestionsMutation = useQuery(
     trpc.expense.searchShopByLocation.queryOptions(
       currentLocationQuery.data?.isSuccess ? currentLocationQuery.data : skipToken,
     ),
+  );
+
+  const continueToMainForm = useCallback(
+    (args?: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => {
+      if (args && 'isOnline' in args) {
+        form.setFieldValue('type', 'online');
+      } else {
+        const { shopMall, shopName } = args ?? {};
+        const fields: TrackableFieldName[] = [];
+        form.setFieldValue('type', 'physical', { dontValidate: true, dontRunListeners: true });
+        if (shopName) {
+          fields.push('shopName');
+          form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
+        }
+        if (shopMall) {
+          fields.push('shopMall');
+          form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
+        }
+        pushHistory(form, fields);
+      }
+      navigate({ to: '/expenses/$expenseId' });
+    },
+    [form],
   );
 
   const normalizedResult = useMemo(() => {
@@ -69,7 +93,9 @@ function RouteComponent() {
     <div>
       <div className='mb-2 flex gap-x-4'>
         <button className='btn btn-primary w-5/12 grow'>Pick another location</button>
-        <button className='btn btn-secondary w-5/12 grow'>Online</button>
+        <button className='btn btn-secondary w-5/12 grow' onClick={() => continueToMainForm({ isOnline: true })}>
+          Online
+        </button>
       </div>
       <div className='space-y-6'>
         <div>
@@ -80,7 +106,7 @@ function RouteComponent() {
           <ul className='menu bg-base-100 rounded-box w-full border'>
             {normalizedResult?.shops.map(shop => (
               <li key={`${shop.shopMall}-${shop.shopName}`}>
-                <button onClick={() => {}} className='flex justify-between'>
+                <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
                   <div className='text-left'>
                     <div className='font-medium'>{shop.shopName}</div>
                     <div className='text-xs opacity-60'>📍 {shop.shopMall ?? '<Unspecified>'}</div>
@@ -115,7 +141,10 @@ function RouteComponent() {
           <ul className='menu bg-base-100 rounded-box w-full border'>
             {normalizedResult?.malls.map(mall => (
               <li key={mall.mallName}>
-                <button onClick={() => {}} className='flex justify-between'>
+                <button
+                  onClick={() => continueToMainForm({ shopMall: mall.mallName })}
+                  className='flex justify-between'
+                >
                   <div className='text-left'>
                     <div className='font-medium'>{mall.mallName}</div>
                     <div className='text-xs opacity-60'>{mall.shopCount} shops</div>
