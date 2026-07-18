@@ -107,6 +107,10 @@ export interface HistoryEntry {
   value: any;
 }
 
+export type CurrentCoordResult =
+  | { isError: false; latitude: number; longitude: number; accuracy: number }
+  | { isError: true; code: number; message: string };
+
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
   options?: ExpenseOptions,
@@ -124,6 +128,7 @@ export function mapExpenseDetailToForm(
       shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult: calculateExpense(formValues),
+      currentCoordResult: undefined as CurrentCoordResult | undefined,
     },
     history: {
       past: [] as HistoryEntry[][],
@@ -241,18 +246,27 @@ export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirec
   return navigate({ to: '/expenses', search: monthYear });
 }
 
-export async function setCurrentLocation(form: ExpenseFormApi) {
-  if (navigator.geolocation) {
-    navigator.geolocation.getCurrentPosition(
-      ({ coords }) => {
-        const { latitude, longitude, accuracy } = coords;
-        form.setFieldValue('geolocation', { latitude, longitude, accuracy, isError: false });
-      },
-      () => {
-        form.setFieldValue('geolocation.isError', false);
-      },
-    );
+export function setCurrentLocation(form: ExpenseFormApi) {
+  if (!navigator.geolocation) {
+    form.setFieldValue('ui.currentCoordResult', {
+      isError: true,
+      code: 0,
+      message: 'Geolocation is not supported by this browser.',
+    });
+    return;
   }
+
+  navigator.geolocation.getCurrentPosition(
+    ({ coords }) => {
+      const { latitude, longitude, accuracy } = coords;
+      form.setFieldValue('ui.currentCoordResult', { isError: false, latitude, longitude, accuracy });
+    },
+    e => {
+      const { code, message } = e;
+      form.setFieldValue('ui.currentCoordResult', { isError: true, code, message });
+    },
+    {},
+  );
 }
 
 export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, navigate: UseNavigateResult<string>) =>
