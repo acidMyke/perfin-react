@@ -388,25 +388,20 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
         if (!shopDetail) return;
         const { accountOptions, categoryOptions } = optionsData;
         const { accountId, categoryId, isGstExcluded, serviceChargeBps } = shopDetail;
+        const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
         if (accountId) {
-          form.setFieldValue(
-            'account',
-            accountOptions.find(({ value }) => value === accountId),
-            { dontUpdateMeta: true },
-          );
+          const account = accountOptions.find(({ value }) => value === accountId);
+          form.setFieldValue('account', account, updateMetaOpts);
         }
         if (categoryId) {
-          form.setFieldValue(
-            'category',
-            categoryOptions.find(({ value }) => value === categoryId),
-            { dontUpdateMeta: true },
-          );
+          const category = categoryOptions.find(({ value }) => value === categoryId);
+          form.setFieldValue('category', category, updateMetaOpts);
         }
         if (serviceChargeBps) {
-          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
+          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
         }
         if (isGstExcluded) {
-          createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
+          createAdjustment({ special: GST_NAME, ...updateMetaOpts });
         }
         form.setFieldValue('ui.shopDetailSource', 'autocomplete');
         pushHistory(form, ['account', 'category', 'adjustments']);
