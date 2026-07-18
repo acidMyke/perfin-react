@@ -8,15 +8,15 @@ import {
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
-  type ExpenseFormData,
   useAdjustmentCallbacks,
+  setCurrentLocation,
+  type ExpenseFormData,
   type ExpenseFormApi,
   type HistoryEntry,
 } from './-common';
 import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
-import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
 
@@ -97,7 +97,6 @@ function RouteComponent() {
       onChange: ({ fieldApi }) => {
         if (fieldApi.name.startsWith('history')) return;
         if (fieldApi.name.startsWith('ui')) return;
-        if (/(geolocation.*)/.test(fieldApi.name)) triggerFetchShopSuggestion();
         pushHistory(form, [fieldApi.name as TrackableFieldName]);
       },
       onBlurDebounceMs: 200,
@@ -131,22 +130,6 @@ function RouteComponent() {
     },
   });
   const { createAdjustment } = useAdjustmentCallbacks(form);
-  const shopNameMallPickerRef = useShopNameMallPickerRef();
-  const triggerFetchShopSuggestion = useCallback(
-    (param?: { latitude: number; longitude: number }) => {
-      if (form.getFieldValue('ui.shouldFetchShopSuggestion')) {
-        if (!param) {
-          const { latitude, longitude } = form.getFieldValue('geolocation');
-          if (latitude && longitude) {
-            shopNameMallPickerRef.current?.fetchShopSuggestions({ latitude, longitude });
-          }
-        } else {
-          shopNameMallPickerRef.current?.fetchShopSuggestions(param);
-        }
-      }
-    },
-    [form, shopNameMallPickerRef],
-  );
 
   const shopDetailPickerRef = useShopDetailPickerRef();
   const triggerFetchShopDetail = useCallback(
@@ -169,7 +152,8 @@ function RouteComponent() {
 
   useEffect(() => {
     if (isCreate) {
-      form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true });
+      setCurrentLocation(form);
+      form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true, dontRunListeners: true });
     }
   }, [isCreate, form]);
 
@@ -183,21 +167,6 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
-        <ShopNameMallPicker
-          ref={shopNameMallPickerRef}
-          onTryAgainClick={() => form.setFieldValue('ui.shouldFetchShopSuggestion', true)}
-          onFinalized={data => {
-            const { shopMall, shopName } = data;
-            if (shopMall) {
-              form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
-            }
-            if (shopName) {
-              form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
-              triggerFetchShopDetail(shopName);
-            }
-            pushHistory(form, ['shopMall', 'shopName']);
-          }}
-        />
         <ShopDetailPicker
           ref={shopDetailPickerRef}
           optionsData={optionsData}

@@ -5,16 +5,19 @@ import { useMutation } from '@tanstack/react-query';
 type ShopSuggestionPayload = RouterInputs['expense']['suggestShopByLocation'];
 type ShopNameMallFinalized = { shopName: string | null; shopMall: string | null };
 
+/** @deprecated */
 type ShopNameMallPickerHandler = {
   fetchShopSuggestions: (param: ShopSuggestionPayload) => void;
 };
 
+/** @deprecated */
 type ShopNameMallPickerPickerProps = {
   onEmptyResponse?: () => any;
   onFinalized: (data: ShopNameMallFinalized) => any;
   onTryAgainClick: () => any;
 };
 
+/** @deprecated */
 export const ShopNameMallPicker = forwardRef<ShopNameMallPickerHandler, ShopNameMallPickerPickerProps>((props, ref) => {
   const { onFinalized, onEmptyResponse, onTryAgainClick } = props;
   const shopPickerDialogRef = useRef<HTMLDialogElement>(null);
@@ -103,6 +106,7 @@ export const ShopNameMallPicker = forwardRef<ShopNameMallPickerHandler, ShopName
   );
 });
 
+/** @deprecated */
 export function useShopNameMallPickerRef() {
   return useRef<ShopNameMallPickerHandler>(null);
 }
