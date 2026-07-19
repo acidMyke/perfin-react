@@ -6,11 +6,11 @@ import {
   useExpenseForm,
   type TrackableFieldName,
 } from './-common';
-import { useCallback, useEffect, useMemo } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
-import { Building, Store } from 'lucide-react';
+import { AlertTriangle, Building, Store } from 'lucide-react';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -26,14 +26,29 @@ type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 type ShopResult = Shop & { distance: number };
 type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
 
+function formatGeolocationErrorCode(code: number) {
+  switch (code) {
+    case 0:
+      return 'Your browser does not support location services.';
+    case 1:
+      return 'Location permission was denied.';
+    case 2:
+      return 'Unable to determine your location.';
+    case 3:
+      return 'Location request timed out.';
+  }
+}
+
 function RouteComponent() {
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const navigate = Route.useNavigate();
   const form = useExpenseForm();
+  const [showMap, setShowMap] = useState(false);
+  const [customCoordinate, setCustomCoordinate] = useState<{ latitude: number; longitude: number }>();
   const currentLocationQuery = useQuery({ queryKey: ['current_coord'], queryFn: () => setCurrentLocation(form) });
   const shopSuggestionsMutation = useQuery(
     trpc.expense.searchShopByLocation.queryOptions(
-      currentLocationQuery.data?.isSuccess ? currentLocationQuery.data : skipToken,
+      customCoordinate ?? (currentLocationQuery.data?.isSuccess ? currentLocationQuery.data : skipToken),
     ),
   );
   const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
@@ -110,11 +125,25 @@ function RouteComponent() {
   return (
     <div>
       <div className='mb-2 flex gap-x-4'>
-        <button className='btn btn-primary w-5/12 grow'>Pick another location</button>
+        <button className='btn btn-primary w-5/12 grow' onClick={() => setShowMap(v => !v)}>
+          {showMap ? 'Hide map' : 'Change coordinate'}
+        </button>
         <button className='btn btn-secondary w-5/12 grow' onClick={() => continueToMainForm({ isOnline: true })}>
           Online
         </button>
       </div>
+      {currentLocationQuery.data && currentLocationQuery.data.isSuccess === false && (
+        <div className='alert alert-warning'>
+          <AlertTriangle className='h-5 w-5' />
+
+          <div className='flex-1'>
+            <div className='font-semibold'>Location unavailable</div>
+            <div className='text-sm opacity-80'>
+              {formatGeolocationErrorCode(currentLocationQuery.data.code) ?? currentLocationQuery.data.message}
+            </div>
+          </div>
+        </div>
+      )}
       <div className='space-y-6'>
         <div>
           <h3 className='menu-title text-2xl'>
