@@ -299,6 +299,7 @@ const ShopDetailSubForm = withForm({
           containerCn='col-span-4 mt-2'
           triggerChangeOnFocus
           hideError
+          onSuggestionSelected={onShopNameSelect}
         />
         <ExpenseSuggestableField
           form={form}

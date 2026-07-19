@@ -1,11 +1,18 @@
-import { createFileRoute, redirect } from '@tanstack/react-router';
-import { pushHistory, useCompleteShopDetailMutation, useExpenseForm, type TrackableFieldName } from './-common';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import {
+  pushHistory,
+  useCompleteShopDetailMutation,
+  useExpenseForm,
+  type ExpenseFormApi,
+  type TrackableFieldName,
+} from './-common';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
-import { Building, Store } from 'lucide-react';
+import { ArrowRight, Building, Store } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
+import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -134,8 +141,47 @@ function RouteComponent() {
         </button>
       </div>
 
+      <p>Manual entry</p>
+      <ManualEntryFields
+        form={form}
+        onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
+      />
+
       <p className='mt-6'>Pick from existing</p>
       <NearbyResultList normalizedResult={normalizedResult} continueToMainForm={continueToMainForm} />
+    </div>
+  );
+}
+
+type ManualEntryFieldsOptions = {
+  form: ExpenseFormApi;
+  onShopNameSelect: (shopName: string) => {};
+};
+
+function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions) {
+  return (
+    <div className='mt-2 mb-2 flex gap-x-4'>
+      <ExpenseSuggestableField
+        form={form}
+        fields={{ text: 'shopName' }}
+        scope='shopName'
+        getContext={() => form.getFieldValue('shopMall')}
+        label='Shop name'
+        triggerChangeOnFocus
+        hideError
+        onSuggestionSelected={onShopNameSelect}
+      />
+      <ExpenseSuggestableField
+        form={form}
+        fields={{ text: 'shopMall' }}
+        scope='shopMall'
+        label='Mall'
+        triggerChangeOnFocus
+        hideError
+      />
+      <Link className='btn btn-primary' to='/expenses/$expenseId' params={{ expenseId: 'create' }}>
+        <ArrowRight />
+      </Link>
     </div>
   );
 }
