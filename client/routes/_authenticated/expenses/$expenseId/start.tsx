@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
-import { AlertTriangle, Building, Store } from 'lucide-react';
+import { Building, Store } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
@@ -20,6 +20,15 @@ type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 
 type ShopResult = Shop & { distance: number };
 type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
+
+function formatCoordinate(coord: { latitude: number; longitude: number; accuracy?: number }) {
+  const { latitude, longitude, accuracy } = coord;
+  let coordString = `${latitude.toPrecision(8)}, ${longitude.toPrecision(8)}`;
+  if (accuracy) {
+    coordString += ' ' + formatDistance(accuracy);
+  }
+  return coordString;
+}
 
 function RouteComponent() {
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
@@ -114,22 +123,18 @@ function RouteComponent() {
           Online
         </button>
       </div>
-      {currentLocationQuery.data && currentLocationQuery.isError && (
-        <div className='alert alert-warning'>
-          <AlertTriangle className='h-5 w-5' />
 
-          <div className='flex-1'>
-            <div className='font-semibold'>Location unavailable</div>
-            <div className='text-sm opacity-80'>{currentLocationQuery.error?.getFormmatedError()}</div>
-          </div>
-        </div>
-      )}
-      {currentLocationQuery.data && (
+      {customCoordinate ? (
+        <p>Custom coordinate: {formatCoordinate(customCoordinate)}</p>
+      ) : (
         <p className='col-span-5 mt-6 h-10'>
-          Coordinate: {currentLocationQuery.data.latitude.toPrecision(8)},{' '}
-          {currentLocationQuery.data.longitude.toPrecision(8)} ({currentLocationQuery.data.accuracy})
+          Current coordinate:{' '}
+          {currentLocationQuery.isPending && <span className='skeleton skeleton-text'>Retriving location...</span>}
+          {currentLocationQuery.isError && <span>Error: {currentLocationQuery.error?.getFormmatedError()}</span>}
+          {currentLocationQuery.data && <span className=''>{formatCoordinate(currentLocationQuery.data)}</span>}
         </p>
       )}
+
       <div className='space-y-6'>
         <div>
           <h3 className='menu-title text-2xl'>
