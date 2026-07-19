@@ -1,4 +1,5 @@
-import { useEffect, useState } from 'react';
+import { distanceBetween } from '#client/utils';
+import { useEffect, useRef, useState } from 'react';
 
 export const GEOLOCATION_KEY = ['user', 'location'] as const;
 export type LocationCoordinates = {
@@ -49,13 +50,28 @@ type UseGeolocationWatcherOptions = {
    * Called when the Geolocation API returns an error.
    */
   onError?: (error: GeolocationError) => void;
+
+  /**
+   * Minimum distance (m) before emitting a new location.
+   *
+   * @default 20
+   */
+  distanceThreshold?: number;
+
+  /**
+   * Minimum time (ms) between emitted locations.
+   *
+   * @default 4000
+   */
+  timeThreshold?: number;
 } & PositionOptions;
 
 export function useGeolocationWatcher(options: UseGeolocationWatcherOptions = {}) {
-  const { enableHighAccuracy = true, maximumAge = 0, timeout = 5000, onSuccess, onError } = options;
+  const { enableHighAccuracy = true, maximumAge = 10000, timeout = 5000, onSuccess, onError } = options;
   const [data, setData] = useState<LocationCoordinates | null>(null);
   const [error, setError] = useState<GeolocationError | null>(null);
   const [isPending, setIsPending] = useState(true);
+  const lastCoords = useRef<LocationCoordinates | null>(null);
 
   useEffect(() => {
     if (!navigator.geolocation) {
@@ -68,12 +84,24 @@ export function useGeolocationWatcher(options: UseGeolocationWatcherOptions = {}
 
     const watchId = navigator.geolocation.watchPosition(
       position => {
-        const coords: LocationCoordinates = {
-          latitude: position.coords.latitude,
-          longitude: position.coords.longitude,
-          accuracy: position.coords.accuracy,
-          timestamp: position.timestamp,
-        };
+        const distanceThreshold = Math.max(options.distanceThreshold ?? 20, 20);
+        const timeThreshold = Math.max(options.timeThreshold ?? 1000, 1000);
+        const { latitude, longitude, accuracy } = position.coords;
+        const coords: LocationCoordinates = { latitude, longitude, accuracy, timestamp: position.timestamp };
+
+        const prev = lastCoords.current;
+        if (prev) {
+          const distance = distanceBetween(prev.latitude, prev.longitude, latitude, longitude);
+          const time = position.timestamp - prev.timestamp;
+          const movedEnough = distance >= distanceThreshold;
+          const waitedEnough = time >= timeThreshold;
+
+          if (!movedEnough || !waitedEnough) {
+            return;
+          }
+        }
+
+        lastCoords.current = coords;
 
         setData(coords);
         setError(null);

@@ -27,7 +27,7 @@ function RouteComponent() {
   const form = useExpenseForm();
   const [showMap, setShowMap] = useState(false);
   const [customCoordinate, setCustomCoordinate] = useState<{ latitude: number; longitude: number }>();
-  const currentLocationQuery = useGeolocationWatcher();
+  const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 100 });
   const shopSuggestionsMutation = useQuery(
     trpc.expense.searchShopByLocation.queryOptions(
       customCoordinate ?? (currentLocationQuery.isSuccess ? currentLocationQuery.data : skipToken) ?? skipToken,
@@ -123,6 +123,12 @@ function RouteComponent() {
             <div className='text-sm opacity-80'>{currentLocationQuery.error?.getFormmatedError()}</div>
           </div>
         </div>
+      )}
+      {currentLocationQuery.data && (
+        <p className='col-span-5 mt-6 h-10'>
+          Coordinate: {currentLocationQuery.data.latitude.toPrecision(8)},{' '}
+          {currentLocationQuery.data.longitude.toPrecision(8)} ({currentLocationQuery.data.accuracy})
+        </p>
       )}
       <div className='space-y-6'>
         <div>
