@@ -1,16 +1,11 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import {
-  pushHistory,
-  setCurrentLocation,
-  useCompleteShopDetailMutation,
-  useExpenseForm,
-  type TrackableFieldName,
-} from './-common';
+import { pushHistory, useCompleteShopDetailMutation, useExpenseForm, type TrackableFieldName } from './-common';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance } from '#client/utils';
 import { AlertTriangle, Building, Store } from 'lucide-react';
+import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -26,29 +21,16 @@ type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 type ShopResult = Shop & { distance: number };
 type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
 
-function formatGeolocationErrorCode(code: number) {
-  switch (code) {
-    case 0:
-      return 'Your browser does not support location services.';
-    case 1:
-      return 'Location permission was denied.';
-    case 2:
-      return 'Unable to determine your location.';
-    case 3:
-      return 'Location request timed out.';
-  }
-}
-
 function RouteComponent() {
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const navigate = Route.useNavigate();
   const form = useExpenseForm();
   const [showMap, setShowMap] = useState(false);
   const [customCoordinate, setCustomCoordinate] = useState<{ latitude: number; longitude: number }>();
-  const currentLocationQuery = useQuery({ queryKey: ['current_coord'], queryFn: () => setCurrentLocation(form) });
+  const currentLocationQuery = useGeolocationWatcher();
   const shopSuggestionsMutation = useQuery(
     trpc.expense.searchShopByLocation.queryOptions(
-      customCoordinate ?? (currentLocationQuery.data?.isSuccess ? currentLocationQuery.data : skipToken),
+      customCoordinate ?? (currentLocationQuery.isSuccess ? currentLocationQuery.data : skipToken) ?? skipToken,
     ),
   );
   const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
@@ -60,7 +42,7 @@ function RouteComponent() {
       } else {
         const { shopMall, shopName } = args ?? {};
         const fields: TrackableFieldName[] = [];
-        if (currentLocationQuery.data?.isSuccess) {
+        if (currentLocationQuery.data) {
           fields.push('geolocation');
           const { latitude, longitude, accuracy } = currentLocationQuery.data;
           form.setFieldValue(
@@ -87,7 +69,7 @@ function RouteComponent() {
   );
 
   const normalizedResult = useMemo(() => {
-    if (!currentLocationQuery.data?.isSuccess || !shopSuggestionsMutation.data) return;
+    if (!currentLocationQuery.data || !shopSuggestionsMutation.data) return;
     const { latitude: userLat, longitude: userLng } = currentLocationQuery.data;
     const shops: ShopResult[] = [];
     const mallMap = new Map<string, { latSum: number; lngSum: number; count: number }>();
@@ -132,15 +114,13 @@ function RouteComponent() {
           Online
         </button>
       </div>
-      {currentLocationQuery.data && currentLocationQuery.data.isSuccess === false && (
+      {currentLocationQuery.data && currentLocationQuery.isError && (
         <div className='alert alert-warning'>
           <AlertTriangle className='h-5 w-5' />
 
           <div className='flex-1'>
             <div className='font-semibold'>Location unavailable</div>
-            <div className='text-sm opacity-80'>
-              {formatGeolocationErrorCode(currentLocationQuery.data.code) ?? currentLocationQuery.data.message}
-            </div>
+            <div className='text-sm opacity-80'>{currentLocationQuery.error?.getFormmatedError()}</div>
           </div>
         </div>
       )}
