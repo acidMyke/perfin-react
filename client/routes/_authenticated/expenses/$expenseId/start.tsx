@@ -6,13 +6,14 @@ import {
   type ExpenseFormApi,
   type TrackableFieldName,
 } from './-common';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { distanceBetween, formatDistance } from '#client/utils';
+import { distanceBetween, formatDistance, SG_CENTER, toLatLng, type Coordinate } from '#client/utils';
 import { ArrowRight, Building, Store } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
+import { AdvancedMarker, APIProvider, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -42,7 +43,7 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const form = useExpenseForm();
   const [showMap, setShowMap] = useState(false);
-  const [customCoordinate, setCustomCoordinate] = useState<{ latitude: number; longitude: number }>();
+  const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
   const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 100 });
   const shopSuggestionsMutation = useQuery(
     trpc.expense.searchShopByLocation.queryOptions(
@@ -121,7 +122,7 @@ function RouteComponent() {
   }, []);
 
   return (
-    <div>
+    <div className='mb-20'>
       {customCoordinate ? (
         <p className='mb-2'>Custom coordinate: {formatCoordinate(customCoordinate)}</p>
       ) : (
@@ -140,6 +141,14 @@ function RouteComponent() {
           Online
         </button>
       </div>
+
+      {showMap && (
+        <CoordinatePicker
+          currentLocationQuery={currentLocationQuery}
+          customCoordinate={customCoordinate}
+          setCustomCoordinate={setCustomCoordinate}
+        />
+      )}
 
       <p>Manual entry</p>
       <ManualEntryFields
@@ -255,5 +264,66 @@ function NearbyResultList({ normalizedResult, continueToMainForm }: NearbyResult
         </ul>
       </div>
     </div>
+  );
+}
+
+type CoordinatePickerProps = {
+  currentLocationQuery: ReturnType<typeof useGeolocationWatcher>;
+  customCoordinate: Coordinate | undefined;
+  setCustomCoordinate: Dispatch<SetStateAction<Coordinate | undefined>>;
+};
+
+function CoordinatePicker(props: CoordinatePickerProps) {
+  const { currentLocationQuery, customCoordinate, setCustomCoordinate } = props;
+  const defaultCenter = customCoordinate
+    ? toLatLng(customCoordinate)
+    : currentLocationQuery.data
+      ? toLatLng(currentLocationQuery.data)
+      : SG_CENTER;
+  const defaualtZoom = customCoordinate ? 17 : currentLocationQuery.data ? 15 : 11;
+
+  return (
+    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+      <EmbeddedGoogleMap
+        mapId='80d716b53c1956d425c4c9f3'
+        className='col-span-2 my-4 h-100'
+        gestureHandling='greedy'
+        disableDefaultUI={false}
+        zoomControl
+        mapTypeControl={false}
+        fullscreenControl={false}
+        streetViewControl={false}
+        colorScheme='DARK'
+        reuseMaps
+        defaultCenter={defaultCenter}
+        defaultZoom={defaualtZoom}
+        onClick={e => {
+          const latLng = e.detail.latLng;
+          if (!latLng) return;
+          setCustomCoordinate({ latitude: latLng.lat, longitude: latLng.lng });
+        }}
+        options={{
+          zoomControlOptions: {
+            position: ControlPosition.RIGHT_BOTTOM,
+          },
+        }}
+      >
+        {currentLocationQuery.data && (
+          <AdvancedMarker
+            position={{ lat: currentLocationQuery.data.latitude, lng: currentLocationQuery.data.longitude }}
+          >
+            <div className='current-location-dot'>
+              <div className='pulse-ring'></div>
+              <div className='core-dot'></div>
+            </div>
+          </AdvancedMarker>
+        )}
+        {customCoordinate && (
+          <AdvancedMarker position={{ lat: customCoordinate.latitude, lng: customCoordinate.longitude }}>
+            <Pin background='#ea4335' glyphColor='#b41412' />
+          </AdvancedMarker>
+        )}
+      </EmbeddedGoogleMap>
+    </APIProvider>
   );
 }
