@@ -46,6 +46,7 @@ function RouteComponent() {
 
   const continueToMainForm = useCallback(
     (args?: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => {
+      navigate({ to: '/expenses/$expenseId' });
       if (args && 'isOnline' in args) {
         form.setFieldValue('type', 'online');
       } else {
@@ -72,7 +73,6 @@ function RouteComponent() {
         }
         pushHistory(form, fields);
       }
-      navigate({ to: '/expenses/$expenseId' });
     },
     [form],
   );
@@ -135,77 +135,85 @@ function RouteComponent() {
         </p>
       )}
 
-      <div className='space-y-6'>
-        <div>
-          <h3 className='menu-title text-2xl'>
-            <Store size={30} className='inline' /> Shops
-          </h3>
+      <DisplayList normalizedResult={normalizedResult} continueToMainForm={continueToMainForm} />
+    </div>
+  );
+}
 
-          <ul className='menu bg-base-100 rounded-box w-full border'>
-            {normalizedResult?.shops.map(shop => (
-              <li key={`${shop.shopMall}-${shop.shopName}`}>
-                <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
-                  <div className='text-left'>
-                    <div className='font-medium'>{shop.shopName}</div>
-                    <div className='text-xs opacity-60'>📍 {shop.shopMall ?? '<Unspecified>'}</div>
+type DisplayListProps = {
+  normalizedResult: { shops: ShopResult[]; malls: MallResult[] } | undefined;
+  continueToMainForm: (args: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => any;
+};
+
+function DisplayList({ normalizedResult, continueToMainForm }: DisplayListProps) {
+  return (
+    <div className='space-y-6'>
+      <div>
+        <h3 className='menu-title text-2xl'>
+          <Store size={30} className='inline' /> Shops
+        </h3>
+
+        <ul className='menu bg-base-100 rounded-box w-full border'>
+          {normalizedResult?.shops.map(shop => (
+            <li key={`${shop.shopMall}-${shop.shopName}`}>
+              <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
+                <div className='text-left'>
+                  <div className='font-medium'>{shop.shopName}</div>
+                  <div className='text-xs opacity-60'>📍 {shop.shopMall ?? '<Unspecified>'}</div>
+                </div>
+
+                <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>
+              </button>
+            </li>
+          )) ??
+            [...Array(4)].map((_, i) => (
+              <li key={i}>
+                <div className='flex justify-between'>
+                  <div className='space-y-2'>
+                    <div className='skeleton h-4 w-32' />
+                    <div className='skeleton h-3 w-24' />
                   </div>
 
-                  <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>
-                </button>
+                  <div className='skeleton h-5 w-12' />
+                </div>
               </li>
-            )) ??
-              [...Array(4)].map((_, i) => (
-                <li key={i}>
-                  <div className='flex justify-between'>
-                    <div className='space-y-2'>
-                      <div className='skeleton h-4 w-32' />
-                      <div className='skeleton h-3 w-24' />
-                    </div>
+            ))}
+        </ul>
 
-                    <div className='skeleton h-5 w-12' />
-                  </div>
-                </li>
-              ))}
-          </ul>
+        <div className='space-y-2'>{}</div>
+      </div>
 
-          <div className='space-y-2'>{}</div>
-        </div>
+      <div>
+        <h3 className='menu-title text-2xl'>
+          <Building size={30} className='inline' /> Malls
+        </h3>
 
-        <div>
-          <h3 className='menu-title text-2xl'>
-            <Building size={30} className='inline' /> Malls
-          </h3>
+        <ul className='menu bg-base-100 rounded-box w-full border'>
+          {normalizedResult?.malls.map(mall => (
+            <li key={mall.mallName}>
+              <button onClick={() => continueToMainForm({ shopMall: mall.mallName })} className='flex justify-between'>
+                <div className='text-left'>
+                  <div className='font-medium'>{mall.mallName}</div>
+                  <div className='text-xs opacity-60'>{mall.shopCount} shops</div>
+                </div>
 
-          <ul className='menu bg-base-100 rounded-box w-full border'>
-            {normalizedResult?.malls.map(mall => (
-              <li key={mall.mallName}>
-                <button
-                  onClick={() => continueToMainForm({ shopMall: mall.mallName })}
-                  className='flex justify-between'
-                >
-                  <div className='text-left'>
-                    <div className='font-medium'>{mall.mallName}</div>
-                    <div className='text-xs opacity-60'>{mall.shopCount} shops</div>
+                <span className='badge badge-outline'>{formatDistance(mall.distance)}</span>
+              </button>
+            </li>
+          )) ??
+            [...Array(3)].map((_, i) => (
+              <li key={i}>
+                <div className='flex justify-between'>
+                  <div className='space-y-2'>
+                    <div className='skeleton h-4 w-36' />
+                    <div className='skeleton h-3 w-16' />
                   </div>
 
-                  <span className='badge badge-outline'>{formatDistance(mall.distance)}</span>
-                </button>
+                  <div className='skeleton h-5 w-12' />
+                </div>
               </li>
-            )) ??
-              [...Array(3)].map((_, i) => (
-                <li key={i}>
-                  <div className='flex justify-between'>
-                    <div className='space-y-2'>
-                      <div className='skeleton h-4 w-36' />
-                      <div className='skeleton h-3 w-16' />
-                    </div>
-
-                    <div className='skeleton h-5 w-12' />
-                  </div>
-                </li>
-              ))}
-          </ul>
-        </div>
+            ))}
+        </ul>
       </div>
     </div>
   );
