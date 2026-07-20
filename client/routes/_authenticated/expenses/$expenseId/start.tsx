@@ -158,6 +158,10 @@ function RouteComponent() {
 
       <p className='mt-6'>Pick from existing</p>
       <NearbyResultList normalizedResult={normalizedResult} continueToMainForm={continueToMainForm} />
+
+      <Link className='btn mt-6 w-full' to='/expenses'>
+        Cancel
+      </Link>
     </div>
   );
 }
