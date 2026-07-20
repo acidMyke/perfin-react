@@ -85,8 +85,8 @@ function RouteComponent() {
         inProgressLabel='Submitting...'
       />
       {expenseId === 'create' ? (
-        <Link className='btn col-span-4 w-full' to='/expenses'>
-          Cancel
+        <Link className='btn col-span-4 w-full' to='/expenses/$expenseId/start' params={{ expenseId }}>
+          Back
         </Link>
       ) : (
         <Link className='btn col-span-4 w-full' to='/expenses/$expenseId/view' params={{ expenseId }}>
