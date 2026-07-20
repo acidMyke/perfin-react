@@ -6,6 +6,7 @@ import { whoamiQueryOptions } from '#client/queryOptions';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { PageHeader } from '#components/PageHeader';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
@@ -71,7 +72,9 @@ function RouteComponent() {
   return (
     <>
       <div className='h-8'></div>
-      <Outlet />
+      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+        <Outlet />
+      </APIProvider>
       <FloatingButton />
       <NavDock />
     </>

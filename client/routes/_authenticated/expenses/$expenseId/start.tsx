@@ -283,47 +283,45 @@ function CoordinatePicker(props: CoordinatePickerProps) {
   const defaualtZoom = customCoordinate ? 17 : currentLocationQuery.data ? 15 : 11;
 
   return (
-    <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-      <EmbeddedGoogleMap
-        mapId='80d716b53c1956d425c4c9f3'
-        className='col-span-2 my-4 h-100'
-        gestureHandling='greedy'
-        disableDefaultUI={false}
-        zoomControl
-        mapTypeControl={false}
-        fullscreenControl={false}
-        streetViewControl={false}
-        colorScheme='DARK'
-        reuseMaps
-        defaultCenter={defaultCenter}
-        defaultZoom={defaualtZoom}
-        onClick={e => {
-          const latLng = e.detail.latLng;
-          if (!latLng) return;
-          setCustomCoordinate({ latitude: latLng.lat, longitude: latLng.lng });
-        }}
-        options={{
-          zoomControlOptions: {
-            position: ControlPosition.RIGHT_BOTTOM,
-          },
-        }}
-      >
-        {currentLocationQuery.data && (
-          <AdvancedMarker
-            position={{ lat: currentLocationQuery.data.latitude, lng: currentLocationQuery.data.longitude }}
-          >
-            <div className='current-location-dot'>
-              <div className='pulse-ring'></div>
-              <div className='core-dot'></div>
-            </div>
-          </AdvancedMarker>
-        )}
-        {customCoordinate && (
-          <AdvancedMarker position={{ lat: customCoordinate.latitude, lng: customCoordinate.longitude }}>
-            <Pin background='#ea4335' glyphColor='#b41412' />
-          </AdvancedMarker>
-        )}
-      </EmbeddedGoogleMap>
-    </APIProvider>
+    <EmbeddedGoogleMap
+      mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID}
+      className='col-span-2 my-4 h-100'
+      gestureHandling='greedy'
+      disableDefaultUI={false}
+      zoomControl
+      mapTypeControl={false}
+      fullscreenControl={false}
+      streetViewControl={false}
+      colorScheme='DARK'
+      reuseMaps
+      defaultCenter={defaultCenter}
+      defaultZoom={defaualtZoom}
+      onClick={e => {
+        const latLng = e.detail.latLng;
+        if (!latLng) return;
+        setCustomCoordinate({ latitude: latLng.lat, longitude: latLng.lng });
+      }}
+      options={{
+        zoomControlOptions: {
+          position: ControlPosition.RIGHT_BOTTOM,
+        },
+      }}
+    >
+      {currentLocationQuery.data && (
+        <AdvancedMarker
+          position={{ lat: currentLocationQuery.data.latitude, lng: currentLocationQuery.data.longitude }}
+        >
+          <div className='current-location-dot'>
+            <div className='pulse-ring'></div>
+            <div className='core-dot'></div>
+          </div>
+        </AdvancedMarker>
+      )}
+      {customCoordinate && (
+        <AdvancedMarker position={{ lat: customCoordinate.latitude, lng: customCoordinate.longitude }}>
+          <Pin background='#ea4335' glyphColor='#b41412' />
+        </AdvancedMarker>
+      )}
+    </EmbeddedGoogleMap>
   );
 }
