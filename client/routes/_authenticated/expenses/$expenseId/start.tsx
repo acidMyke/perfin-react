@@ -13,7 +13,7 @@ import { distanceBetween, formatDistance, SG_CENTER, toLatLng, type Coordinate }
 import { ArrowRight, Building, Store } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
-import { AdvancedMarker, APIProvider, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
+import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,

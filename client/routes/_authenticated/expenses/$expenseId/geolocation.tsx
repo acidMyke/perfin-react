@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { setCurrentLocation, useExpenseForm } from './-common';
 import { coordinateFormat, SG_CENTER } from '#client/utils';
-import { APIProvider, ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
+import { ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/geolocation')({
   validateSearch(search) {
