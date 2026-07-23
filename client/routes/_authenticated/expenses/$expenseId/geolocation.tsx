@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { setCurrentLocation, useExpenseForm } from './-common';
 import { coordinateFormat, SG_CENTER } from '#client/utils';
-import { APIProvider, ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
+import { ControlPosition, Map, Marker } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/geolocation')({
   validateSearch(search) {
@@ -48,62 +48,61 @@ function RouteComponent() {
         </>
       )}
 
-      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-        <Map
-          className='col-span-2 my-4 h-100'
-          gestureHandling='greedy'
-          disableDefaultUI={false}
-          zoomControl
-          mapTypeControl={false}
-          fullscreenControl={false}
-          streetViewControl={false}
-          colorScheme='DARK'
-          reuseMaps
-          defaultCenter={{
-            lat: form.getFieldValue('geolocation.latitude') ?? SG_CENTER.lat,
-            lng: form.getFieldValue('geolocation.longitude') ?? SG_CENTER.lng,
-          }}
-          defaultZoom={16}
-          onClick={e => {
-            const latLng = e.detail.latLng;
-            if (!latLng || readOnly) return;
-            form.setFieldValue('geolocation', {
-              accuracy: null,
-              latitude: latLng.lat,
-              longitude: latLng.lng,
-              isError: false,
-            });
-          }}
-          options={{
-            zoomControlOptions: {
-              position: ControlPosition.RIGHT_BOTTOM,
-            },
-          }}
-        >
-          <form.AppField name='geolocation'>
-            {field =>
-              field.state.value && (
-                <Marker
-                  position={{ lat: field.state.value.latitude, lng: field.state.value.longitude }}
-                  draggable={readOnly}
-                  onDragEnd={e => {
-                    const lat = e.latLng?.lat();
-                    const lng = e.latLng?.lng();
-                    if (!lat || !lng) return;
+      <Map
+        mapId={import.meta.env.VITE_GOOGLE_MAPS_MAP_ID}
+        className='col-span-2 my-4 h-100'
+        gestureHandling='greedy'
+        disableDefaultUI={false}
+        zoomControl
+        mapTypeControl={false}
+        fullscreenControl={false}
+        streetViewControl={false}
+        colorScheme='DARK'
+        reuseMaps
+        defaultCenter={{
+          lat: form.getFieldValue('geolocation.latitude') ?? SG_CENTER.lat,
+          lng: form.getFieldValue('geolocation.longitude') ?? SG_CENTER.lng,
+        }}
+        defaultZoom={16}
+        onClick={e => {
+          const latLng = e.detail.latLng;
+          if (!latLng || readOnly) return;
+          form.setFieldValue('geolocation', {
+            accuracy: null,
+            latitude: latLng.lat,
+            longitude: latLng.lng,
+            isError: false,
+          });
+        }}
+        options={{
+          zoomControlOptions: {
+            position: ControlPosition.RIGHT_BOTTOM,
+          },
+        }}
+      >
+        <form.AppField name='geolocation'>
+          {field =>
+            field.state.value && (
+              <Marker
+                position={{ lat: field.state.value.latitude, lng: field.state.value.longitude }}
+                draggable={readOnly}
+                onDragEnd={e => {
+                  const lat = e.latLng?.lat();
+                  const lng = e.latLng?.lng();
+                  if (!lat || !lng) return;
 
-                    field.handleChange({
-                      accuracy: null,
-                      latitude: lat,
-                      longitude: lng,
-                      isError: false,
-                    });
-                  }}
-                />
-              )
-            }
-          </form.AppField>
-        </Map>
-      </APIProvider>
+                  field.handleChange({
+                    accuracy: null,
+                    latitude: lat,
+                    longitude: lng,
+                    isError: false,
+                  });
+                }}
+              />
+            )
+          }
+        </form.AppField>
+      </Map>
 
       {readOnly ? (
         <Link className='btn col-span-full w-full' to='/expenses/$expenseId/view' params={{ expenseId }} replace>

@@ -196,7 +196,7 @@ describe('helpers', async () => {
       expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
     });
 
-    it('should create account if account.id is create', () => {
+    it('should create account if account.id is null', () => {
       const netTotalCents = 80_00;
       const expectedAccountId = nanoid();
       vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
@@ -212,7 +212,7 @@ describe('helpers', async () => {
         db,
         userId,
         expenseId,
-        { account: { value: CREATE_ID, label: accountName } } as SaveExpenseInput,
+        { account: { value: null, label: accountName } } as SaveExpenseInput,
         deps,
       );
 
@@ -231,7 +231,7 @@ describe('helpers', async () => {
       expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
 
-    it('should create category if category.id is create', () => {
+    it('should create category if category.id is null', () => {
       const netTotalCents = 80_00;
       const expectedAccountId = nanoid();
       vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
@@ -247,7 +247,7 @@ describe('helpers', async () => {
         db,
         userId,
         expenseId,
-        { category: { value: CREATE_ID, label: categoryName } } as SaveExpenseInput,
+        { category: { value: null, label: categoryName } } as SaveExpenseInput,
         deps,
       );
 
@@ -558,7 +558,7 @@ describe(processSaveExpense, async () => {
     const expectedExpenseId = nanoid();
     deps.generateId.mockReturnValue(expectedExpenseId);
     const input = inputGenerator.generate();
-    input.expenseId = CREATE_ID;
+    input.expenseId = null;
     await processSaveExpense(mockContext, input, deps);
     expect(deps.generateId).toHaveBeenCalled();
 

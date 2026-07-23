@@ -99,3 +99,42 @@ input[type='number'].appearance-none::-webkit-outer-spin-button {
 input.input[type='number']::-webkit-inner-spin-button {
   margin-inline-end: 0;
 }
+
+.current-location-dot {
+  position: relative;
+  width: 14px;
+  height: 14px;
+  background-color: #007aff;
+  border: 2.5px solid #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pulse-ring {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  background-color: rgba(0, 122, 255, 0.25);
+  border-radius: 50%;
+  animation: map-pulse 2.2s cubic-bezier(0.25, 0, 0, 1) infinite;
+  pointer-events: none;
+  transform-origin: center;
+}
+
+/* Looping animation definition */
+@keyframes map-pulse {
+  0% {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  60% {
+    opacity: 0.4;
+  }
+  100% {
+    transform: scale(1.6);
+    opacity: 0;
+  }
+}

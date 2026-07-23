@@ -18,15 +18,15 @@ import { calculateExpense } from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
 
 export const saveExpenseInputSchema = z.object({
-  expenseId: z.string(),
+  expenseId: z.string().nullable(),
   version: z.int().optional().default(0),
   billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
   account: z
-    .object({ value: z.string(), label: z.string().trim() })
+    .object({ value: z.string().nullable(), label: z.string().trim() })
     .nullish()
     .transform(v => v ?? null),
   category: z
-    .object({ value: z.string(), label: z.string().trim() })
+    .object({ value: z.string().nullable(), label: z.string().trim() })
     .nullish()
     .transform(v => v ?? null),
   latitude: z.number().nullish(),
@@ -154,7 +154,7 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const extgItemIds = new Set<string>();
   const extgAdjIds = new Set<string>();
 
-  if (expenseId !== CREATE_ID) {
+  if (expenseId != null) {
     await deps.verifyExpenseVersion(db, userId, expenseId, input.version, deps);
     await deps.getExistingChildrenData(db, expenseId, extgItemIds, extgAdjIds, deps);
   } else {
@@ -225,12 +225,12 @@ export function queueMainExpenseRecord(
   let accountId = input.account?.value ?? null;
   let categoryId = input.category?.value ?? null;
 
-  if (input.account?.value === CREATE_ID) {
+  if (input.account?.value === null) {
     accountId = deps.generateId();
     collector.push(deps.insertSubject(db, accountsTable, accountId, input.account.label, userId));
   }
 
-  if (input.category?.value === CREATE_ID) {
+  if (input.category?.value === null) {
     categoryId = deps.generateId();
     collector.push(deps.insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
   }

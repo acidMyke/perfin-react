@@ -12,6 +12,7 @@ import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/exp
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 import { useMemo } from 'react';
+import { useMutation } from '@tanstack/react-query';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
@@ -19,6 +20,14 @@ export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
+
+type NullableValueExpenseOptions = {
+  [Key in keyof ExpenseOptions]: {
+    [InnerKey in keyof ExpenseOptions[Key][number]]: InnerKey extends 'value'
+      ? ExpenseOptions[Key][number][InnerKey] | null
+      : ExpenseOptions[Key][number][InnerKey];
+  }[];
+};
 
 export function defaultExpenseItem(priceCents?: number): ExpenseItem {
   return {
@@ -43,7 +52,11 @@ export function defaultExpenseAdjustment(): ExpenseAdjustment {
 
 export const MAX_ITEMS_IN_MAIN = 2;
 
-function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
+function processApiResponse(
+  detail: LoadExpenseDetailResponse,
+  options: NullableValueExpenseOptions,
+  param?: { isCopy: boolean },
+) {
   const { accountOptions, categoryOptions } = options;
   const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
   const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
@@ -95,6 +108,10 @@ export interface HistoryEntry {
   value: any;
 }
 
+export type CurrentCoordResult =
+  | { isSuccess: true; latitude: number; longitude: number; accuracy: number }
+  | { isSuccess: false; code: number; message: string };
+
 export function mapExpenseDetailToForm(
   detail?: LoadExpenseDetailResponse,
   options?: ExpenseOptions,
@@ -112,6 +129,7 @@ export function mapExpenseDetailToForm(
       shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult: calculateExpense(formValues),
+      currentCoordResult: undefined as CurrentCoordResult | undefined,
     },
     history: {
       past: [] as HistoryEntry[][],
@@ -229,18 +247,28 @@ export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirec
   return navigate({ to: '/expenses', search: monthYear });
 }
 
-export async function setCurrentLocation(form: ExpenseFormApi) {
-  if (navigator.geolocation) {
+export function setCurrentLocation(form?: ExpenseFormApi): Promise<CurrentCoordResult> {
+  if (!navigator.geolocation) {
+    const result = { isSuccess: false, code: 0, message: 'Geolocation is not supported by this browser.' } as const;
+    form?.setFieldValue('ui.currentCoordResult', result);
+    return Promise.resolve(result);
+  }
+
+  return new Promise(resolve => {
     navigator.geolocation.getCurrentPosition(
       ({ coords }) => {
         const { latitude, longitude, accuracy } = coords;
-        form.setFieldValue('geolocation', { latitude, longitude, accuracy, isError: false });
+        form?.setFieldValue('ui.currentCoordResult', { isSuccess: true, latitude, longitude, accuracy });
+        resolve({ isSuccess: true, latitude, longitude, accuracy });
       },
-      () => {
-        form.setFieldValue('geolocation.isError', false);
+      e => {
+        const { code, message } = e;
+        form?.setFieldValue('ui.currentCoordResult', { isSuccess: false, code, message });
+        resolve({ isSuccess: false, code, message });
       },
+      {},
     );
-  }
+  });
 }
 
 export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, navigate: UseNavigateResult<string>) =>
@@ -285,9 +313,7 @@ export const useItemCallbacks = (form: ExpenseFormApi, expenseId: string, naviga
 
 export type CreateAdjustmentOption = UpdateMetaOptions &
   (
-    | { special: typeof GST_NAME }
-    | { special: typeof SERVICE_CHARGE_NAME; rateBps?: number }
-    | { expenseItemId: string }
+    { special: typeof GST_NAME } | { special: typeof SERVICE_CHARGE_NAME; rateBps?: number } | { expenseItemId: string }
   );
 
 export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
@@ -329,3 +355,65 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
     }),
     [form],
   );
+
+export const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
+export type TrackableFieldName = Exclude<
+  DeepKeys<ExpenseFormData>,
+  'ui' | 'history' | `ui${string}` | `history${string}`
+>;
+export function pushHistory(form: ExpenseFormApi, fieldNames: TrackableFieldName[]) {
+  const { history, ui, ...currentValues } = form.state.values;
+  let { past } = history;
+  const lastPastEntry = history.past.at(-1);
+  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
+
+  const actions: HistoryEntry[] = [];
+  for (const fieldName of fieldNames) {
+    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
+      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
+      actions.push({ name: fieldName, value: prevValue });
+    }
+  }
+
+  if (actions.length > 0) {
+    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
+  }
+}
+
+export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData: ExpenseOptions) {
+  const { createAdjustment } = useAdjustmentCallbacks(form);
+  const shopDetailMutation = useMutation(
+    trpc.expense.getShopDetail.mutationOptions({
+      onSuccess([shopDetail]) {
+        if (!shopDetail) return;
+        const { accountOptions, categoryOptions } = optionsData;
+        const { accountId, categoryId, isGstExcluded, serviceChargeBps } = shopDetail;
+        const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
+        if (accountId) {
+          const account = accountOptions.find(({ value }) => value === accountId);
+          form.setFieldValue('account', account, updateMetaOpts);
+        }
+        if (categoryId) {
+          const category = categoryOptions.find(({ value }) => value === categoryId);
+          form.setFieldValue('category', category, updateMetaOpts);
+        }
+        if (serviceChargeBps) {
+          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
+        }
+        if (isGstExcluded) {
+          createAdjustment({ special: GST_NAME, ...updateMetaOpts });
+        }
+        form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+        pushHistory(form, ['account', 'category', 'adjustments']);
+      },
+    }),
+  );
+
+  return {
+    async mutateAsync(args?: { shopName: string }) {
+      const shopName = args?.shopName ?? form.getFieldValue('shopName');
+      if (!shopName) return;
+      await shopDetailMutation.mutateAsync({ shopName });
+    },
+  };
+}

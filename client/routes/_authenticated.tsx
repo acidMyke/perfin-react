@@ -6,6 +6,7 @@ import { whoamiQueryOptions } from '#client/queryOptions';
 import { useQueryErrorResetBoundary } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { PageHeader } from '#components/PageHeader';
+import { APIProvider } from '@vis.gl/react-google-maps';
 
 export const Route = createFileRoute('/_authenticated')({
   component: RouteComponent,
@@ -57,7 +58,7 @@ function NavDock() {
 function FloatingButton() {
   return (
     <Link
-      to='/expenses/$expenseId'
+      to='/expenses/$expenseId/start'
       params={{ expenseId: 'create' }}
       className='btn btn-circle btn-xl btn-primary pointer-events-auto fixed right-8 bottom-24'
       activeProps={{ className: 'hidden' }}
@@ -71,7 +72,9 @@ function RouteComponent() {
   return (
     <>
       <div className='h-8'></div>
-      <Outlet />
+      <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
+        <Outlet />
+      </APIProvider>
       <FloatingButton />
       <NavDock />
     </>

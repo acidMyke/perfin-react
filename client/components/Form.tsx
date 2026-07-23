@@ -321,7 +321,7 @@ function BooleanInput(props: BooleanInputProps) {
 
 export type Option = {
   label: string;
-  value: string;
+  value: string | null;
 };
 
 export type ComboBoxProps = {
@@ -444,7 +444,7 @@ function ComboBox({
           >
             {showCreateOption && (
               <ComboboxOption
-                value={{ label: query, value: 'create' } satisfies Option}
+                value={{ label: query, value: null } satisfies Option}
                 className='data-focus:bg-base-200 data-selected:bg-base-300 cursor-pointer rounded px-3 py-2'
               >
                 Create <span className='font-bold'>"{query}"</span>

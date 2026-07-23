@@ -1,4 +1,4 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
+import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat, formatBps } from '#client/utils';
@@ -10,6 +10,11 @@ import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
+  beforeLoad: ({ params }) => {
+    if (params.expenseId === 'create') {
+      throw redirect({ to: '/expenses/$expenseId/view', params });
+    }
+  },
 });
 
 function formatCents(cents: number) {
@@ -145,7 +150,7 @@ function ActionSection(props: { isDeleted: boolean; billedAt: Date }) {
           className='btn btn-secondary btn-lg col-span-2 mt-2 flex-1'
           onClick={() =>
             navigate({
-              to: '/expenses/$expenseId',
+              to: '/expenses/$expenseId/start',
               params: { expenseId: 'create' },
               search: { copyId: expenseId },
             })

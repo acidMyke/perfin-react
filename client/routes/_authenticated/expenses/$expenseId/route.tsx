@@ -5,22 +5,19 @@ import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '#clie
 import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import {
+  SET_VAL_ONLY,
   createEditExpenseFormOptions,
   invalidateAndRedirectBackToList,
   mapExpenseDetailToForm,
+  pushHistory,
   type ExpenseFormData,
-  useAdjustmentCallbacks,
   type ExpenseFormApi,
   type HistoryEntry,
+  type TrackableFieldName,
 } from './-common';
-import type { DeepKeys, UpdateMetaOptions } from '@tanstack/react-form';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { ShopDetailPicker, useShopDetailPickerRef } from './-common/ShopDetailPicker';
-import { ShopNameMallPicker, useShopNameMallPickerRef } from './-common/ShopPicker';
+import type { DeepKeys } from '@tanstack/react-form';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
-
-const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -56,26 +53,6 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   preload: false,
 });
 
-type TrackableFieldName = Exclude<DeepKeys<ExpenseFormData>, 'ui' | 'history' | `ui${string}` | `history${string}`>;
-const pushHistory = (form: ExpenseFormApi, fieldNames: TrackableFieldName[]) => {
-  const { history, ui, ...currentValues } = form.state.values;
-  let { past } = history;
-  const lastPastEntry = history.past.at(-1);
-  const lastFieldName = lastPastEntry?.length === 1 ? lastPastEntry[0].name : null;
-
-  const actions: HistoryEntry[] = [];
-  for (const fieldName of fieldNames) {
-    if (fieldNames.length != 1 || lastFieldName !== fieldName) {
-      const prevValue = form.getFieldValue(`history.lastValues.${fieldName}`);
-      actions.push({ name: fieldName, value: prevValue });
-    }
-  }
-
-  if (actions.length > 0) {
-    form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
-  }
-};
-
 function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId } = Route.useParams();
@@ -97,13 +74,7 @@ function RouteComponent() {
       onChange: ({ fieldApi }) => {
         if (fieldApi.name.startsWith('history')) return;
         if (fieldApi.name.startsWith('ui')) return;
-        if (/(geolocation.*)/.test(fieldApi.name)) triggerFetchShopSuggestion();
         pushHistory(form, [fieldApi.name as TrackableFieldName]);
-      },
-      onBlurDebounceMs: 200,
-      onBlur: ({ fieldApi }) => {
-        const fieldName = fieldApi.name as DeepKeys<ExpenseFormData>;
-        if (fieldName === 'shopName') triggerFetchShopDetail(fieldApi.state.value);
       },
     },
     validators: {
@@ -112,7 +83,7 @@ function RouteComponent() {
         const { billedAt, geolocation, ui, history, ...otherValues } = value;
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
-            expenseId,
+            expenseId: isCreate ? null : expenseId,
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
@@ -124,41 +95,12 @@ function RouteComponent() {
         await invalidateAndRedirectBackToList({
           expenseId,
           navigate,
-          optionsCreated: [value.account?.value, value.category?.value].includes('create'),
+          optionsCreated: [value.account?.value, value.category?.value].includes(null),
           billedAt,
         });
       },
     },
   });
-  const { createAdjustment } = useAdjustmentCallbacks(form);
-  const shopNameMallPickerRef = useShopNameMallPickerRef();
-  const triggerFetchShopSuggestion = useCallback(
-    (param?: { latitude: number; longitude: number }) => {
-      if (form.getFieldValue('ui.shouldFetchShopSuggestion')) {
-        if (!param) {
-          const { latitude, longitude } = form.getFieldValue('geolocation');
-          if (latitude && longitude) {
-            shopNameMallPickerRef.current?.fetchShopSuggestions({ latitude, longitude });
-          }
-        } else {
-          shopNameMallPickerRef.current?.fetchShopSuggestions(param);
-        }
-      }
-    },
-    [form, shopNameMallPickerRef],
-  );
-
-  const shopDetailPickerRef = useShopDetailPickerRef();
-  const triggerFetchShopDetail = useCallback(
-    (shopName?: string | null) => {
-      const source = form.getFieldValue('ui.shopDetailSource');
-      if (source !== 'user') {
-        shopName ??= form.getFieldValue('shopName');
-        if (shopName) shopDetailPickerRef.current?.fetchShopDetail({ shopName });
-      }
-    },
-    [form, shopDetailPickerRef],
-  );
 
   useEffect(() => {
     if (existingExpenseQuery.isSuccess && existingExpenseQuery.data) {
@@ -166,12 +108,6 @@ function RouteComponent() {
       form.reset(formData, { keepDefaultValues: isCopy });
     }
   }, [existingExpenseQuery.isSuccess, existingExpenseQuery.isError, isCopy]);
-
-  useEffect(() => {
-    if (isCreate) {
-      form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true });
-    }
-  }, [isCreate, form]);
 
   return (
     <div className='mx-auto max-w-md'>
@@ -183,51 +119,6 @@ function RouteComponent() {
       <div className='h-4'></div>
       <form.AppForm>
         <Outlet />
-        <ShopNameMallPicker
-          ref={shopNameMallPickerRef}
-          onTryAgainClick={() => form.setFieldValue('ui.shouldFetchShopSuggestion', true)}
-          onFinalized={data => {
-            const { shopMall, shopName } = data;
-            if (shopMall) {
-              form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
-            }
-            if (shopName) {
-              form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
-              triggerFetchShopDetail(shopName);
-            }
-            pushHistory(form, ['shopMall', 'shopName']);
-          }}
-        />
-        <ShopDetailPicker
-          ref={shopDetailPickerRef}
-          optionsData={optionsData}
-          onFinalized={data => {
-            const { accountOptions, categoryOptions } = optionsData;
-            const { accountId, categoryId, isGstExcluded, serviceChargeBps } = data;
-            if (accountId) {
-              form.setFieldValue(
-                'account',
-                accountOptions.find(({ value }) => value === accountId),
-                { dontUpdateMeta: true },
-              );
-            }
-            if (categoryId) {
-              form.setFieldValue(
-                'category',
-                categoryOptions.find(({ value }) => value === categoryId),
-                { dontUpdateMeta: true },
-              );
-            }
-            if (serviceChargeBps) {
-              createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, dontUpdateMeta: true });
-            }
-            if (isGstExcluded) {
-              createAdjustment({ special: GST_NAME, dontUpdateMeta: true });
-            }
-            form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-            pushHistory(form, ['account', 'category', 'adjustments']);
-          }}
-        />
         <DirtyFormBlockModel mainRouteId={Route.id} />
       </form.AppForm>
     </div>
