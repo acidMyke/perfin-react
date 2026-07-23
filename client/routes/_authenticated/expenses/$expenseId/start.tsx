@@ -45,11 +45,8 @@ function RouteComponent() {
   const [showMap, setShowMap] = useState(false);
   const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
   const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 100 });
-  const shopSuggestionsMutation = useQuery(
-    trpc.expense.searchShopByLocation.queryOptions(
-      customCoordinate ?? (currentLocationQuery.isSuccess ? currentLocationQuery.data : skipToken) ?? skipToken,
-    ),
-  );
+  const coordinateOrSkip = customCoordinate ?? currentLocationQuery.data ?? skipToken;
+  const shopSuggestionsMutation = useQuery(trpc.expense.searchShopByLocation.queryOptions(coordinateOrSkip));
   const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   const continueToMainForm = useCallback(
@@ -86,8 +83,8 @@ function RouteComponent() {
   );
 
   const normalizedResult = useMemo(() => {
-    if (!currentLocationQuery.data || !shopSuggestionsMutation.data) return;
-    const { latitude: userLat, longitude: userLng } = currentLocationQuery.data;
+    if (coordinateOrSkip === skipToken || !shopSuggestionsMutation.data) return;
+    const { latitude: userLat, longitude: userLng } = coordinateOrSkip;
     const shops: ShopResult[] = [];
     const mallMap = new Map<string, { latSum: number; lngSum: number; count: number }>();
     for (const shop of shopSuggestionsMutation.data.result) {
