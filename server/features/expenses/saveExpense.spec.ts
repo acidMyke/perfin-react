@@ -502,10 +502,12 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, expenseId, undefined, [expectedFileId], deps);
+      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [expectedFileId], deps);
 
-      expect(deps.upsertAttachments).toHaveBeenCalledWith(db, [{ expenseId, fileId: expectedFileId }]);
-      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(db, expenseId, [expectedFileId]);
+      expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
+        { expenseId, fileId: expectedFileId },
+      ]);
+      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(expectMockDatabase(), expenseId, [expectedFileId]);
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
       expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
@@ -513,7 +515,7 @@ describe('helpers', async () => {
     it('should not call getFileIdsByRequestId if fileUploadRequestId is falsy', async () => {
       const mockedGetFileIdsByRequestId = vi.mocked(getFileIdsByRequestId);
       mockedGetFileIdsByRequestId.mockRejectedValue('oops');
-      await queueExpenseAttachments(collector, db, expenseId, undefined, [], deps);
+      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [], deps);
       expect(mockedGetFileIdsByRequestId).not.toHaveBeenCalled();
     });
 
@@ -528,11 +530,13 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, expenseId, expectRequestId, [], deps);
+      await queueExpenseAttachments(collector, db, userId, expenseId, expectRequestId, [], deps);
 
-      expect(mockedGetFileIdsByRequestId).toHaveBeenCalledWith(expectRequestId);
-      expect(deps.upsertAttachments).toHaveBeenCalledWith(db, [{ expenseId, fileId: expectedFileId }]);
-      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(db, expenseId, [expectedFileId]);
+      expect(mockedGetFileIdsByRequestId).toHaveBeenCalledWith(expectMockDatabase(), userId, expectRequestId);
+      expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
+        { expenseId, fileId: expectedFileId },
+      ]);
+      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(expectMockDatabase(), expenseId, [expectedFileId]);
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
       expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
