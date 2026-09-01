@@ -178,6 +178,15 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
   deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
   deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
+  await deps.queueExpenseAttachments(
+    collector,
+    db,
+    userId,
+    expenseId,
+    input.fileUploadRequestId,
+    input.attachmentFileIds,
+    deps,
+  );
   await processSaveExpenseSearchIndexing(collector, db, { ...input, id: expenseId, userId });
 
   await collector.executeBatch(db, true);
@@ -329,4 +338,15 @@ export async function queueExpenseAttachments(
   fileUploadRequestId: SaveExpenseInput['fileUploadRequestId'],
   attachmentFileIds: SaveExpenseInput['attachmentFileIds'],
   deps: PickRepos<'upsertAttachments' | 'deleteAttachmentIfNotInList'>,
-) {}
+) {
+  const fileIds = [...attachmentFileIds];
+
+  if (fileUploadRequestId) {
+    const newFileIds = await getFileIdsByRequestId(db, userId, fileUploadRequestId);
+    fileIds.push(...newFileIds);
+  }
+
+  const attachmentRecords = fileIds.map(fileId => ({ expenseId, fileId }));
+  collector.push(deps.upsertAttachments(db, attachmentRecords));
+  collector.push(deps.deleteAttachmentIfNotInList(db, expenseId, fileIds));
+}
