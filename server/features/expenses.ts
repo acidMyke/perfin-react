@@ -3,11 +3,13 @@ import {
   accountsTable,
   categoriesTable,
   expenseAdjustmentsTable,
+  expenseAttachmentsTable,
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
   searchIndexVersionTable,
   textChunksTable,
+  uploadedFilesTable,
 } from '../../db/schema';
 import { and, asc, avg, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
@@ -18,6 +20,7 @@ import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, 
 import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
 import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
+import { filesColumns } from '#server/lib/fileUpload';
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -45,7 +48,7 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [[expense], items, adjustments] = await db.batch([
+    const [[expense], items, adjustments, attachmentDetails] = await db.batch([
       db
         .select({
           amountCents: expensesTable.amountCents,
@@ -88,13 +91,18 @@ const loadExpenseDetailProcedure = protectedProcedure
         .where(
           and(eq(expenseAdjustmentsTable.expenseId, input.expenseId), eq(expenseAdjustmentsTable.isDeleted, false)),
         ),
+      db
+        .select(filesColumns())
+        .from(expenseAttachmentsTable)
+        .innerJoin(uploadedFilesTable, eq(expenseAttachmentsTable.fileId, uploadedFilesTable.id))
+        .where(and(eq(expenseAttachmentsTable.expenseId, input.expenseId), eq(uploadedFilesTable.userId, userId))),
     ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return { ...expense, items, adjustments };
+    return { ...expense, items, adjustments, attachmentDetails };
   });
 
 const saveExpenseProcedure = protectedProcedure

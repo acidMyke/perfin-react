@@ -284,6 +284,15 @@ export const expenseAdjustmentsTable = sqliteTable(
   ],
 );
 
+export const expenseAttachmentsTable = sqliteTable(
+  'expense_attachments',
+  {
+    expenseId: idColumn(),
+    fileId: idColumn(),
+  },
+  t => [primaryKey({ columns: [t.expenseId, t.fileId] })],
+);
+
 /** @deprecated replaced by v2_search */
 export const searchTable = sqliteTable(
   'search',

@@ -43,3 +43,12 @@ export async function attachFiles(ctx: ProtectedContext, requestOrFileId: string
       ),
   );
 }
+
+export function filesColumns() {
+  return {
+    fileId: uploadedFilesTable.id,
+    name: uploadedFilesTable.originalName,
+    size: uploadedFilesTable.size,
+    mimeType: uploadedFilesTable.mimeType,
+  };
+}
