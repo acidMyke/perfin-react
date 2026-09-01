@@ -18,6 +18,7 @@ import {
 import type { DeepKeys } from '@tanstack/react-form';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
+import { isServerAttachment, useAttachmentUploadMutation } from '#client/lib/attachment';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -66,7 +67,7 @@ function RouteComponent() {
     ),
   );
   const createExpenseMutation = useMutation(trpc.expense.save.mutationOptions({ onSuccess: () => void form.reset() }));
-
+  const attachmentUploadMutation = useAttachmentUploadMutation();
   const form = useAppForm({
     ...createEditExpenseFormOptions,
     listeners: {
@@ -80,7 +81,8 @@ function RouteComponent() {
     validators: {
       onSubmitAsync: async ({ value, signal }): Promise<any> => {
         signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.save.mutationKey() });
-        const { billedAt, geolocation, ui, history, ...otherValues } = value;
+        const { billedAt, geolocation, ui, history, attachments, ...otherValues } = value;
+        const { requestId: fileUploadRequestId } = await attachmentUploadMutation.mutateAsync(attachments);
         const formError = await handleFormMutateAsync(
           createExpenseMutation.mutateAsync({
             expenseId: isCreate ? null : expenseId,
@@ -89,6 +91,8 @@ function RouteComponent() {
             longitude: geolocation?.longitude ?? null,
             geoAccuracy: geolocation?.accuracy ?? null,
             billedAt: billedAt.toISOString(),
+            attachmentFileIds: attachments.filter(isServerAttachment).map(({ fileId }) => fileId),
+            fileUploadRequestId,
           }),
         );
         if (formError) return formError;

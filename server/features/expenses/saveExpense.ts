@@ -69,6 +69,8 @@ export const saveExpenseInputSchema = z.object({
       isDeleted: z.boolean().optional().default(false),
     }),
   ),
+  attachmentFileIds: z.array(z.string()),
+  fileUploadRequestId: z.string().optional(),
 });
 
 export const CREATE_ID = 'create' as const;
