@@ -553,6 +553,8 @@ describe(processSaveExpense, async () => {
     .supply(saveExpenseInputSchema.shape.items.element.shape.id, () => nanoid())
     .supply(saveExpenseInputSchema.shape.adjustments.element.shape.id, () => nanoid())
     .supply(saveExpenseInputSchema.shape.expenseId, () => nanoid())
+    .supply(saveExpenseInputSchema.shape.fileUploadRequestId, () => nanoid())
+    .supply(saveExpenseInputSchema.shape.attachmentFileIds, () => [nanoid()])
     .array({ min: 2, max: 2 });
   let mockContext: MockProtectedContext;
   let userId: string;
@@ -607,6 +609,16 @@ describe(processSaveExpense, async () => {
       input.expenseId,
       input.adjustments,
       expect.any(Set),
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseAttachments).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input.fileUploadRequestId,
+      input.attachmentFileIds,
       expectDeps(),
     );
 

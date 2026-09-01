@@ -153,6 +153,7 @@ const saveExpenseHelpers = {
   queueMainExpenseRecord,
   queueExpenseItems,
   queueExpenseAdjustments,
+  queueExpenseAttachments,
 };
 
 export type SaveExpenseHelpers = typeof saveExpenseHelpers;
@@ -323,6 +324,7 @@ export function queueExpenseAdjustments(
 export async function queueExpenseAttachments(
   collector: BatchCollector,
   db: AppDatabase,
+  userId: string,
   expenseId: string,
   fileUploadRequestId: SaveExpenseInput['fileUploadRequestId'],
   attachmentFileIds: SaveExpenseInput['attachmentFileIds'],
