@@ -14,6 +14,7 @@ import {
   getExistingChildrenData,
   processSaveExpense,
   queueExpenseAdjustments,
+  queueExpenseAttachments,
   queueExpenseItems,
   queueMainExpenseRecord,
   saveExpenseInputSchema,
@@ -27,6 +28,7 @@ import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
 import { getLocationBoxId } from '../../lib/utils';
 import { zocker } from 'zocker';
+import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
 vi.mock(import('drizzle-orm'), importOriginal => {
   return mockDrizzleOrm(importOriginal);
@@ -38,6 +40,7 @@ vi.mock(import('#schema'), importOriginal => {
 
 vi.mock(import('../../lib/expenseHelper'), () => ({ calculateExpense: vi.fn() }));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
+vi.mock(import('../../lib/fileUpload'), () => ({ getFileIdsByRequestId: vi.fn() }));
 vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
 
 describe('helpers', async () => {
@@ -160,6 +163,7 @@ describe('helpers', async () => {
             isDeleted: false,
           },
         ],
+        attachmentFileIds: [],
       };
 
       queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
@@ -476,6 +480,61 @@ describe('helpers', async () => {
         new Set([deletingId]),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+    });
+  });
+
+  describe(queueExpenseAttachments, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    let deps = { upsertAttachments: vi.fn(), deleteAttachmentIfNotInList: vi.fn() };
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+    });
+
+    it('should map fileIds and call upsertAttachments with the correct values', async () => {
+      const expectedFileId = nanoid();
+      const batchItem0 = 'repos.upsertAttachments';
+      const batchItem1 = 'repos.deleteAttachmentIfNotInList';
+      deps.upsertAttachments.mockReturnValue(batchItem0);
+      deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
+
+      await queueExpenseAttachments(collector, db, expenseId, undefined, [expectedFileId], deps);
+
+      expect(deps.upsertAttachments).toHaveBeenCalledWith(db, [{ expenseId, fileId: expectedFileId }]);
+      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(db, expenseId, [expectedFileId]);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+    });
+
+    it('should not call getFileIdsByRequestId if fileUploadRequestId is falsy', async () => {
+      const mockedGetFileIdsByRequestId = vi.mocked(getFileIdsByRequestId);
+      mockedGetFileIdsByRequestId.mockRejectedValue('oops');
+      await queueExpenseAttachments(collector, db, expenseId, undefined, [], deps);
+      expect(mockedGetFileIdsByRequestId).not.toHaveBeenCalled();
+    });
+
+    it('should call getFileIdsByRequestId and include fileIds for upsertAttachments and deleteAttachmentIfNotInList', async () => {
+      const mockedGetFileIdsByRequestId = vi.mocked(getFileIdsByRequestId);
+      const expectRequestId = nanoid();
+      const expectedFileId = nanoid();
+      const batchItem0 = 'repos.upsertAttachments';
+      const batchItem1 = 'repos.deleteAttachmentIfNotInList';
+
+      mockedGetFileIdsByRequestId.mockResolvedValue([expectedFileId]);
+      deps.upsertAttachments.mockReturnValue(batchItem0);
+      deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
+
+      await queueExpenseAttachments(collector, db, expenseId, expectRequestId, [], deps);
+
+      expect(mockedGetFileIdsByRequestId).toHaveBeenCalledWith(expectRequestId);
+      expect(deps.upsertAttachments).toHaveBeenCalledWith(db, [{ expenseId, fileId: expectedFileId }]);
+      expect(deps.deleteAttachmentIfNotInList).toHaveBeenCalledWith(db, expenseId, [expectedFileId]);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
   });
 });

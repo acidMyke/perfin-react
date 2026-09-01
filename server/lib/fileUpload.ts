@@ -1,8 +1,7 @@
 import type { ProtectedContext } from './trpc';
-import { BatchCollector, maybeBatch } from './BatchCollector';
 import { and, eq, isNotNull, isNull, or, sql } from 'drizzle-orm';
 import { uploadedFilesTable } from '#schema';
-import { caseWhen, sumAsNumber } from './db';
+import { caseWhen, sumAsNumber, type AppDatabase } from './db';
 
 export async function getFilesCount(ctx: ProtectedContext, requestOrFileId: string) {
   const { db, userId } = ctx;
@@ -27,21 +26,13 @@ export async function getFilesCount(ctx: ProtectedContext, requestOrFileId: stri
   return { successCount, failedCount, pendingCount };
 }
 
-export async function attachFiles(ctx: ProtectedContext, requestOrFileId: string, collector?: BatchCollector) {
-  const { db, userId } = ctx;
+export async function getFileIdsByRequestId(db: AppDatabase, userId: string, requestId: string) {
+  const fileIdObjs = await db
+    .select({ fileId: uploadedFilesTable.id })
+    .from(uploadedFilesTable)
+    .where(and(eq(uploadedFilesTable.userId, userId), eq(uploadedFilesTable.requestId, requestId)));
 
-  await maybeBatch(
-    collector,
-    db
-      .update(uploadedFilesTable)
-      .set({ attachedAt: new Date() })
-      .where(
-        and(
-          eq(uploadedFilesTable.userId, userId),
-          or(eq(uploadedFilesTable.requestId, requestOrFileId), eq(uploadedFilesTable.id, requestOrFileId)),
-        ),
-      ),
-  );
+  return fileIdObjs.map(({ fileId }) => fileId);
 }
 
 export function filesColumns() {

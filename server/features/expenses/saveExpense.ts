@@ -7,15 +7,17 @@ import {
   accountsTable,
   categoriesTable,
   expenseAdjustmentsTable,
+  expenseAttachmentsTable,
   expenseItemsTable,
   expensesTable,
   generateId,
 } from '#schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
 import { calculateExpense } from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
+import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
 export const saveExpenseInputSchema = z.object({
   expenseId: z.string().nullable(),
@@ -132,6 +134,14 @@ export const saveExpenseRepo = {
       .update(table)
       .set({ isDeleted: true })
       .where(and(eq(table.expenseId, expenseId), inArray(table.id, Array.from(ids)))),
+  upsertAttachments: (db: AppDatabase, expenseAttachmentRecords: (typeof expenseAttachmentsTable.$inferInsert)[]) =>
+    db.insert(expenseAttachmentsTable).values(expenseAttachmentRecords).onConflictDoNothing(),
+  deleteAttachmentIfNotInList: (db: AppDatabase, expenseId: string, fileIds: string[]) =>
+    db
+      .delete(expenseAttachmentsTable)
+      .where(
+        and(eq(expenseAttachmentsTable.expenseId, expenseId), notInArray(expenseAttachmentsTable.fileId, fileIds)),
+      ),
 };
 
 export type SaveExpenseRepo = typeof saveExpenseRepo;
@@ -309,3 +319,12 @@ export function queueExpenseAdjustments(
     collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
   }
 }
+
+export async function queueExpenseAttachments(
+  collector: BatchCollector,
+  db: AppDatabase,
+  expenseId: string,
+  fileUploadRequestId: SaveExpenseInput['fileUploadRequestId'],
+  attachmentFileIds: SaveExpenseInput['attachmentFileIds'],
+  deps: PickRepos<'upsertAttachments' | 'deleteAttachmentIfNotInList'>,
+) {}
