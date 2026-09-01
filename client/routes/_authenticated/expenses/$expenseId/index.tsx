@@ -77,6 +77,11 @@ function RouteComponent() {
       </form.AppField>
       <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
+      <form.AppField name='attachments'>
+        {({ AttachmentBox }) => (
+          <AttachmentBox label='Attachment' accept='image/*,application/pdf' max={5} containerCn='col-span-8 my-2' />
+        )}
+      </form.AppField>
       <form.StatusMessage />
       <form.SubmitButton
         buttonCn='col-span-full mb-4'

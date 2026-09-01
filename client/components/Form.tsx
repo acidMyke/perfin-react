@@ -4,8 +4,11 @@ import type { ClassValue } from 'clsx';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { twMerge } from '#client/twMerge';
 import { FieldError } from './FieldError';
-import { ChevronDown, Clipboard, TriangleAlert } from 'lucide-react';
+import { ChevronDown, Clipboard, Plus, TriangleAlert, X } from 'lucide-react';
 import { Combobox, ComboboxInput, ComboboxOption, ComboboxOptions } from '@headlessui/react';
+import { formatFileSize } from '#client/utils';
+import { createAttachmentFromFileUpload, type Attachment } from '#client/lib/attachment';
+import { AttachmentPreview } from './AttachmentPreview';
 
 export const cn = (...input: ClassValue[]) => twMerge(clsx(input));
 export const { fieldContext, formContext, useFieldContext, useFormContext } = createFormHookContexts();
@@ -530,6 +533,137 @@ function MultiSelectBox({ label, options, inputCn, containerCn }: MultiSelectBox
   );
 }
 
+type AttachmentBoxProps = {
+  label: string;
+  max: number;
+  accept: string;
+  readOnly?: boolean;
+  containerCn?: string;
+};
+
+function AttachmentBox({ label, max, accept, readOnly = false, containerCn }: AttachmentBoxProps) {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const field = useFieldContext<Attachment[]>();
+  const attachments = field.state.value;
+  const [preview, setPreview] = useState<Attachment | null>(null);
+  const handleAdd = () => {
+    if (readOnly) return;
+    inputRef.current?.click();
+  };
+
+  const handleFiles = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(event.target.files ?? []);
+
+    field.handleChange(current => {
+      const remaining = max ? Math.max(max - current.length, 0) : files.length;
+      return [...current, ...files.slice(0, remaining).map(createAttachmentFromFileUpload)];
+    });
+
+    event.target.value = '';
+  };
+
+  const handleRemove = (index: number) => {
+    if (readOnly) return;
+    field.handleChange(current => current.filter((_, i) => i !== index));
+  };
+
+  return (
+    <>
+      <div className={cn('w-full', containerCn)}>
+        <div className='mb-2 flex items-center justify-between'>
+          <label className='label p-0'>
+            <span className='label-text font-medium'>{label}</span>
+          </label>
+
+          {!readOnly && (
+            <button
+              type='button'
+              className='btn btn-primary btn-sm'
+              onClick={handleAdd}
+              disabled={max !== undefined && attachments.length >= max}
+            >
+              <Plus /> Add
+            </button>
+          )}
+        </div>
+
+        <input
+          ref={inputRef}
+          type='file'
+          className='hidden'
+          accept={accept}
+          multiple={max === undefined || max > 1}
+          onChange={handleFiles}
+        />
+
+        <div className='divide-base-300 border-base-300 divide-y rounded-lg border'>
+          {attachments.length === 0 ? (
+            <div className='text-base-content/50 px-4 py-3 text-sm'>No attachments</div>
+          ) : (
+            attachments.map((file, index) => (
+              <div key={index} className='flex items-center justify-between gap-3 px-2 py-1'>
+                <button
+                  type='button'
+                  className='link link-primary block max-w-full truncate text-left'
+                  onClick={() => setPreview(file)}
+                >
+                  {file.name}
+                </button>
+
+                {file.size && (
+                  <span className='text-base-content/60 grow text-left text-sm'>({formatFileSize(file.size)})</span>
+                )}
+
+                {!readOnly && (
+                  <button
+                    type='button'
+                    className='btn btn-ghost btn-sm'
+                    aria-label={`Remove ${file.name}`}
+                    onClick={() => handleRemove(index)}
+                  >
+                    <X />
+                  </button>
+                )}
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+
+      {preview && (
+        <dialog className={`modal ${preview ? 'modal-open' : ''}`} onClose={() => setPreview(null)}>
+          <div className='modal-box max-w-4xl'>
+            <div className='flex items-center justify-between gap-4'>
+              <h3 className='truncate text-lg font-bold'>{preview?.name}</h3>
+
+              <button
+                type='button'
+                className='btn btn-sm btn-circle btn-ghost'
+                onClick={() => setPreview(null)}
+                aria-label='Close preview'
+              >
+                <X />
+              </button>
+            </div>
+
+            <AttachmentPreview attachment={preview} />
+
+            <div className='modal-action'>
+              <button type='button' className='btn' onClick={() => setPreview(null)}>
+                Close
+              </button>
+            </div>
+          </div>
+
+          <form method='dialog' className='modal-backdrop'>
+            <button onClick={() => setPreview(null)}>close</button>
+          </form>
+        </dialog>
+      )}
+    </>
+  );
+}
+
 type SubmitButtonProps = {
   label: string;
   doneLabel?: string;
@@ -648,5 +782,6 @@ export const { useAppForm, withForm, withFieldGroup } = createFormHook({
     BooleanInput,
     OtpInput,
     MultiSelectBox,
+    AttachmentBox,
   },
 });
