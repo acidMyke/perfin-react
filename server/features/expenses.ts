@@ -243,38 +243,62 @@ const getShopDetailProcedure = protectedProcedure
     const shopNameHash = await getTextHash(userId, input.shopName);
     const expensesCte = db.$with('expense_id_cte').as(
       db
-        .select({
-          expenseId: expenseTextsTable.expenseId.as('expense_id'),
-          accountId: expensesTable.accountId.as('account_id'),
-          categoryId: expensesTable.categoryId.as('category_id'),
-        })
+        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
         .from(expenseTextsTable)
         .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
         .where(eq(expenseTextsTable.textHash, shopNameHash))
-        .groupBy(expenseTextsTable.expenseId)
         .orderBy(desc(expensesTable.billedAt))
         .limit(1),
     );
 
+    const adjustmentsCte = db.$with('adjustments_cte').as(
+      db
+        .select({
+          isGstExcluded: max(
+            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
+          ).as('is_gst'),
+          serviceChargeBps: max(
+            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+          ).as('service_charge'),
+        })
+        .from(expensesCte)
+        .leftJoin(
+          expenseAdjustmentsTable,
+          and(
+            eq(expenseAdjustmentsTable.isInferable, true),
+            eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
+          ),
+        )
+        .groupBy(expenseAdjustmentsTable.expenseId),
+    );
+
+    const accountsCte = db.$with('accounts_cte').as(
+      db
+        .select({ accountIds: jsonGroupArray(expenseAccountAllocationsTable.accountId).as('accountIds') })
+        .from(expensesCte)
+        .leftJoin(expenseAccountAllocationsTable, eq(expensesCte.expenseId, expenseAccountAllocationsTable.expenseId))
+        .groupBy(expenseAccountAllocationsTable.expenseId),
+    );
+
+    const categoriesCte = db.$with('categories_cte').as(
+      db
+        .select({ categoryIds: jsonGroupArray(expenseCategoryAllocationsTable.categoryId).as('categoryIds') })
+        .from(expensesCte)
+        .leftJoin(expenseCategoryAllocationsTable, eq(expensesCte.expenseId, expenseCategoryAllocationsTable.expenseId))
+        .groupBy(expenseCategoryAllocationsTable.expenseId),
+    );
+
     const data = await db
-      .with(expensesCte)
+      .with(expensesCte, adjustmentsCte, accountsCte, categoriesCte)
       .select({
-        accountId: expensesCte.accountId,
-        categoryId: expensesCte.categoryId,
-        isGstExcluded: max(caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`)),
-        serviceChargeBps: max(
-          caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
-        ),
+        accountIds: accountsCte.accountIds,
+        categoryIds: categoriesCte.categoryIds,
+        isGstExcluded: adjustmentsCte.isGstExcluded,
+        serviceChargeBps: adjustmentsCte.serviceChargeBps,
       })
-      .from(expensesCte)
-      .leftJoin(
-        expenseAdjustmentsTable,
-        and(
-          eq(expenseAdjustmentsTable.isInferable, true),
-          eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
-        ),
-      )
-      .groupBy(expenseAdjustmentsTable.expenseId);
+      .from(adjustmentsCte)
+      .crossJoin(accountsCte)
+      .crossJoin(categoriesCte);
 
     return data;
   });

@@ -86,11 +86,18 @@ export function coalesce<TValue extends ExtractableData, TFallback extends Extra
   return sql<Exclude<ExtractType<TValue>, null> | ExtractType<TFallback>>`coalesce(${value}, ${fallback})`;
 }
 
-export function jsonGroupArray<T extends ExtractableData>(data: T, options: { distinct?: boolean } = {}) {
+export function jsonGroupArray<T extends ExtractableData>(
+  data: T,
+  options: { distinct?: boolean; filterNull?: boolean } = {},
+) {
   const { distinct } = options;
   const jsonGroupedArray = distinct ? sql`json_group_array(distinct ${data})` : sql`json_group_array(${data})`;
   return sql`coalesce(${jsonGroupedArray}, '[]')`.mapWith({
-    mapFromDriverValue: v => (typeof v === 'string' ? JSON.parse(v) : []) as ExtractType<T>[],
+    mapFromDriverValue: v => {
+      const vJson = (typeof v === 'string' ? JSON.parse(v) : []) as ExtractType<T>[];
+      if (options.filterNull) return vJson.filter(v => v != null);
+      return vJson;
+    },
   });
 }
 
