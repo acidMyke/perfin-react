@@ -7,7 +7,7 @@ import {
   type UpdateMetaOptions,
 } from '@tanstack/react-form';
 import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
-import { useAppForm, useFormContext } from '#components/Form';
+import { useAppForm, useFormContext, type Option } from '#components/Form';
 import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
@@ -19,6 +19,7 @@ export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
+export type ExpenseFormItem = Omit<ExpenseItem, 'categoryId'> & { category?: Option | undefined };
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
 
@@ -30,13 +31,14 @@ type NullableValueExpenseOptions = {
   }[];
 };
 
-export function defaultExpenseItem(priceCents?: number): ExpenseItem {
+export function defaultExpenseItem(priceCents?: number): ExpenseFormItem {
   return {
     id: generateId(),
     name: '',
     isDeleted: false,
     priceCents: priceCents ?? 0,
     quantity: 1,
+    category: undefined,
   };
 }
 
@@ -59,9 +61,11 @@ function processApiResponse(
   param?: { isCopy: boolean },
 ) {
   const { accountOptions, categoryOptions } = options;
-  const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
-  const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
-  const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+  const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
+  const idOptionMapping = new Map([
+    ...accountOptions.map(({ value, label }) => [value, label] as [string, string]),
+    ...categoryOptions.map(({ value, label }) => [value, label] as [string, string]),
+  ]);
 
   if (param?.isCopy) {
     const remappedItemId = new Map<string, string>();
@@ -79,11 +83,21 @@ function processApiResponse(
 
   return {
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
-    account,
-    category,
     geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
     attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
+    items: rest.items.map(item => ({
+      category: item.categoryId ? idOptionMapping.get(item.categoryId) : undefined,
+      ...item,
+    })),
+    accountAllocs: rest.accountAllocs.map(({ accountId, amountCents }) => ({
+      account: accountId ? idOptionMapping.get(accountId) : undefined,
+      amountCents,
+    })),
+    categoryAllocs: rest.categoryAllocs.map(({ categoryId, amountCents }) => ({
+      category: categoryId ? idOptionMapping.get(categoryId) : undefined,
+      amountCents,
+    })),
   };
 }
 
@@ -92,8 +106,6 @@ function createNewExpenseForm() {
     version: 0,
     amountCents: 0,
     billedAt: new Date(),
-    account: undefined,
-    category: undefined,
     type: 'online',
     geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
     shopName: null,
@@ -103,6 +115,8 @@ function createNewExpenseForm() {
     items: [],
     adjustments: [],
     attachments: [],
+    accountAllocs: [],
+    categoryAllocs: [],
   } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
 }
 

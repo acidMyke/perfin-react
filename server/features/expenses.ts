@@ -2,8 +2,10 @@ import { protectedProcedure } from '../lib/trpc';
 import {
   accountsTable,
   categoriesTable,
+  expenseAccountAllocationsTable,
   expenseAdjustmentsTable,
   expenseAttachmentsTable,
+  expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
@@ -48,13 +50,11 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [[expense], items, adjustments, attachmentDetails] = await db.batch([
+    const [[expense], items, adjustments, attachmentDetails, accountAllocs, categoryAllocs] = await db.batch([
       db
         .select({
           amountCents: expensesTable.amountCents,
           billedAt: expensesTable.billedAt,
-          accountId: expensesTable.accountId,
-          categoryId: expensesTable.categoryId,
           type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
@@ -74,6 +74,7 @@ const loadExpenseDetailProcedure = protectedProcedure
           name: expenseItemsTable.name,
           quantity: expenseItemsTable.quantity,
           priceCents: expenseItemsTable.priceCents,
+          categoryId: expenseItemsTable.categoryId,
           isDeleted: expenseItemsTable.isDeleted,
         })
         .from(expenseItemsTable)
@@ -96,13 +97,29 @@ const loadExpenseDetailProcedure = protectedProcedure
         .from(expenseAttachmentsTable)
         .innerJoin(uploadedFilesTable, eq(expenseAttachmentsTable.fileId, uploadedFilesTable.id))
         .where(and(eq(expenseAttachmentsTable.expenseId, input.expenseId), eq(uploadedFilesTable.userId, userId))),
+      db
+        .select({
+          accountId: expenseAccountAllocationsTable.accountId,
+          amountCents: expenseAccountAllocationsTable.amountCents,
+        })
+        .from(expenseAccountAllocationsTable)
+        .where(and(eq(expenseAccountAllocationsTable.expenseId, input.expenseId)))
+        .orderBy(expenseAccountAllocationsTable.sequence),
+      db
+        .select({
+          categoryId: expenseCategoryAllocationsTable.categoryId,
+          amountCents: expenseCategoryAllocationsTable.amountCents,
+        })
+        .from(expenseCategoryAllocationsTable)
+        .where(and(eq(expenseCategoryAllocationsTable.expenseId, input.expenseId)))
+        .orderBy(expenseCategoryAllocationsTable.sequence),
     ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return { ...expense, items, adjustments, attachmentDetails };
+    return { ...expense, items, adjustments, attachmentDetails, accountAllocs, categoryAllocs };
   });
 
 const saveExpenseProcedure = protectedProcedure
