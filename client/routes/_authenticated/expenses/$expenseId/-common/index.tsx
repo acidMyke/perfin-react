@@ -19,7 +19,7 @@ export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
-export type ExpenseFormItem = Omit<ExpenseItem, 'categoryId'> & { category?: Option | undefined };
+export type ExpenseFormItem = Omit<ExpenseItem, 'categoryId'> & { category: Option | undefined };
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
 
@@ -63,8 +63,8 @@ function processApiResponse(
   const { accountOptions, categoryOptions } = options;
   const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
   const idOptionMapping = new Map([
-    ...accountOptions.map(({ value, label }) => [value, label] as [string, string]),
-    ...categoryOptions.map(({ value, label }) => [value, label] as [string, string]),
+    ...accountOptions.map(option => [option.value, option] as [string, Option]),
+    ...categoryOptions.map(option => [option.value, option] as [string, Option]),
   ]);
 
   if (param?.isCopy) {
@@ -86,8 +86,8 @@ function processApiResponse(
     geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
     attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
-    items: rest.items.map(item => ({
-      category: item.categoryId ? idOptionMapping.get(item.categoryId) : undefined,
+    items: rest.items.map(({ categoryId, ...item }) => ({
+      category: categoryId ? idOptionMapping.get(categoryId) : undefined,
       ...item,
     })),
     accountAllocs: rest.accountAllocs.map(({ accountId, amountCents }) => ({
