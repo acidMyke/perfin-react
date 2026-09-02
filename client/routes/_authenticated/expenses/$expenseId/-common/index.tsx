@@ -115,8 +115,8 @@ function createNewExpenseForm() {
     items: [],
     adjustments: [],
     attachments: [],
-    accountAllocs: [],
-    categoryAllocs: [],
+    accountAllocs: [{ account: undefined, amountCents: 0 }],
+    categoryAllocs: [{ category: undefined, amountCents: 0 }],
   } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
 }
 
@@ -404,15 +404,21 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
       onSuccess([shopDetail]) {
         if (!shopDetail) return;
         const { accountOptions, categoryOptions } = optionsData;
-        const { accountId, categoryId, isGstExcluded, serviceChargeBps } = shopDetail;
+        const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
         const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
-        if (accountId) {
-          const account = accountOptions.find(({ value }) => value === accountId);
-          form.setFieldValue('account', account, updateMetaOpts);
+        if (accountIds.length > 1) {
+          form.setFieldValue(
+            'accountAllocs',
+            accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
+            updateMetaOpts,
+          );
         }
-        if (categoryId) {
-          const category = categoryOptions.find(({ value }) => value === categoryId);
-          form.setFieldValue('category', category, updateMetaOpts);
+        if (categoryIds.length > 1) {
+          form.setFieldValue(
+            'categoryAllocs',
+            categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
+            updateMetaOpts,
+          );
         }
         if (serviceChargeBps) {
           createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
@@ -421,7 +427,7 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
           createAdjustment({ special: GST_NAME, ...updateMetaOpts });
         }
         form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-        pushHistory(form, ['account', 'category', 'adjustments']);
+        pushHistory(form, ['accountAllocs', 'categoryAllocs', 'adjustments']);
       },
     }),
   );
