@@ -198,7 +198,9 @@ export const expensesTable = sqliteTable(
     specifiedAmountCents: centsColumn(),
     billedAt: dateColumn(),
     userId: idColumn(),
+    /** @deprecated normalized to expenseAccountAllocationsTable */
     accountId: nullableIdColumn(),
+    /** @deprecated normalized to expenseCategoryAllocationsTable */
     categoryId: nullableIdColumn(),
     type: text({ enum: ['online', 'physical'] }).notNull(),
     updatedBy: idColumn(),
@@ -232,7 +234,6 @@ export const expenseItemsTable = sqliteTable(
     quantity: integer().default(1).notNull(),
     priceCents: centsColumn(),
     expenseId: idColumn(),
-    /** @deprecated unused, will be deleted */
     categoryId: nullableIdColumn(),
     /** @deprecated refund is deprecated */
     expenseRefundId: nullableIdColumn(),
@@ -291,6 +292,38 @@ export const expenseAttachmentsTable = sqliteTable(
     fileId: idColumn(),
   },
   t => [primaryKey({ columns: [t.expenseId, t.fileId] })],
+);
+
+export const expenseAccountAllocationsTable = sqliteTable(
+  'expense_account_allocs',
+  {
+    expenseId: idColumn(),
+    accountId: idColumn(),
+    amountCents: integer().notNull(),
+    sequence: integer().notNull(),
+    // Duplicated from expense main table for quick filtering
+    expenseBilledAt: dateColumn(),
+  },
+  t => [
+    primaryKey(t.expenseId, t.accountId),
+    index('idx_expense_account_account_id').on(t.accountId, t.expenseBilledAt),
+  ],
+);
+
+export const expenseCategoryAllocationsTable = sqliteTable(
+  'expense_category_allocs',
+  {
+    expenseId: idColumn(),
+    categoryId: idColumn(),
+    amountCents: integer().notNull(),
+    sequence: integer().notNull(),
+    // Duplicated from expense main table for quick filtering
+    expenseBilledAt: dateColumn(),
+  },
+  t => [
+    primaryKey(t.expenseId, t.categoryId),
+    index('idx_expense_category_category_id').on(t.categoryId, t.expenseBilledAt),
+  ],
 );
 
 /** @deprecated replaced by v2_search */
