@@ -3,8 +3,8 @@ import { file, z, type RefinementCtx } from 'zod';
 import { zfd } from 'zod-form-data';
 import { filetypeinfo } from 'magic-bytes.js';
 import { generateId, uploadedFilesTable } from '#schema';
-import { and, eq, sql } from 'drizzle-orm';
-import { concat, type AppDatabase } from '#server/lib/db';
+import { and, eq } from 'drizzle-orm';
+import { type AppDatabase } from '#server/lib/db';
 import { json } from 'itty-router';
 
 export const FILES_ROUTE_BASE = '/api/files';
@@ -159,35 +159,7 @@ filesApiRouter.post(
 
     await db.insert(uploadedFilesTable).values(uploadedFilesInserts);
     wctx.waitUntil(putFilesAndUpdateDb(db, env.bk, fileUploadParams));
-    return json({ requestId, detailLink: `${FILES_ROUTE_BASE}/requests/${requestId}` });
-  },
-);
-
-filesApiRouter.get(
-  '/requests/:requestId',
-  chainHandler(withAuth()).then(withZod({ params: z.object({ requestId: z.string() }) })),
-  async request => {
-    const { validated, context } = request;
-    const { db, userId } = context;
-
-    const uploadedFilesData = await db
-      .select({
-        fileId: uploadedFilesTable.id,
-        fileLink: concat(FILES_ROUTE_BASE, '/', uploadedFilesTable.id, '/', uploadedFilesTable.originalName),
-        createdAt: uploadedFilesTable.createdAt,
-        uploadedAt: uploadedFilesTable.uploadedAt,
-        attachedAt: uploadedFilesTable.attachedAt,
-        failedAt: uploadedFilesTable.failedAt,
-        failureReason: uploadedFilesTable.failureReason,
-        originalName: uploadedFilesTable.originalName,
-        sha256: sql<string>`lower(hex(${uploadedFilesTable.checksum}))`,
-        mimeType: uploadedFilesTable.mimeType,
-        size: uploadedFilesTable.size,
-      })
-      .from(uploadedFilesTable)
-      .where(and(eq(uploadedFilesTable.requestId, validated.params.requestId), eq(uploadedFilesTable.userId, userId)));
-
-    return json(uploadedFilesData);
+    return json({ requestId });
   },
 );
 

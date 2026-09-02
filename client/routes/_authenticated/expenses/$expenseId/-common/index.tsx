@@ -13,6 +13,7 @@ import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 import { useMemo } from 'react';
 import { useMutation } from '@tanstack/react-query';
+import { createAttachmentFromServerDetail } from '#client/lib/attachment';
 
 export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
@@ -58,7 +59,7 @@ function processApiResponse(
   param?: { isCopy: boolean },
 ) {
   const { accountOptions, categoryOptions } = options;
-  const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, ...rest } = detail;
+  const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
   const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
   const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
 
@@ -81,6 +82,7 @@ function processApiResponse(
     account,
     category,
     geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
+    attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
   };
 }
@@ -92,14 +94,15 @@ function createNewExpenseForm() {
     billedAt: new Date(),
     account: undefined,
     category: undefined,
-    type: 'online' as 'online' | 'physical',
+    type: 'online',
     geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
     shopName: null,
     shopMall: null,
     isDeleted: false,
     specifiedAmountCents: 0,
-    items: [] as ExpenseItem[],
-    adjustments: [] as ExpenseAdjustment[],
+    items: [],
+    adjustments: [],
+    attachments: [],
   } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
 }
 

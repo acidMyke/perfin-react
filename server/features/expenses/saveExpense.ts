@@ -7,15 +7,17 @@ import {
   accountsTable,
   categoriesTable,
   expenseAdjustmentsTable,
+  expenseAttachmentsTable,
   expenseItemsTable,
   expensesTable,
   generateId,
 } from '#schema';
-import { and, eq, inArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
 import { calculateExpense } from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
+import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
 export const saveExpenseInputSchema = z.object({
   expenseId: z.string().nullable(),
@@ -69,6 +71,8 @@ export const saveExpenseInputSchema = z.object({
       isDeleted: z.boolean().optional().default(false),
     }),
   ),
+  attachmentFileIds: z.array(z.string()),
+  fileUploadRequestId: z.string().optional(),
 });
 
 export const CREATE_ID = 'create' as const;
@@ -130,6 +134,14 @@ export const saveExpenseRepo = {
       .update(table)
       .set({ isDeleted: true })
       .where(and(eq(table.expenseId, expenseId), inArray(table.id, Array.from(ids)))),
+  upsertAttachments: (db: AppDatabase, expenseAttachmentRecords: (typeof expenseAttachmentsTable.$inferInsert)[]) =>
+    db.insert(expenseAttachmentsTable).values(expenseAttachmentRecords).onConflictDoNothing(),
+  deleteAttachmentIfNotInList: (db: AppDatabase, expenseId: string, fileIds: string[]) =>
+    db
+      .delete(expenseAttachmentsTable)
+      .where(
+        and(eq(expenseAttachmentsTable.expenseId, expenseId), notInArray(expenseAttachmentsTable.fileId, fileIds)),
+      ),
 };
 
 export type SaveExpenseRepo = typeof saveExpenseRepo;
@@ -141,6 +153,7 @@ const saveExpenseHelpers = {
   queueMainExpenseRecord,
   queueExpenseItems,
   queueExpenseAdjustments,
+  queueExpenseAttachments,
 };
 
 export type SaveExpenseHelpers = typeof saveExpenseHelpers;
@@ -165,6 +178,15 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
   deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
   deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
+  await deps.queueExpenseAttachments(
+    collector,
+    db,
+    userId,
+    expenseId,
+    input.fileUploadRequestId,
+    input.attachmentFileIds,
+    deps,
+  );
   await processSaveExpenseSearchIndexing(collector, db, { ...input, id: expenseId, userId });
 
   await collector.executeBatch(db, true);
@@ -306,4 +328,25 @@ export function queueExpenseAdjustments(
   if (removedAdjIds.size > 0) {
     collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
   }
+}
+
+export async function queueExpenseAttachments(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  fileUploadRequestId: SaveExpenseInput['fileUploadRequestId'],
+  attachmentFileIds: SaveExpenseInput['attachmentFileIds'],
+  deps: PickRepos<'upsertAttachments' | 'deleteAttachmentIfNotInList'>,
+) {
+  const fileIds = [...attachmentFileIds];
+
+  if (fileUploadRequestId) {
+    const newFileIds = await getFileIdsByRequestId(db, userId, fileUploadRequestId);
+    fileIds.push(...newFileIds);
+  }
+
+  const attachmentRecords = fileIds.map(fileId => ({ expenseId, fileId }));
+  collector.push(deps.upsertAttachments(db, attachmentRecords));
+  collector.push(deps.deleteAttachmentIfNotInList(db, expenseId, fileIds));
 }
