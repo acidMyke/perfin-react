@@ -7,6 +7,8 @@ export type ExpenseItemForCalculation = {
   isDeleted?: boolean | null | undefined;
   quantity: number;
   priceCents: number;
+  categoryId?: string;
+  category?: { id: string };
 };
 
 export type ExpenseAdjustmentForCalculation = {
@@ -40,6 +42,8 @@ export type AdjustmentResult = {
 export type ExpenseCalculationResult = ItemCalculationResult & {
   /** Individual item result */
   itemResults: Record<string, ItemCalculationResult>;
+  /** Amount for each category */
+  categoryResults: Record<string, ItemCalculationResult>;
   /** Amount for each adjustments*/
   adjustmentResults: [string, AdjustmentResult, Record<string, AdjustmentResult>][];
 };
@@ -50,6 +54,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
   const isItemizedExpense = items.length > 0;
   let expenseGrossTotal = 0;
   const itemResultsMap = new Map<string, ItemCalculationResult>();
+  const categoryToItemsMap = new Map<string, string[]>();
 
   if (isItemizedExpense) {
     // Itemized bill. Ignore specifiedAmountCents
@@ -59,6 +64,12 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       const gross = quantity * priceCents;
       expenseGrossTotal += gross;
       itemResultsMap.set(id, { grossTotalCents: gross, netTotalCents: gross });
+      const categoryId = item.categoryId ?? item.category?.id;
+      if (categoryId) {
+        const existing = categoryToItemsMap.get(categoryId);
+        if (existing) existing.push(id);
+        else categoryToItemsMap.set(categoryId, [id]);
+      }
     }
   } else {
     // Non-itemized bill. Just grossTotalCents then adjustments
@@ -83,6 +94,13 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       if (itemResult) {
         itemizedAdj[expenseItemId] = adjRes;
         itemResult.netTotalCents += amountCents;
+      } else {
+        for (const [itemId, itemResult] of itemResultsMap.entries()) {
+          const adjCentBps = itemResult.netTotalCents * rateBps;
+          const adjAmount = Math.round(adjCentBps / 100_00);
+          itemizedAdj[itemId] = { amountCents: adjAmount, rateBps };
+          itemResult.netTotalCents += adjAmount;
+        }
       }
       adjustmentResults.push([id, adjRes, itemizedAdj]);
 
@@ -132,8 +150,22 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     adjustmentResults.push([id, { amountCents: totalAdjCents, rateBps }, itemsAdjustmentResults]);
   }
 
+  const categoryResults: Record<string, ItemCalculationResult> = {};
+  for (const [categoryId, itemIds] of categoryToItemsMap) {
+    const acc = { grossTotalCents: 0, netTotalCents: 0 };
+    for (const itemId of itemIds) {
+      const itemResult = itemResultsMap.get(itemId);
+      if (itemResult) {
+        acc.grossTotalCents += itemResult.grossTotalCents;
+        acc.netTotalCents += itemResult.netTotalCents;
+      }
+    }
+    categoryResults[categoryId] = acc;
+  }
+
   return {
     itemResults: Object.fromEntries(itemResultsMap),
+    categoryResults,
     grossTotalCents: expenseGrossTotal,
     netTotalCents: expenseNetTotal,
     adjustmentResults,

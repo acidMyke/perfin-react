@@ -114,94 +114,154 @@ describe('calculateExpense()', () => {
         expect(result.netTotalCents, 'netTotalCents').toBe(64_00);
       });
     });
-  });
 
-  describe('With adjustments', () => {
-    it('should apply flat adjustment to the total bill', () => {
-      const result = calculateExpense({
-        specifiedAmountCents: 0,
-        items: [{ id: 'i006', priceCents: 5_00, quantity: 3 }],
-        adjustments: [{ id: 'a001', amountCents: 10_00 }],
-      });
-
-      expect(result.grossTotalCents, 'grossTotalCents').toBe(15_00);
-      expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
-    });
-
-    it('should apply rate adjustment (no expenseItemId provided) to the total bill', () => {
-      const result = calculateExpense({
-        specifiedAmountCents: 0,
-        items: [
-          { id: 'i007', priceCents: 5_00, quantity: 3 },
-          { id: 'i008', priceCents: 8_00, quantity: 1 },
-        ],
-        adjustments: [{ id: 'a002', rateBps: 9_00 }],
-      });
-
-      expect(result.itemResults).toEqual({
-        i007: { grossTotalCents: 15_00, netTotalCents: 16_35 },
-        i008: { grossTotalCents: 8_00, netTotalCents: 8_72 },
-      });
-      expect(result.adjustmentResults[0]).toEqual([
-        'a002',
-        { amountCents: 2_07, rateBps: 9_00 },
-        {
-          i007: { amountCents: 1_35, rateBps: expect.any(Number) },
-          i008: { amountCents: 72, rateBps: expect.any(Number) },
-        },
-      ]);
-      expect(result.grossTotalCents, 'grossTotalCents').toBe(23_00);
-      expect(result.netTotalCents, 'netTotalCents').toBe(25_07);
-    });
-
-    it('should apply rate adjustment (expenseItemId provided) only to the specific item', () => {
-      const result = calculateExpense({
-        specifiedAmountCents: 0,
-        items: [
-          { id: 'i009', priceCents: 5_00, quantity: 3 },
-          { id: 'i010', priceCents: 20_00, quantity: 1 },
-        ],
-        adjustments: [{ id: 'a003', rateBps: -50_00, expenseItemId: 'i010' }],
-      });
-
-      expect(result.itemResults).toEqual({
-        i009: { grossTotalCents: 15_00, netTotalCents: 15_00 },
-        i010: { grossTotalCents: 20_00, netTotalCents: 10_00 },
-      });
-      expect(result.adjustmentResults[0]).toEqual([
-        'a003',
-        { amountCents: -10_00, rateBps: expect.any(Number) },
-        { i010: { amountCents: -10_00, rateBps: -50_00 } },
-      ]);
-
-      expect(result.grossTotalCents, 'grossTotalCents').toBe(35_00);
-      expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
-    });
-  });
-
-  describe('Edge cases', () => {
-    describe('$0 amount', () => {
-      it('should handle flat adjustments when the current total is zero', () => {
+    describe('With adjustments', () => {
+      it('should apply flat adjustment to the total bill', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
-          items: [],
-          adjustments: [{ id: 'flat-fee', amountCents: 500 }],
+          items: [{ id: 'i006', priceCents: 5_00, quantity: 3 }],
+          adjustments: [{ id: 'a001', amountCents: 10_00 }],
         });
 
-        expect(result.netTotalCents).toBe(500);
-        expect(result.adjustmentResults[0][1].rateBps).toBe(Infinity);
+        expect(result.grossTotalCents, 'grossTotalCents').toBe(15_00);
+        expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
       });
 
-      it('should handle global rate adjustments when item totals sum to zero', () => {
+      it('should apply rate adjustment (no expenseItemId provided) to the total bill', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
-          items: [{ id: 'free-item', quantity: 1, priceCents: 0 }],
-          adjustments: [{ id: 'tax-rate', rateBps: 1000 }],
+          items: [
+            { id: 'i007', priceCents: 5_00, quantity: 3 },
+            { id: 'i008', priceCents: 8_00, quantity: 1 },
+          ],
+          adjustments: [{ id: 'a002', rateBps: 9_00 }],
         });
 
-        expect(result.netTotalCents).toBe(0);
-        expect(result.itemResults['free-item'].netTotalCents).toBe(0);
-        expect(result.adjustmentResults[0][2]['free-item'].rateBps).toBeNaN();
+        expect(result.itemResults).toEqual({
+          i007: { grossTotalCents: 15_00, netTotalCents: 16_35 },
+          i008: { grossTotalCents: 8_00, netTotalCents: 8_72 },
+        });
+        expect(result.adjustmentResults[0]).toEqual([
+          'a002',
+          { amountCents: 2_07, rateBps: 9_00 },
+          {
+            i007: { amountCents: 1_35, rateBps: expect.any(Number) },
+            i008: { amountCents: 72, rateBps: expect.any(Number) },
+          },
+        ]);
+        expect(result.grossTotalCents, 'grossTotalCents').toBe(23_00);
+        expect(result.netTotalCents, 'netTotalCents').toBe(25_07);
+      });
+
+      it('should apply rate adjustment (expenseItemId provided) only to the specific item', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i009', priceCents: 5_00, quantity: 3 },
+            { id: 'i010', priceCents: 20_00, quantity: 1 },
+          ],
+          adjustments: [{ id: 'a003', rateBps: -50_00, expenseItemId: 'i010' }],
+        });
+
+        expect(result.itemResults).toEqual({
+          i009: { grossTotalCents: 15_00, netTotalCents: 15_00 },
+          i010: { grossTotalCents: 20_00, netTotalCents: 10_00 },
+        });
+        expect(result.adjustmentResults[0]).toEqual([
+          'a003',
+          { amountCents: -10_00, rateBps: expect.any(Number) },
+          { i010: { amountCents: -10_00, rateBps: -50_00 } },
+        ]);
+
+        expect(result.grossTotalCents, 'grossTotalCents').toBe(35_00);
+        expect(result.netTotalCents, 'netTotalCents').toBe(25_00);
+      });
+    });
+
+    describe('Edge cases', () => {
+      describe('$0 amount', () => {
+        it('should handle flat adjustments when the current total is zero', () => {
+          const result = calculateExpense({
+            specifiedAmountCents: 0,
+            items: [],
+            adjustments: [{ id: 'flat-fee', amountCents: 500 }],
+          });
+
+          expect(result.netTotalCents).toBe(500);
+          expect(result.adjustmentResults[0][1].rateBps).toBe(Infinity);
+        });
+
+        it('should handle global rate adjustments when item totals sum to zero', () => {
+          const result = calculateExpense({
+            specifiedAmountCents: 0,
+            items: [{ id: 'free-item', quantity: 1, priceCents: 0 }],
+            adjustments: [{ id: 'tax-rate', rateBps: 1000 }],
+          });
+
+          expect(result.netTotalCents).toBe(0);
+          expect(result.itemResults['free-item'].netTotalCents).toBe(0);
+          expect(result.adjustmentResults[0][2]['free-item'].rateBps).toBeNaN();
+        });
+      });
+    });
+
+    describe('With category', () => {
+      it('should sum the prices of all items in the same category by categoryId or category.id', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i002', priceCents: 5_00, quantity: 3, categoryId: 'c001' },
+            { id: 'i003', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
+            { id: 'i004', priceCents: 9_00, quantity: 5, category: { id: 'c002' } },
+          ],
+          adjustments: [],
+        });
+
+        expect(result.categoryResults).toEqual({
+          c001: { grossTotalCents: 64_00, netTotalCents: 64_00 },
+          c002: { grossTotalCents: 45_00, netTotalCents: 45_00 },
+        });
+      });
+
+      it('should sum the prices after item level adjustment', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i005', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
+            { id: 'i006', priceCents: 9_00, quantity: 5, category: { id: 'c001' } },
+            { id: 'i007', priceCents: 2_00, quantity: 2, category: { id: 'c002' } },
+          ],
+          adjustments: [
+            { id: 'a001', rateBps: 9_00 },
+            { id: 'a002', rateBps: -10_00, expenseItemId: 'i005' },
+            { id: 'a002', amountCents: -10_00, expenseItemId: 'i006' },
+          ],
+        });
+
+        expect(result.categoryResults).toEqual({
+          c001: { grossTotalCents: 94_00, netTotalCents: 87_12 },
+          c002: { grossTotalCents: 4_00, netTotalCents: 4_36 },
+        });
+      });
+
+      it('should sum the prices after adjustment', () => {
+        const result = calculateExpense({
+          specifiedAmountCents: 0,
+          items: [
+            { id: 'i005', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
+            { id: 'i006', priceCents: 9_00, quantity: 5, category: { id: 'c001' } },
+            { id: 'i007', priceCents: 2_00, quantity: 2, category: { id: 'c002' } },
+          ],
+          adjustments: [
+            { id: 'a001', rateBps: 9_00 },
+            { id: 'a002', amountCents: -10_00 },
+          ],
+        });
+
+        expect(result.categoryResults).toEqual({
+          c001: { grossTotalCents: 94_00, netTotalCents: 92_87 },
+          c002: { grossTotalCents: 4_00, netTotalCents: 3_95 },
+        });
       });
     });
   });
