@@ -24,6 +24,7 @@ import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { Fragment, useState } from 'react';
+import { ExpenseAccountAllocation } from './-subform/ExpenseAccountAllocs';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -69,14 +70,10 @@ function RouteComponent() {
           </label>
         )}
       </form.Field>
-      <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-4 mt-2' />}
-      </form.AppField>
-      <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
-      </form.AppField>
+
       <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
+      <ExpenseAccountAllocation form={form} accountOptions={accountOptions} />
       <form.AppField name='attachments'>
         {({ AttachmentBox }) => (
           <AttachmentBox label='Attachment' accept='image/*,application/pdf' max={5} containerCn='col-span-8 my-2' />
