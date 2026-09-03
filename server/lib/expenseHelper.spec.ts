@@ -206,13 +206,13 @@ describe('calculateExpense()', () => {
     });
 
     describe('With category', () => {
-      it('should sum the prices of all items in the same category by categoryId or category.id', () => {
+      it('should sum the prices of all items in the same category by categoryId or category.value', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
           items: [
             { id: 'i002', priceCents: 5_00, quantity: 3, categoryId: 'c001' },
-            { id: 'i003', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
-            { id: 'i004', priceCents: 9_00, quantity: 5, category: { id: 'c002' } },
+            { id: 'i003', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
+            { id: 'i004', priceCents: 9_00, quantity: 5, category: { value: 'c002' } },
           ],
           adjustments: [],
         });
@@ -227,9 +227,9 @@ describe('calculateExpense()', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
           items: [
-            { id: 'i005', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
-            { id: 'i006', priceCents: 9_00, quantity: 5, category: { id: 'c001' } },
-            { id: 'i007', priceCents: 2_00, quantity: 2, category: { id: 'c002' } },
+            { id: 'i005', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
+            { id: 'i006', priceCents: 9_00, quantity: 5, category: { value: 'c001' } },
+            { id: 'i007', priceCents: 2_00, quantity: 2, category: { value: 'c002' } },
           ],
           adjustments: [
             { id: 'a001', rateBps: 9_00 },
@@ -248,9 +248,9 @@ describe('calculateExpense()', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
           items: [
-            { id: 'i005', priceCents: 7_00, quantity: 7, category: { id: 'c001' } },
-            { id: 'i006', priceCents: 9_00, quantity: 5, category: { id: 'c001' } },
-            { id: 'i007', priceCents: 2_00, quantity: 2, category: { id: 'c002' } },
+            { id: 'i005', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
+            { id: 'i006', priceCents: 9_00, quantity: 5, category: { value: 'c001' } },
+            { id: 'i007', priceCents: 2_00, quantity: 2, category: { value: 'c002' } },
           ],
           adjustments: [
             { id: 'a001', rateBps: 9_00 },
