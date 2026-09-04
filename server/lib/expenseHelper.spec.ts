@@ -217,10 +217,10 @@ describe('calculateExpense()', () => {
           adjustments: [],
         });
 
-        expect(result.categoryResults).toEqual({
-          c001: { grossTotalCents: 64_00, netTotalCents: 64_00 },
-          c002: { grossTotalCents: 45_00, netTotalCents: 45_00 },
-        });
+        expect(result.categoryResults).toEqual([
+          ['c001', { grossTotalCents: 64_00, netTotalCents: 64_00 }],
+          ['c002', { grossTotalCents: 45_00, netTotalCents: 45_00 }],
+        ]);
       });
 
       it('should sum the prices after item level adjustment', () => {
@@ -238,10 +238,10 @@ describe('calculateExpense()', () => {
           ],
         });
 
-        expect(result.categoryResults).toEqual({
-          c001: { grossTotalCents: 94_00, netTotalCents: 87_12 },
-          c002: { grossTotalCents: 4_00, netTotalCents: 4_36 },
-        });
+        expect(result.categoryResults).toEqual([
+          ['c001', { grossTotalCents: 94_00, netTotalCents: 87_12 }],
+          ['c002', { grossTotalCents: 4_00, netTotalCents: 4_36 }],
+        ]);
       });
 
       it('should sum the prices after adjustment', () => {
@@ -258,10 +258,10 @@ describe('calculateExpense()', () => {
           ],
         });
 
-        expect(result.categoryResults).toEqual({
-          c001: { grossTotalCents: 94_00, netTotalCents: 92_87 },
-          c002: { grossTotalCents: 4_00, netTotalCents: 3_95 },
-        });
+        expect(result.categoryResults).toEqual([
+          ['c001', { grossTotalCents: 94_00, netTotalCents: 92_87 }],
+          ['c002', { grossTotalCents: 4_00, netTotalCents: 3_95 }],
+        ]);
       });
     });
   });

@@ -43,7 +43,7 @@ export type ExpenseCalculationResult = ItemCalculationResult & {
   /** Individual item result */
   itemResults: Record<string, ItemCalculationResult>;
   /** Amount for each category */
-  categoryResults: Record<string, ItemCalculationResult>;
+  categoryResults: [string, ItemCalculationResult][];
   /** Amount for each adjustments*/
   adjustmentResults: [string, AdjustmentResult, Record<string, AdjustmentResult>][];
 };
@@ -150,7 +150,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     adjustmentResults.push([id, { amountCents: totalAdjCents, rateBps }, itemsAdjustmentResults]);
   }
 
-  const categoryResults: Record<string, ItemCalculationResult> = {};
+  const categoryResults: ExpenseCalculationResult['categoryResults'] = [];
   for (const [categoryId, itemIds] of categoryToItemsMap) {
     const acc = { grossTotalCents: 0, netTotalCents: 0 };
     for (const itemId of itemIds) {
@@ -160,7 +160,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
         acc.netTotalCents += itemResult.netTotalCents;
       }
     }
-    categoryResults[categoryId] = acc;
+    categoryResults.push([categoryId, acc]);
   }
 
   return {
