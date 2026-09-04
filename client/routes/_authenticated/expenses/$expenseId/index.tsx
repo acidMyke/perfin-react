@@ -15,7 +15,7 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
 import { withForm } from '#components/Form';
-import { useStore } from '@tanstack/react-form';
+import { useSelector, useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { BillTotal } from './-common/BillTotal';
@@ -25,6 +25,7 @@ import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { Fragment, useState } from 'react';
 import { ExpenseAccountAllocationSubForm } from './-subform/ExpenseAccountAllocation';
+import { ExpenseCategoryAllocationSubForm } from './-subform/ExpenseCategoryAllocation';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -74,6 +75,7 @@ function RouteComponent() {
       <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
       <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} />
+      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} />
       <form.AppField name='attachments'>
         {({ AttachmentBox }) => (
           <AttachmentBox label='Attachment' accept='image/*,application/pdf' max={5} containerCn='col-span-8 my-2' />
@@ -103,6 +105,10 @@ function RouteComponent() {
 const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const {
+      data: { categoryOptions },
+    } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
     const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
@@ -204,6 +210,7 @@ const ItemsDetailsSubForm = withForm({
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
+                    categoryOptions={categoryOptions}
                   />
                 );
               })}

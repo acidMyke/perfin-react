@@ -1,4 +1,4 @@
-import { withFieldGroup } from '#components/Form';
+import { withFieldGroup, type Option } from '#components/Form';
 import { defaultExpenseItem, useExpenseForm, type TGetExpenseFormField } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
@@ -30,12 +30,13 @@ export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
   props: {
     itemIndex: 0,
+    categoryOptions: [] as Option[],
     onRemoveClick: () => {},
     getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
     createAdjustment: (_: string) => {},
   },
-  render({ group, itemIndex, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
+  render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
     const itemId = useStore(group.store, state => state.values.id);
     const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
@@ -47,7 +48,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           scope='itemName'
           getContext={() => getFormField('shopName')}
           label={`Item ${itemIndex + 1} name`}
-          containerCn='col-span-7 w-full'
+          containerCn='col-span-4 w-full'
           triggerChangeOnFocus
           hideError
           onSuggestionSelected={suggestion => {
@@ -63,6 +64,10 @@ export const ItemDetailFieldGroup = withFieldGroup({
             }
           }}
         />
+
+        <group.AppField name={`category`} listeners={{ onChange: () => onPricingChange() }}>
+          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-3' />}
+        </group.AppField>
 
         <button className='btn-ghost btn btn-sm' onClick={onRemoveClick}>
           <X />

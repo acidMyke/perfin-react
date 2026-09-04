@@ -2,6 +2,8 @@ import { createFileRoute, Link } from '@tanstack/react-router';
 import { calculateExpenseForm, useItemCallbacks, useAdjustmentCallbacks, useExpenseForm } from './-common';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
+import { trpc } from '#client/trpc';
+import { useSuspenseQuery } from '@tanstack/react-query';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/items/$indexStr')({
   component: RouteComponent,
@@ -11,6 +13,9 @@ function RouteComponent() {
   const navigate = Route.useNavigate();
   const { expenseId, indexStr } = Route.useParams();
   const form = useExpenseForm();
+  const {
+    data: { categoryOptions },
+  } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
   const { createAdjustment } = useAdjustmentCallbacks(form);
 
@@ -33,6 +38,7 @@ function RouteComponent() {
               getFormField={form.getFieldValue.bind(form)}
               onPricingChange={() => calculateExpenseForm(form)}
               createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
+              categoryOptions={categoryOptions}
             />
 
             <div className='mt-4 flex w-full'>
