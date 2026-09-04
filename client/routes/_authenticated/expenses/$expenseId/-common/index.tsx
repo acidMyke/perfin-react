@@ -8,7 +8,12 @@ import {
 } from '@tanstack/react-form';
 import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { useAppForm, useFormContext, type Option } from '#components/Form';
-import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import {
+  calculateExpense,
+  calculateRemainingAllocation,
+  GST_NAME,
+  SERVICE_CHARGE_NAME,
+} from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 import { useMemo } from 'react';
@@ -147,6 +152,7 @@ export function mapExpenseDetailToForm(
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult: calculateExpense(formValues),
       currentCoordResult: undefined as CurrentCoordResult | undefined,
+      isInvalidCategoryAllocation: false,
     },
     history: {
       past: [] as HistoryEntry[][],
@@ -240,6 +246,32 @@ export function calculateExpenseForm(form: ExpenseFormApi) {
 
   const result = calculateExpense({ specifiedAmountCents, items, adjustments });
   form.setFieldValue('ui.calculateResult', result);
+
+  calculateExpenseFormRemainingAllocation(form, 'account', result.netTotalCents);
+  if (items.length === 0) {
+    calculateExpenseFormRemainingAllocation(form, 'category', result.netTotalCents);
+  }
+}
+
+export function calculateExpenseFormRemainingAllocation(
+  form: ExpenseFormApi,
+  allocKind: 'account' | 'category',
+  lazyNetTotalCents?: number,
+) {
+  const netTotalCents = lazyNetTotalCents ?? form.getFieldValue('ui.calculateResult.netTotalCents');
+  const allocations = form.getFieldValue(`${allocKind}Allocs`);
+  const { remainingCents, lastAllocationCents, isValidForCategory } = calculateRemainingAllocation({
+    netTotalCents,
+    allocations,
+  });
+  if (remainingCents !== 0) {
+    const lastIndex = allocations.length - 1;
+    form.setFieldValue(`${allocKind}Allocs[${lastIndex}].amountCents`, lastAllocationCents);
+  }
+
+  if (allocKind === 'category') {
+    form.setFieldValue('ui.isInvalidCategoryAllocation', !isValidForCategory);
+  }
 }
 
 type InvalidateAndRedirectBackToListOptions = {

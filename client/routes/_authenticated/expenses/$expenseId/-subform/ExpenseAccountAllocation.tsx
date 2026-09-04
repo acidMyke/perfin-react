@@ -1,6 +1,6 @@
 import { withForm, type Option } from '#client/components/Form';
 import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { calculateExpenseForm, createEditExpenseFormOptions } from '../-common';
+import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions } from '../-common';
 import { currencyNumberFormat } from '#client/utils';
 
 export const ExpenseAccountAllocationSubForm = withForm({
@@ -29,10 +29,10 @@ export const ExpenseAccountAllocationSubForm = withForm({
                   </form.AppField>
 
                   <form.AppField
-                    name='amountCents'
+                    name={`accountAllocs[${idx}].amountCents`}
                     listeners={{
                       onChange: () => {
-                        if (!isLast) calculateExpenseForm(form);
+                        if (!isLast) calculateExpenseFormRemainingAllocation(form, 'account');
                       },
                     }}
                   >
@@ -51,7 +51,7 @@ export const ExpenseAccountAllocationSubForm = withForm({
                   <button
                     className='btn-ghost btn btn-sm px-0'
                     onClick={() => {
-                      if (isLast) arrayField.pushValue({ account: undefined, amountCents: 0 });
+                      if (isLast) arrayField.insertValue(idx, { account: undefined, amountCents: 0 });
                       else arrayField.removeValue(idx);
                     }}
                   >
@@ -60,6 +60,7 @@ export const ExpenseAccountAllocationSubForm = withForm({
 
                   <button
                     className='btn-ghost btn btn-sm px-0'
+                    disabled={length === 1}
                     onClick={() => {
                       arrayField.swapValues(idx, idx + (idx == 0 ? 1 : -1));
                     }}
