@@ -1,4 +1,4 @@
-import { calculateExpense } from './expenseHelper';
+import { calculateExpense, calculateRemainingAllocation, type CalculationResultWithAllocations } from './expenseHelper';
 
 describe('calculateExpense()', () => {
   describe('Non-Itemized Expenses', () => {
@@ -264,5 +264,41 @@ describe('calculateExpense()', () => {
         });
       });
     });
+  });
+});
+
+describe(calculateRemainingAllocation, () => {
+  it('should calculate remaining allocation correctly', () => {
+    const input: CalculationResultWithAllocations = {
+      netTotalCents: 55_00,
+      allocations: [{ amountCents: 17_00 }, { amountCents: 11_00 }, { amountCents: 12_00 }, { amountCents: 2_00 }],
+    };
+
+    const result = calculateRemainingAllocation(input);
+    expect(result.remainingCents).toBe(13_00);
+    expect(result.lastAllocationCents).toBe(15_00);
+    expect(result.isValidForCategory).toBe(true);
+  });
+
+  it('should calculate remaining allocation even with negative balance', () => {
+    const input: CalculationResultWithAllocations = {
+      netTotalCents: 35_00,
+      allocations: [{ amountCents: 26_00 }, { amountCents: -9_00 }, { amountCents: 12_00 }],
+    };
+
+    const result = calculateRemainingAllocation(input);
+    expect(result.remainingCents).toBe(6_00);
+    expect(result.lastAllocationCents).toBe(18_00);
+    expect(result.isValidForCategory).toBe(false);
+  });
+
+  it('should flag invalid when allocated more than net', () => {
+    const input: CalculationResultWithAllocations = {
+      netTotalCents: 25_00,
+      allocations: [{ amountCents: 26_00 }, { amountCents: 12_00 }],
+    };
+
+    const result = calculateRemainingAllocation(input);
+    expect(result.isValidForCategory).toBe(false);
   });
 });

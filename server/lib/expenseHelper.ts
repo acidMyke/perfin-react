@@ -171,3 +171,28 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     adjustmentResults,
   };
 }
+
+export type CalculationResultWithAllocations = Pick<ExpenseCalculationResult, 'netTotalCents'> & {
+  allocations: { amountCents: number }[];
+};
+
+export function calculateRemainingAllocation(input: CalculationResultWithAllocations) {
+  const { netTotalCents, allocations } = input;
+  let remainingCents = netTotalCents;
+  let isValidForCategory = true;
+  for (let i = 0; i < allocations.length; i++) {
+    const { amountCents } = allocations[i];
+    remainingCents -= amountCents;
+    if (amountCents < 0 || remainingCents < 0) {
+      isValidForCategory = false;
+    }
+  }
+
+  const lastAllocationCents = allocations.at(-1)!.amountCents + remainingCents;
+
+  return {
+    remainingCents,
+    lastAllocationCents,
+    isValidForCategory,
+  };
+}
