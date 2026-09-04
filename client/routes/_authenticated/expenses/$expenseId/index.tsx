@@ -15,7 +15,7 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
 import { withForm } from '#components/Form';
-import { useSelector, useStore } from '@tanstack/react-form';
+import { useStore } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { BillTotal } from './-common/BillTotal';
@@ -74,8 +74,8 @@ function RouteComponent() {
 
       <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
-      <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} />
-      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} />
+      <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} readOnly={false} />
+      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} readOnly={false} />
       <form.AppField name='attachments'>
         {({ AttachmentBox }) => (
           <AttachmentBox label='Attachment' accept='image/*,application/pdf' max={5} containerCn='col-span-8 my-2' />

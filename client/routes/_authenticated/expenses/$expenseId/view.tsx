@@ -2,11 +2,13 @@ import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useStore } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat, formatBps } from '#client/utils';
-import { useMutation } from '@tanstack/react-query';
+import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
 import { Fragment, useRef } from 'react';
 import { trpc } from '#client/trpc';
 import { BillTotal } from './-common/BillTotal';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { ExpenseAccountAllocationSubForm } from './-subform/ExpenseAccountAllocation';
+import { ExpenseCategoryAllocationSubForm } from './-subform/ExpenseCategoryAllocation';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -26,7 +28,9 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
 
   const expense = useStore(form.store, state => state.values);
-  const { geolocation, items, adjustments, account, category, isDeleted, billedAt } = expense;
+  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const { accountOptions, categoryOptions } = optionsData;
+  const { geolocation, items, adjustments, isDeleted, billedAt } = expense;
   const shopName = expense.shopName ? expense.shopName : 'Unknown Shop';
   const { itemResults, adjustmentResults } = expense.ui.calculateResult;
 
@@ -49,8 +53,6 @@ function RouteComponent() {
       <div className='grid grid-cols-2 space-y-1 pb-2'>
         {expense.shopMall && <p className='text-sm opacity-70'>{expense.shopMall}</p>}
         <p className='text-sm opacity-60'>{dateFormat.format(expense.billedAt)}</p>
-        <p className='text-sm opacity-60'>Category: {category?.label ?? 'Unspecified'}</p>
-        <p className='text-sm opacity-60'>Account: {account?.label ?? 'Unspecified'}</p>
       </div>
       <div className='grid w-full auto-cols-min auto-rows-auto grid-cols-[1fr_auto_auto_auto] gap-x-4 pb-3'>
         {items.length > 0 && (
@@ -105,6 +107,8 @@ function RouteComponent() {
       </div>
 
       <BillTotal className='col-span-2' isView />
+      <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} readOnly={true} />
+      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} readOnly={true} />
 
       <ActionSection isDeleted={isDeleted} billedAt={billedAt} />
     </div>

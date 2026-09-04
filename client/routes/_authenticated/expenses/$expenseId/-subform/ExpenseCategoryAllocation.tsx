@@ -9,8 +9,9 @@ export const ExpenseCategoryAllocationSubForm = withForm({
   ...createEditExpenseFormOptions,
   props: {
     categoryOptions: [] as Option[],
+    readOnly: false,
   },
-  render({ form, categoryOptions }) {
+  render({ form, categoryOptions, readOnly }) {
     const isItemizedExpense = useSelector(form.store, state => state.values.items.length > 0);
     const categoryLabelMapping = useMemo(
       () => new Map(categoryOptions.map(({ value, label }) => [value, label] as const)),
@@ -62,6 +63,7 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                           options={categoryOptions}
                           containerCn='w-62'
                           inputCn='input-sm text-sm'
+                          readOnly={readOnly}
                         />
                       )}
                     </form.AppField>
@@ -83,29 +85,34 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                           hideError
                           disabled={isLast}
                           min={0}
+                          readOnly={readOnly}
                         />
                       )}
                     </form.AppField>
 
-                    <button
-                      className='btn-ghost btn btn-sm px-0'
-                      onClick={() => {
-                        if (isLast) arrayField.insertValue(idx, { category: undefined, amountCents: 0 });
-                        else arrayField.removeValue(idx);
-                      }}
-                    >
-                      {isLast ? <Plus /> : <X />}
-                    </button>
+                    {!readOnly && (
+                      <>
+                        <button
+                          className='btn-ghost btn btn-sm px-0'
+                          onClick={() => {
+                            if (isLast) arrayField.insertValue(idx, { category: undefined, amountCents: 0 });
+                            else arrayField.removeValue(idx);
+                          }}
+                        >
+                          {isLast ? <Plus /> : <X />}
+                        </button>
 
-                    <button
-                      className='btn-ghost btn btn-sm px-0'
-                      disabled={length === 1}
-                      onClick={() => {
-                        arrayField.swapValues(idx, idx + (idx == 0 ? 1 : -1));
-                      }}
-                    >
-                      {idx === 0 ? <ChevronDown /> : <ChevronUp />}
-                    </button>
+                        <button
+                          className='btn-ghost btn btn-sm px-0'
+                          disabled={length === 1}
+                          onClick={() => {
+                            arrayField.swapValues(idx, idx + (idx == 0 ? 1 : -1));
+                          }}
+                        >
+                          {idx === 0 ? <ChevronDown /> : <ChevronUp />}
+                        </button>
+                      </>
+                    )}
                   </li>
                 );
               })}
