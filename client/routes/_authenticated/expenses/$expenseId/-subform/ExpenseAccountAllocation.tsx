@@ -12,10 +12,10 @@ export const ExpenseAccountAllocationSubForm = withForm({
   render({ form, accountOptions, readOnly }) {
     return (
       <>
-        <label className='label mt-4 p-0'>
+        <label className='label mt-2 p-0'>
           <span className='label-text font-medium'>Account allocations</span>
         </label>
-        <form.Field name='accountAllocs' mode='array'>
+        <form.Field name='accountAllocs'>
           {arrayField => (
             <ul className='col-span-full flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pl-2'>
               {arrayField.state.value.map((_, idx, { length }) => {
@@ -59,12 +59,13 @@ export const ExpenseAccountAllocationSubForm = withForm({
                       <>
                         <button
                           className='btn-ghost btn btn-sm px-0'
-                          onClick={() => {
-                            if (isLast) arrayField.insertValue(idx, { account: undefined, amountCents: 0 });
-                            else arrayField.removeValue(idx);
-                          }}
+                          onClick={() => arrayField.insertValue(idx, { account: undefined, amountCents: 0 })}
                         >
-                          {isLast ? <Plus /> : <X />}
+                          <Plus />
+                        </button>
+
+                        <button className='btn-ghost btn btn-sm px-0' onClick={() => arrayField.removeValue(idx)}>
+                          <X />
                         </button>
 
                         <button
