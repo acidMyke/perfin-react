@@ -1,9 +1,9 @@
 import { withForm, type Option } from '#client/components/Form';
 import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { createEditExpenseFormOptions } from '../-common';
+import { calculateExpenseForm, createEditExpenseFormOptions } from '../-common';
 import { currencyNumberFormat } from '#client/utils';
 
-export const ExpenseAccountAllocation = withForm({
+export const ExpenseAccountAllocationSubForm = withForm({
   ...createEditExpenseFormOptions,
   props: {
     accountOptions: [] as Option[],
@@ -14,6 +14,7 @@ export const ExpenseAccountAllocation = withForm({
         {arrayField => (
           <ul className='col-span-full mt-4 flex auto-rows-auto flex-col flex-nowrap items-start gap-2 py-2 pl-2'>
             {arrayField.state.value.map((_, idx, { length }) => {
+              const isLast = idx === length - 1;
               return (
                 <li className='flex w-full flex-row items-center gap-2'>
                   <form.AppField name={`accountAllocs[${idx}].account`}>
@@ -27,7 +28,14 @@ export const ExpenseAccountAllocation = withForm({
                     )}
                   </form.AppField>
 
-                  <form.AppField name='amountCents' listeners={{/* onChange: () => onPricingChange() */}}>
+                  <form.AppField
+                    name='amountCents'
+                    listeners={{
+                      onChange: () => {
+                        if (!isLast) calculateExpenseForm(form);
+                      },
+                    }}
+                  >
                     {({ NumericInput }) => (
                       <NumericInput
                         transforms={['amountInCents']}
@@ -35,7 +43,7 @@ export const ExpenseAccountAllocation = withForm({
                         containerCn='mt-0 w-28'
                         inputCn='input-sm text-sm'
                         hideError
-                        disabled={idx === length - 1}
+                        disabled={isLast}
                       />
                     )}
                   </form.AppField>
@@ -43,10 +51,11 @@ export const ExpenseAccountAllocation = withForm({
                   <button
                     className='btn-ghost btn btn-sm px-0'
                     onClick={() => {
-                      arrayField.pushValue({ account: undefined, amountCents: 0 });
+                      if (isLast) arrayField.pushValue({ account: undefined, amountCents: 0 });
+                      else arrayField.removeValue(idx);
                     }}
                   >
-                    {idx !== length - 1 ? <X /> : <Plus />}
+                    {isLast ? <Plus /> : <X />}
                   </button>
 
                   <button
