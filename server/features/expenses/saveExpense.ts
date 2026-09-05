@@ -369,26 +369,27 @@ export function queueExpenseAdjustments(
   }
 }
 
-export async function queueExpenseAccountAllocations(
-  collector: BatchCollector,
+type Allocation<TKind extends 'account' | 'category'> = { amountCents: number } & {
+  [key in TKind]?: { label: string; value: string | null } | null | undefined;
+};
+
+async function resolveAndAggregateAllocations<TKind extends 'account' | 'category'>(
+  kind: TKind,
   db: AppDatabase,
   userId: string,
   expenseId: string,
-  input: Pick<SaveExpenseInput, 'accountAllocs' | 'billedAt'>,
-  calculateExpenseResult: Pick<ExpenseCalculationResult, 'netTotalCents'>,
-  deps: PickRepos<
-    | 'generateId'
-    | 'getExistingSubjects'
-    | 'insertSubjects'
-    | 'upsertExpenseAccountAllocations'
-    | 'deleteExpenseAccountAllocationsIfNotInList'
-  >,
+  allocations: NoInfer<Allocation<TKind>[]>,
+  netTotalCents: number,
+  expenseBilledAt: Date,
+  deps: PickRepos<'generateId' | 'getExistingSubjects' | 'insertSubjects'>,
 ) {
-  const idsOrNamesToCheck = input.accountAllocs
-    .flatMap(({ account }) => (account ? [account.label.trim(), account.value] : undefined))
+  const idsOrNamesToCheck = allocations
+    .flatMap(({ [kind]: subject }) => (subject ? [subject.label.trim(), subject.value] : undefined))
     .filter((value): value is string => Boolean(value));
 
-  const existingSubjects = await deps.getExistingSubjects(db, accountsTable, userId, idsOrNamesToCheck);
+  const subjectTable = kind === 'account' ? accountsTable : categoriesTable;
+
+  const existingSubjects = await deps.getExistingSubjects(db, subjectTable, userId, idsOrNamesToCheck);
   type Subject = (typeof existingSubjects)[number];
   const subjectByValue = new Map<string, Subject>();
   const subjectByLabel = new Map<string, Subject>();
@@ -407,11 +408,11 @@ export async function queueExpenseAccountAllocations(
     totalCentsAllocated += amountCents;
   };
 
-  for (const allocations of input.accountAllocs) {
-    const { account: subject, amountCents } = allocations;
-    if (allocations.amountCents === 0) continue;
+  for (const allocation of allocations) {
+    const { [kind]: subject, amountCents } = allocation;
+    if (amountCents === 0) continue;
     if (!subject) {
-      accumulateAmount('', allocations.amountCents);
+      accumulateAmount('', amountCents);
       continue;
     }
 
@@ -427,32 +428,68 @@ export async function queueExpenseAccountAllocations(
     accumulateAmount(subjectId, amountCents);
   }
 
-  if (totalCentsAllocated < calculateExpenseResult.netTotalCents) {
-    const unallocatedCents = calculateExpenseResult.netTotalCents - totalCentsAllocated;
+  if (totalCentsAllocated < netTotalCents) {
+    const unallocatedCents = netTotalCents - totalCentsAllocated;
     accumulateAmount('', unallocatedCents);
   }
 
-  if (!subjectsToCreate.values().next().done) {
-    collector.push(deps.insertSubjects(db, accountsTable, userId, subjectsToCreate.values().toArray()));
-  }
-
-  if (!amountsBySubjectId.entries().next().done) {
-    collector.push(
-      deps.upsertExpenseAccountAllocations(
-        db,
-        amountsBySubjectId
-          .entries()
-          .map(([accountId, amountCents], sequence) => ({
+  return {
+    subjectsToCreate: subjectsToCreate.values().toArray(),
+    subjectIds: amountsBySubjectId.keys().toArray(),
+    resolvedAllocations: amountsBySubjectId
+      .entries()
+      .map(([subjectId, amountCents], sequence) =>
+        Object.assign(
+          {
+            [`${kind}Id`]: subjectId,
+          } as { [key in `${TKind}Id`]: string },
+          {
             expenseId,
-            expenseBilledAt: input.billedAt,
-            accountId,
+            expenseBilledAt,
             amountCents,
             sequence,
-          }))
-          .toArray(),
-      ),
-    );
+          },
+        ),
+      )
+      .toArray(),
+  };
+}
+
+export async function queueExpenseAccountAllocations(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  input: Pick<SaveExpenseInput, 'accountAllocs' | 'billedAt'>,
+  calculateExpenseResult: Pick<ExpenseCalculationResult, 'netTotalCents'>,
+  deps: PickRepos<
+    | 'generateId'
+    | 'getExistingSubjects'
+    | 'insertSubjects'
+    | 'upsertExpenseAccountAllocations'
+    | 'deleteExpenseAccountAllocationsIfNotInList'
+  >,
+) {
+  const { subjectsToCreate, subjectIds, resolvedAllocations } = await resolveAndAggregateAllocations(
+    'account',
+    db,
+    userId,
+    expenseId,
+    input.accountAllocs,
+    calculateExpenseResult.netTotalCents,
+    input.billedAt,
+    deps,
+  );
+
+  if (subjectsToCreate.length > 0) {
+    collector.push(deps.insertSubjects(db, accountsTable, userId, subjectsToCreate));
   }
+
+  if (resolvedAllocations.length > 0) {
+    collector.push(deps.upsertExpenseAccountAllocations(db, resolvedAllocations));
+  }
+
+  collector.push(deps.deleteExpenseAccountAllocationsIfNotInList(db, expenseId, subjectIds));
 }
 
 export async function queueExpenseAttachments(
