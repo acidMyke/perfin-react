@@ -119,9 +119,7 @@ describe('helpers', async () => {
     it('should call upsertMainExpense to save values base on info and push return into batch collector', async () => {
       const netTotalCents = 60_00;
       const expectedBoxId = 2903487923848;
-      const mockedCalculateExpense = vi
-        .mocked(calculateExpense)
-        .mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
+      const mockResult = { netTotalCents } as ExpenseCalculationResult;
       const mockedGetLocationBoxId = vi.mocked(getLocationBoxId).mockReturnValue([expectedBoxId]);
       const batchItem0 = 'Main Expense Upserted';
       deps.insertSubject.mockThrow('Should not be called');
@@ -142,8 +140,6 @@ describe('helpers', async () => {
         version: 1,
         latitude: 1.258837,
         longitude: 103.8093661,
-        account: { value: accountId, label: '' },
-        category: { value: categoryId, label: '' },
         items: [
           {
             id: nanoid(),
@@ -164,17 +160,11 @@ describe('helpers', async () => {
           },
         ],
         attachmentFileIds: [],
+        accountAllocs: [],
+        categoryAllocs: [],
       };
 
-      queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
-
-      expect(mockedCalculateExpense).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          specifiedAmountCents: input.specifiedAmountCents,
-          items: input.items,
-          adjustments: input.adjustments,
-        }),
-      );
+      queueMainExpenseRecord(collector, db, userId, expenseId, input, mockResult, deps);
 
       expect(mockedGetLocationBoxId).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ latitude: input.latitude, longitude: input.longitude }),
@@ -188,8 +178,6 @@ describe('helpers', async () => {
           updatedBy: userId,
           shopMall,
           shopName,
-          accountId,
-          categoryId,
           amountCents: netTotalCents,
           boxId: expectedBoxId,
           type: input.type,
@@ -198,76 +186,6 @@ describe('helpers', async () => {
         }),
       );
       expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
-    });
-
-    it('should create account if account.id is null', () => {
-      const netTotalCents = 80_00;
-      const expectedAccountId = nanoid();
-      vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
-      const batchItem0 = 'Account created';
-      const batchItem1 = 'Main Expense Upserted';
-      const accountName = 'accountName';
-      deps.insertSubject.mockReturnValue(batchItem0);
-      deps.upsertMainExpense.mockReturnValue(batchItem1);
-      deps.generateId.mockReturnValueOnce(expectedAccountId);
-
-      queueMainExpenseRecord(
-        collector,
-        db,
-        userId,
-        expenseId,
-        { account: { value: null, label: accountName } } as SaveExpenseInput,
-        deps,
-      );
-
-      expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        schema.accountsTable,
-        expectedAccountId,
-        accountName,
-        userId,
-      );
-      expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        expect.objectContaining({ accountId: expectedAccountId }),
-      );
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
-    });
-
-    it('should create category if category.id is null', () => {
-      const netTotalCents = 80_00;
-      const expectedAccountId = nanoid();
-      vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
-      const batchItem0 = 'Category created';
-      const batchItem1 = 'Main Expense Upserted';
-      const categoryName = 'categoryName';
-      deps.insertSubject.mockReturnValue(batchItem0);
-      deps.upsertMainExpense.mockReturnValue(batchItem1);
-      deps.generateId.mockReturnValueOnce(expectedAccountId);
-
-      queueMainExpenseRecord(
-        collector,
-        db,
-        userId,
-        expenseId,
-        { category: { value: null, label: categoryName } } as SaveExpenseInput,
-        deps,
-      );
-
-      expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        schema.categoriesTable,
-        expectedAccountId,
-        categoryName,
-        userId,
-      );
-      expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        expect.objectContaining({ categoryId: expectedAccountId }),
-      );
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
   });
 
@@ -547,6 +465,9 @@ describe(processSaveExpense, async () => {
   let deps = createDynamicMock<SaveExpenseHelpers & SaveExpenseRepo>('deps');
   const expectDeps = () => expectDynamicMock('deps');
   const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
+  const netTotalCents = 60_00;
+  const expectedCalculateExpenseResult = { netTotalCents } as ExpenseCalculationResult;
+  const mockedCalculateExpense = vi.mocked(calculateExpense).mockReturnValue(expectedCalculateExpenseResult);
   const mockedIndexing = vi.mocked(processSaveExpenseSearchIndexing);
   const inputGenerator = zocker(saveExpenseInputSchema)
     .supply(saveExpenseInputSchema.shape.expenseId, () => nanoid())
@@ -585,12 +506,21 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(mockedCalculateExpense).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        specifiedAmountCents: input.specifiedAmountCents,
+        items: input.items,
+        adjustments: input.adjustments,
+      }),
+    );
+
     expect(deps.queueMainExpenseRecord).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
       userId,
       input.expenseId,
       input,
+      expectedCalculateExpenseResult,
       expectDeps(),
     );
 
@@ -643,6 +573,7 @@ describe(processSaveExpense, async () => {
       userId,
       expectedExpenseId,
       input,
+      expectedCalculateExpenseResult,
       expectDeps(),
     );
 

@@ -15,7 +15,7 @@ import {
 import { and, eq, inArray, notInArray } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
-import { calculateExpense } from '#server/lib/expenseHelper';
+import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
 import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
@@ -23,14 +23,18 @@ export const saveExpenseInputSchema = z.object({
   expenseId: z.string().nullable(),
   version: z.int().optional().default(0),
   billedAt: z.iso.datetime({ error: 'Invalid date time' }).transform(val => parseISO(val)),
-  account: z
-    .object({ value: z.string().nullable(), label: z.string().trim() })
-    .nullish()
-    .transform(v => v ?? null),
-  category: z
-    .object({ value: z.string().nullable(), label: z.string().trim() })
-    .nullish()
-    .transform(v => v ?? null),
+  accountAllocs: z.array(
+    z.object({
+      account: z.object({ value: z.string().nullable(), label: z.string().trim() }).nullish(),
+      amountCents: z.number(),
+    }),
+  ),
+  categoryAllocs: z.array(
+    z.object({
+      category: z.object({ value: z.string().nullable(), label: z.string().trim() }).nullish(),
+      amountCents: z.number(),
+    }),
+  ),
   latitude: z.number().nullish(),
   longitude: z.number().nullish(),
   geoAccuracy: z.number().nullish(),
@@ -175,7 +179,8 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   }
 
   const collector = new BatchCollector();
-  deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
+  const calculationResult = calculateExpense(input);
+  deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, calculationResult, deps);
   deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
   deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
   await deps.queueExpenseAttachments(
@@ -236,35 +241,20 @@ export function queueMainExpenseRecord(
   userId: string,
   expenseId: string,
   input: SaveExpenseInput,
+  calculateExpenseResult: ExpenseCalculationResult,
   deps: PickRepos<'upsertMainExpense' | 'insertSubject' | 'generateId'> = saveExpenseRepo,
 ) {
-  const { netTotalCents } = calculateExpense(input);
   const [boxId] =
     input.latitude && input.longitude
       ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
       : [null];
 
-  let accountId = input.account?.value ?? null;
-  let categoryId = input.category?.value ?? null;
-
-  if (input.account?.value === null) {
-    accountId = deps.generateId();
-    collector.push(deps.insertSubject(db, accountsTable, accountId, input.account.label, userId));
-  }
-
-  if (input.category?.value === null) {
-    categoryId = deps.generateId();
-    collector.push(deps.insertSubject(db, categoriesTable, categoryId, input.category.label, userId));
-  }
-
   collector.push(
     deps.upsertMainExpense(db, {
       id: expenseId,
-      amountCents: netTotalCents,
+      amountCents: calculateExpenseResult.netTotalCents,
       billedAt: input.billedAt,
       userId: userId,
-      accountId: accountId,
-      categoryId: categoryId,
       type: input.type,
       updatedBy: userId,
       latitude: input.latitude,
@@ -347,6 +337,8 @@ export async function queueExpenseAttachments(
   }
 
   const attachmentRecords = fileIds.map(fileId => ({ expenseId, fileId }));
-  collector.push(deps.upsertAttachments(db, attachmentRecords));
+  if (attachmentRecords.length > 0) {
+    collector.push(deps.upsertAttachments(db, attachmentRecords));
+  }
   collector.push(deps.deleteAttachmentIfNotInList(db, expenseId, fileIds));
 }
