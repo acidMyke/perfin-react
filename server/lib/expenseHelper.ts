@@ -188,7 +188,7 @@ export function calculateRemainingAllocation(input: CalculationResultWithAllocat
     }
   }
 
-  const lastAllocationCents = allocations.at(-1)?.amountCents ?? 0 + remainingCents;
+  const lastAllocationCents = (allocations.at(-1)?.amountCents ?? 0) + remainingCents;
 
   return {
     remainingCents,

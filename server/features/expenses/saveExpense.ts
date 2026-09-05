@@ -6,13 +6,15 @@ import z from 'zod';
 import {
   accountsTable,
   categoriesTable,
+  expenseAccountAllocationsTable,
   expenseAdjustmentsTable,
   expenseAttachmentsTable,
+  expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
   generateId,
 } from '#schema';
-import { and, eq, inArray, notInArray } from 'drizzle-orm';
+import { and, eq, inArray, notInArray, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
 import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
@@ -100,13 +102,6 @@ export const saveExpenseRepo = {
         .from(expenseAdjustmentsTable)
         .where(and(eq(expenseAdjustmentsTable.expenseId, expenseId), eq(expenseAdjustmentsTable.isDeleted, false))),
     ]),
-  insertSubject: (
-    db: AppDatabase,
-    table: typeof accountsTable | typeof categoriesTable,
-    id: string,
-    name: string,
-    userId: string,
-  ) => db.insert(table).values({ id, name, userId }),
   upsertMainExpense: (db: AppDatabase, value: typeof expensesTable.$inferInsert) =>
     db
       .insert(expensesTable)
@@ -145,6 +140,60 @@ export const saveExpenseRepo = {
       .delete(expenseAttachmentsTable)
       .where(
         and(eq(expenseAttachmentsTable.expenseId, expenseId), notInArray(expenseAttachmentsTable.fileId, fileIds)),
+      ),
+  getExistingSubjects: (
+    db: AppDatabase,
+    table: typeof accountsTable | typeof categoriesTable,
+    userId: string,
+    idsOrNames: string[],
+  ) =>
+    db
+      .select({ value: table.id, label: table.name })
+      .from(table)
+      .where(and(eq(table.userId, userId), or(inArray(table.id, idsOrNames), inArray(table.name, idsOrNames)))),
+  insertSubjects: (
+    db: AppDatabase,
+    table: typeof accountsTable | typeof categoriesTable,
+    userId: string,
+    records: { value: string; label: string }[],
+  ) =>
+    db.insert(table).values(records.map(({ value, label }) => ({ id: value, name: label, userId, isDeleted: false }))),
+  upsertExpenseAccountAllocations: (db: AppDatabase, records: (typeof expenseAccountAllocationsTable.$inferSelect)[]) =>
+    db
+      .insert(expenseAccountAllocationsTable)
+      .values(records)
+      .onConflictDoUpdate({
+        target: [expenseAccountAllocationsTable.expenseId, expenseAccountAllocationsTable.accountId],
+        set: excludedAll(expenseAccountAllocationsTable, ['expenseId', 'accountId']),
+      }),
+  deleteExpenseAccountAllocationsIfNotInList: (db: AppDatabase, expenseId: string, accountIds: string[]) =>
+    db
+      .delete(expenseAccountAllocationsTable)
+      .where(
+        and(
+          eq(expenseAccountAllocationsTable.expenseId, expenseId),
+          notInArray(expenseAccountAllocationsTable.accountId, accountIds),
+        ),
+      ),
+  upsertExpenseCategoryAllocations: (
+    db: AppDatabase,
+    records: (typeof expenseCategoryAllocationsTable.$inferSelect)[],
+  ) =>
+    db
+      .insert(expenseCategoryAllocationsTable)
+      .values(records)
+      .onConflictDoUpdate({
+        target: [expenseCategoryAllocationsTable.expenseId, expenseCategoryAllocationsTable.categoryId],
+        set: excludedAll(expenseCategoryAllocationsTable, ['expenseId', 'categoryId']),
+      }),
+  deleteExpenseCategoryAllocationsIfNotInList: (db: AppDatabase, expenseId: string, categoryIds: string[]) =>
+    db
+      .delete(expenseCategoryAllocationsTable)
+      .where(
+        and(
+          eq(expenseCategoryAllocationsTable.expenseId, expenseId),
+          notInArray(expenseCategoryAllocationsTable.categoryId, categoryIds),
+        ),
       ),
 };
 
@@ -242,7 +291,7 @@ export function queueMainExpenseRecord(
   expenseId: string,
   input: SaveExpenseInput,
   calculateExpenseResult: ExpenseCalculationResult,
-  deps: PickRepos<'upsertMainExpense' | 'insertSubject' | 'generateId'> = saveExpenseRepo,
+  deps: PickRepos<'upsertMainExpense' | 'generateId'> = saveExpenseRepo,
 ) {
   const [boxId] =
     input.latitude && input.longitude
@@ -317,6 +366,92 @@ export function queueExpenseAdjustments(
 
   if (removedAdjIds.size > 0) {
     collector.push(deps.markExpenseChildAsDeleted(db, expenseAdjustmentsTable, expenseId, removedAdjIds));
+  }
+}
+
+export async function queueExpenseAccountAllocations(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  input: Pick<SaveExpenseInput, 'accountAllocs' | 'billedAt'>,
+  calculateExpenseResult: Pick<ExpenseCalculationResult, 'netTotalCents'>,
+  deps: PickRepos<
+    | 'generateId'
+    | 'getExistingSubjects'
+    | 'insertSubjects'
+    | 'upsertExpenseAccountAllocations'
+    | 'deleteExpenseAccountAllocationsIfNotInList'
+  >,
+) {
+  const idsOrNamesToCheck = input.accountAllocs
+    .flatMap(({ account }) => (account ? [account.label.trim(), account.value] : undefined))
+    .filter((value): value is string => Boolean(value));
+
+  const existingSubjects = await deps.getExistingSubjects(db, accountsTable, userId, idsOrNamesToCheck);
+  type Subject = (typeof existingSubjects)[number];
+  const subjectByValue = new Map<string, Subject>();
+  const subjectByLabel = new Map<string, Subject>();
+
+  for (const account of existingSubjects) {
+    subjectByLabel.set(account.label, account);
+    subjectByValue.set(account.value, account);
+  }
+
+  const subjectsToCreate = new Map<string, Subject>();
+  const amountsBySubjectId = new Map<string, number>();
+  let totalCentsAllocated = 0;
+  const accumulateAmount = (id: string, amountCents: number) => {
+    const prev = amountsBySubjectId.get(id) ?? 0;
+    amountsBySubjectId.set(id, prev + amountCents);
+    totalCentsAllocated += amountCents;
+  };
+
+  for (const allocations of input.accountAllocs) {
+    const { account: subject, amountCents } = allocations;
+    if (allocations.amountCents === 0) continue;
+    if (!subject) {
+      accumulateAmount('', allocations.amountCents);
+      continue;
+    }
+
+    let existingSub = subject.value ? subjectByValue.get(subject.value) : undefined;
+    const label = subject.label.trim();
+    existingSub ??= subjectByLabel.get(label);
+    let subjectId = (existingSub ?? subjectsToCreate.get(label))?.value;
+    if (!subjectId) {
+      subjectId = deps.generateId();
+      const newSubject: Subject = { label, value: subjectId };
+      subjectsToCreate.set(label, newSubject);
+    }
+    accumulateAmount(subjectId, amountCents);
+  }
+
+  if (totalCentsAllocated < calculateExpenseResult.netTotalCents) {
+    const unallocatedCents = calculateExpenseResult.netTotalCents - totalCentsAllocated;
+    accumulateAmount('', unallocatedCents);
+  }
+
+  if (!subjectsToCreate.values().next().done) {
+    collector.push(deps.insertSubjects(db, accountsTable, userId, subjectsToCreate.values().toArray()));
+  }
+
+  if (!amountsBySubjectId.entries().next().done) {
+    collector.push(
+      deps.upsertExpenseAccountAllocations(
+        db,
+        amountsBySubjectId
+          .entries()
+          .map(([accountId, amountCents], sequence) => ({
+            expenseId,
+            expenseBilledAt: input.billedAt,
+            accountId,
+            amountCents,
+            sequence,
+          }))
+          .toArray(),
+      ),
+    );
   }
 }
 
