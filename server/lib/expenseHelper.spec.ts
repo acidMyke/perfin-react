@@ -206,13 +206,15 @@ describe('calculateExpense()', () => {
     });
 
     describe('With category', () => {
-      it('should sum the prices of all items in the same category by categoryId or category.value', () => {
+      it('should sum the prices of all items in the same category by categoryId or category.value or category.label', () => {
         const result = calculateExpense({
           specifiedAmountCents: 0,
           items: [
             { id: 'i002', priceCents: 5_00, quantity: 3, categoryId: 'c001' },
             { id: 'i003', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
             { id: 'i004', priceCents: 9_00, quantity: 5, category: { value: 'c002' } },
+            { id: 'i005', priceCents: 3_00, quantity: 2, category: { label: 'Food' } },
+            { id: 'i006', priceCents: 5_00, quantity: 4, category: { label: 'Food' } },
           ],
           adjustments: [],
         });
@@ -220,6 +222,7 @@ describe('calculateExpense()', () => {
         expect(result.categoryResults).toEqual([
           ['c001', { grossTotalCents: 64_00, netTotalCents: 64_00 }],
           ['c002', { grossTotalCents: 45_00, netTotalCents: 45_00 }],
+          ['Food', { grossTotalCents: 26_00, netTotalCents: 26_00 }],
         ]);
       });
 

@@ -8,7 +8,7 @@ export type ExpenseItemForCalculation = {
   quantity: number;
   priceCents: number;
   categoryId?: string | undefined;
-  category?: { value: string | null } | undefined;
+  category?: { value?: string | null; label?: string } | undefined;
 };
 
 export type ExpenseAdjustmentForCalculation = {
@@ -64,7 +64,7 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       const gross = quantity * priceCents;
       expenseGrossTotal += gross;
       itemResultsMap.set(id, { grossTotalCents: gross, netTotalCents: gross });
-      const categoryId = item.categoryId ?? item.category?.value;
+      const categoryId = item.categoryId ?? item.category?.value ?? item.category?.label;
       if (categoryId) {
         const existing = categoryToItemsMap.get(categoryId);
         if (existing) existing.push(id);
