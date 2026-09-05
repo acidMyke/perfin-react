@@ -99,7 +99,6 @@ function RouteComponent() {
         await invalidateAndRedirectBackToList({
           expenseId,
           navigate,
-          optionsCreated: [value.account?.value, value.category?.value].includes(null),
           billedAt,
         });
       },

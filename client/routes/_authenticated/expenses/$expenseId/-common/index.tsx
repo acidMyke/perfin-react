@@ -277,20 +277,21 @@ export function calculateExpenseFormRemainingAllocation(
 type InvalidateAndRedirectBackToListOptions = {
   navigate: UseNavigateResult<any>;
   billedAt: Date;
-  optionsCreated: boolean;
   expenseId: string;
 };
 
 export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirectBackToListOptions) {
-  const { navigate, billedAt, optionsCreated, expenseId } = opts;
+  const { navigate, billedAt, expenseId } = opts;
 
   const monthYear = { month: billedAt.getMonth(), year: billedAt.getFullYear() };
   const promises = [queryClient.refetchQueries(trpc.expense.list.queryFilter(monthYear))];
   if (expenseId !== 'create') {
     promises.push(queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId })));
   }
+  const optionsCreated = queryClient.getQueryDefaults(trpc.expense.loadOptions.queryKey()).meta?.isPushed ?? false;
   if (optionsCreated) {
     promises.push(queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter()));
+    queryClient.setQueryDefaults(trpc.expense.loadOptions.queryKey(), { meta: undefined });
   }
   await Promise.all(promises);
   return navigate({ to: '/expenses', search: monthYear });
@@ -490,10 +491,11 @@ export function usePushIntoOptions() {
         const existingOptions = old[key];
         const notAdded = existingOptions.every(({ value, label }) => value !== option.value || label !== option.label);
         if (notAdded) {
-          old[key] = [...existingOptions, option as { value: string; label: string }];
+          old[key] = [...existingOptions, option];
         }
         return old;
       });
+      client.setQueryDefaults(loadOptionQueryKey, { meta: { isPushed: true } });
     },
   });
   return {
