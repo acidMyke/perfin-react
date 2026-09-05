@@ -24,6 +24,11 @@ import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpen
 import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 import { filesColumns } from '#server/lib/fileUpload';
 
+export type Option = {
+  label: string;
+  value: string | null;
+};
+
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
     db
@@ -39,8 +44,8 @@ const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db,
   ]);
 
   return {
-    accountOptions,
-    categoryOptions,
+    accountOptions: accountOptions as Option[],
+    categoryOptions: categoryOptions as Option[],
   };
 });
 

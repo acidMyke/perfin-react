@@ -28,14 +28,6 @@ export type ExpenseFormItem = Omit<ExpenseItem, 'categoryId'> & { category: Opti
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
 
-type NullableValueExpenseOptions = {
-  [Key in keyof ExpenseOptions]: {
-    [InnerKey in keyof ExpenseOptions[Key][number]]: InnerKey extends 'value'
-      ? ExpenseOptions[Key][number][InnerKey] | null
-      : ExpenseOptions[Key][number][InnerKey];
-  }[];
-};
-
 export function defaultExpenseItem(priceCents?: number): ExpenseFormItem {
   return {
     id: generateId(),
@@ -60,11 +52,7 @@ export function defaultExpenseAdjustment(): ExpenseAdjustment {
 
 export const MAX_ITEMS_IN_MAIN = 2;
 
-function processApiResponse(
-  detail: LoadExpenseDetailResponse,
-  options: NullableValueExpenseOptions,
-  param?: { isCopy: boolean },
-) {
+function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
   const { accountOptions, categoryOptions } = options;
   const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
   const idOptionMapping = new Map([
