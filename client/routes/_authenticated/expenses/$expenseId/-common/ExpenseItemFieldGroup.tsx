@@ -1,5 +1,5 @@
 import { withFieldGroup, type Option } from '#components/Form';
-import { defaultExpenseItem, useExpenseForm, type TGetExpenseFormField } from '.';
+import { defaultExpenseItem, useExpenseForm, usePushIntoOptions, type TGetExpenseFormField } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useStore } from '@tanstack/react-form';
@@ -37,6 +37,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
     createAdjustment: (_: string) => {},
   },
   render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
+    const { pushIntoOptions } = usePushIntoOptions();
     const itemId = useStore(group.store, state => state.values.id);
     const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
 
@@ -65,7 +66,17 @@ export const ItemDetailFieldGroup = withFieldGroup({
           }}
         />
 
-        <group.AppField name={`category`} listeners={{ onChange: () => onPricingChange() }}>
+        <group.AppField
+          name={`category`}
+          listeners={{
+            onChange: fieldApi => {
+              if (fieldApi.value && fieldApi.value.value == null) {
+                pushIntoOptions({ kind: 'category', option: fieldApi.value });
+              }
+              onPricingChange();
+            },
+          }}
+        >
           {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-3' />}
         </group.AppField>
 

@@ -1,6 +1,6 @@
 import { withForm, type Option } from '#client/components/Form';
 import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions } from '../-common';
+import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions, usePushIntoOptions } from '../-common';
 import { currencyNumberFormat } from '#client/utils';
 
 export const ExpenseAccountAllocationSubForm = withForm({
@@ -10,6 +10,8 @@ export const ExpenseAccountAllocationSubForm = withForm({
     readOnly: false,
   },
   render({ form, accountOptions, readOnly }) {
+    const { pushIntoOptions } = usePushIntoOptions();
+
     return (
       <>
         <label className='label mt-2 p-0'>
@@ -22,7 +24,16 @@ export const ExpenseAccountAllocationSubForm = withForm({
                 const isLast = idx === length - 1;
                 return (
                   <li className='flex w-full flex-row items-center gap-2'>
-                    <form.AppField name={`accountAllocs[${idx}].account`}>
+                    <form.AppField
+                      name={`accountAllocs[${idx}].account`}
+                      listeners={{
+                        onChange: fieldApi => {
+                          if (fieldApi.value && fieldApi.value.value == null) {
+                            pushIntoOptions({ kind: 'account', option: fieldApi.value });
+                          }
+                        },
+                      }}
+                    >
                       {({ ComboBox }) => (
                         <ComboBox
                           label='Account'

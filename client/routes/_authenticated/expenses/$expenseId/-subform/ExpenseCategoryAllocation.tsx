@@ -1,6 +1,6 @@
 import { withForm, type Option } from '#client/components/Form';
 import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
-import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions } from '../-common';
+import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions, usePushIntoOptions } from '../-common';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useSelector } from '@tanstack/react-form';
 import { useMemo } from 'react';
@@ -12,6 +12,7 @@ export const ExpenseCategoryAllocationSubForm = withForm({
     readOnly: false,
   },
   render({ form, categoryOptions, readOnly }) {
+    const { pushIntoOptions } = usePushIntoOptions();
     const isItemizedExpense = useSelector(form.store, state => state.values.items.length > 0);
     const categoryLabelMapping = useMemo(
       () => new Map(categoryOptions.map(({ value, label }) => [value, label] as const)),
@@ -30,7 +31,9 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                 {arrayField.state.value.map((_, idx) => (
                   <li key={idx} className='flex w-full flex-row items-center gap-2'>
                     <form.Field name={`ui.calculateResult.categoryResults[${idx}][0]`}>
-                      {field => <p className='grow'>{categoryLabelMapping.get(field.state.value)}</p>}
+                      {field => (
+                        <p className='grow'>{categoryLabelMapping.get(field.state.value) ?? field.state.value}</p>
+                      )}
                     </form.Field>
                     <form.Field name={`ui.calculateResult.categoryResults[${idx}][1].netTotalCents`}>
                       {field => <p>{formatCents(field.state.value)}</p>}
@@ -49,7 +52,16 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                   const isLast = idx === length - 1;
                   return (
                     <li className='flex w-full flex-row items-center gap-2'>
-                      <form.AppField name={`categoryAllocs[${idx}].category`}>
+                      <form.AppField
+                        name={`categoryAllocs[${idx}].category`}
+                        listeners={{
+                          onChange: fieldApi => {
+                            if (fieldApi.value && fieldApi.value.value == null) {
+                              pushIntoOptions({ kind: 'category', option: fieldApi.value });
+                            }
+                          },
+                        }}
+                      >
                         {({ ComboBox }) => (
                           <ComboBox
                             label='Category'

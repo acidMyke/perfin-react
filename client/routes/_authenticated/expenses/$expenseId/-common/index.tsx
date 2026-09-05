@@ -472,3 +472,31 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
     },
   };
 }
+
+type PushIntoOptionsValueArg = {
+  kind: 'account' | 'category';
+  option: Option;
+};
+
+export function usePushIntoOptions() {
+  const pushIntoOptionsMutation = useMutation({
+    mutationFn: async (allocOption: PushIntoOptionsValueArg, { client }) => {
+      const loadOptionQueryKey = trpc.expense.loadOptions.queryKey();
+      await client.cancelQueries({ queryKey: loadOptionQueryKey });
+      client.setQueryData(loadOptionQueryKey, old => {
+        if (!old) return undefined;
+        const { kind, option } = allocOption;
+        const key = `${kind}Options` as const;
+        const existingOptions = old[key];
+        const notAdded = existingOptions.every(({ value, label }) => value !== option.value || label !== option.label);
+        if (notAdded) {
+          old[key] = [...existingOptions, option as { value: string; label: string }];
+        }
+        return old;
+      });
+    },
+  });
+  return {
+    pushIntoOptions: (allocOption: PushIntoOptionsValueArg) => pushIntoOptionsMutation.mutateAsync(allocOption),
+  };
+}
