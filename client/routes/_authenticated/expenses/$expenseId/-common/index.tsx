@@ -10,6 +10,7 @@ import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#clien
 import { useAppForm, useFormContext, type Option } from '#components/Form';
 import {
   calculateExpense,
+  calculateExpenseCategoryAllocations,
   calculateRemainingAllocation,
   GST_NAME,
   SERVICE_CHARGE_NAME,
@@ -129,6 +130,11 @@ export function mapExpenseDetailToForm(
 ) {
   const isEmptyCreate = !detail || !options;
   const formValues = isEmptyCreate ? createNewExpenseForm() : processApiResponse(detail, options, param);
+  const calculateResult = calculateExpense(formValues);
+  const categoryAllocation =
+    formValues.items.length > 0
+      ? calculateExpenseCategoryAllocations({ items: formValues.items, calculateExpenseResult: calculateResult })
+      : [];
 
   return {
     ...formValues,
@@ -138,7 +144,8 @@ export function mapExpenseDetailToForm(
       shouldInferShopDetail: isEmptyCreate,
       shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
-      calculateResult: calculateExpense(formValues),
+      calculateResult,
+      categoryAllocation,
       currentCoordResult: undefined as CurrentCoordResult | undefined,
       isInvalidCategoryAllocation: false,
     },
@@ -232,12 +239,15 @@ export function calculateExpenseForm(form: ExpenseFormApi) {
   const items = form.getFieldValue('items');
   const adjustments = form.getFieldValue('adjustments');
 
-  const result = calculateExpense({ specifiedAmountCents, items, adjustments });
-  form.setFieldValue('ui.calculateResult', result);
+  const calculateExpenseResult = calculateExpense({ specifiedAmountCents, items, adjustments });
+  form.setFieldValue('ui.calculateResult', calculateExpenseResult);
 
-  calculateExpenseFormRemainingAllocation(form, 'account', result.netTotalCents);
+  calculateExpenseFormRemainingAllocation(form, 'account', calculateExpenseResult.netTotalCents);
   if (items.length === 0) {
-    calculateExpenseFormRemainingAllocation(form, 'category', result.netTotalCents);
+    calculateExpenseFormRemainingAllocation(form, 'category', calculateExpenseResult.netTotalCents);
+  } else {
+    const categoryAllocation = calculateExpenseCategoryAllocations({ items, calculateExpenseResult });
+    form.setFieldValue('ui.categoryAllocation', categoryAllocation);
   }
 }
 

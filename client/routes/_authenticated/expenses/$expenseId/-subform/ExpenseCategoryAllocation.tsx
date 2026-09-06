@@ -3,7 +3,6 @@ import { ChevronDown, ChevronUp, Plus, X } from 'lucide-react';
 import { calculateExpenseFormRemainingAllocation, createEditExpenseFormOptions, usePushIntoOptions } from '../-common';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useSelector } from '@tanstack/react-form';
-import { useMemo } from 'react';
 
 export const ExpenseCategoryAllocationSubForm = withForm({
   ...createEditExpenseFormOptions,
@@ -14,31 +13,25 @@ export const ExpenseCategoryAllocationSubForm = withForm({
   render({ form, categoryOptions, readOnly }) {
     const { pushIntoOptions } = usePushIntoOptions();
     const isItemizedExpense = useSelector(form.store, state => state.values.items.length > 0);
-    const categoryLabelMapping = useMemo(
-      () => new Map(categoryOptions.map(({ value, label }) => [value, label] as const)),
-      categoryOptions,
-    );
 
     return (
       <>
         <label className='label mt-2 p-0'>
           <span className='label-text font-medium'>Category {isItemizedExpense ? 'breakdown' : 'allocations'}</span>
         </label>
-        <form.Field key='itemized' name='ui.calculateResult.categoryResults'>
+        <form.Field key='itemized' name='ui.categoryAllocation'>
           {arrayField =>
             isItemizedExpense && (
               <ul className='col-span-full flex auto-rows-auto flex-col flex-nowrap items-start gap-2 pb-2 pl-2'>
                 {arrayField.state.value.map((_, idx) => (
-                  <li key={idx} className='flex w-full flex-row items-center gap-2'>
-                    <form.Field name={`ui.calculateResult.categoryResults[${idx}][0]`}>
-                      {field => (
-                        <p className='grow'>{categoryLabelMapping.get(field.state.value) ?? field.state.value}</p>
-                      )}
-                    </form.Field>
-                    <form.Field name={`ui.calculateResult.categoryResults[${idx}][1].netTotalCents`}>
-                      {field => <p>{formatCents(field.state.value)}</p>}
-                    </form.Field>
-                  </li>
+                  <form.Field name={`ui.categoryAllocation[${idx}]`}>
+                    {field => (
+                      <li key={idx} className='flex w-full flex-row items-center gap-2'>
+                        <p className='grow'>{field.state.value.category?.label ?? 'Unspecified'}</p>
+                        <p>{formatCents(field.state.value.amountCents)}</p>
+                      </li>
+                    )}
+                  </form.Field>
                 ))}
               </ul>
             )
