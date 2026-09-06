@@ -216,15 +216,15 @@ describe(calculateExpenseCategoryAllocations, () => {
   it('should sum the net prices of all items in the same category by categoryId or category.value or category.label', () => {
     const result = calculateExpenseCategoryAllocations({
       items: [
-        { id: 'i002', category: { value: 'c001' } },
-        { id: 'i003', category: { value: 'c001' } },
-        { id: 'i004', category: { value: 'c002' } },
-        { id: 'i005', category: { label: 'Food' } },
-        { id: 'i006', category: { label: 'Food' } },
+        { id: 'i002', category: { value: 'c001', label: 'Tea' } },
+        { id: 'i003', category: { value: 'c001', label: 'Tea' } },
+        { id: 'i004', category: { value: 'c002', label: 'Transport' } },
+        { id: 'i005', category: { label: 'Food', value: null } },
+        { id: 'i006', category: { label: 'Food', value: null } },
         { id: 'i007', category: undefined },
         { id: 'i008', category: null },
         // i009 isDeleted = true, not in itemResults
-        { id: 'i009', category: { value: 'c001' } },
+        { id: 'i009', category: { value: 'c001', label: 'Tea' } },
       ],
       calculateExpenseResult: {
         itemResults: {
@@ -240,9 +240,9 @@ describe(calculateExpenseCategoryAllocations, () => {
     });
 
     expect(result).toEqual([
-      { category: { value: 'c001' }, amountCents: 64_00 },
-      { category: { value: 'c002' }, amountCents: 45_00 },
-      { category: { label: 'Food' }, amountCents: 26_00 },
+      { category: { value: 'c001', label: 'Tea' }, amountCents: 64_00 },
+      { category: { value: 'c002', label: 'Transport' }, amountCents: 45_00 },
+      { category: { label: 'Food', value: null }, amountCents: 26_00 },
       { category: null, amountCents: 17_00 },
     ]);
   });

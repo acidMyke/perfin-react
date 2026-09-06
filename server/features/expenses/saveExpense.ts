@@ -17,7 +17,11 @@ import {
 import { and, eq, inArray, notInArray, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import { getLocationBoxId } from '#server/lib/utils';
-import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
+import {
+  calculateExpense,
+  calculateExpenseCategoryAllocations,
+  type ExpenseCalculationResult,
+} from '#server/lib/expenseHelper';
 import { processSaveExpenseSearchIndexing } from './indexing';
 import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
@@ -59,6 +63,7 @@ export const saveExpenseInputSchema = z.object({
       priceCents: z.int().min(0, { error: 'Must be non-negative value' }),
       quantity: z.int().min(0, { error: 'Must be non-negative value' }),
       isDeleted: z.boolean().optional().default(false),
+      category: z.object({ value: z.string().nullable(), label: z.string().trim() }).nullish(),
     }),
   ),
   adjustments: z.array(
@@ -486,6 +491,48 @@ export async function queueExpenseAccountAllocations(
   }
 
   collector.push(deps.deleteExpenseAccountAllocationsIfNotInList(db, expenseId, subjectIds));
+}
+
+export async function queueExpenseCategoryAllocations(
+  collector: BatchCollector,
+  db: AppDatabase,
+  userId: string,
+  expenseId: string,
+  input: Pick<SaveExpenseInput, 'categoryAllocs' | 'billedAt' | 'items'>,
+  calculateExpenseResult: Pick<ExpenseCalculationResult, 'netTotalCents' | 'itemResults'>,
+  deps: PickRepos<
+    | 'generateId'
+    | 'getExistingSubjects'
+    | 'insertSubjects'
+    | 'upsertExpenseCategoryAllocations'
+    | 'deleteExpenseCategoryAllocationsIfNotInList'
+  >,
+) {
+  const inputAllocations =
+    input.items.length == 0
+      ? input.categoryAllocs
+      : calculateExpenseCategoryAllocations({ items: input.items, calculateExpenseResult });
+
+  const { subjectsToCreate, subjectIds, resolvedAllocations } = await resolveAndAggregateAllocations(
+    'category',
+    db,
+    userId,
+    expenseId,
+    inputAllocations,
+    calculateExpenseResult.netTotalCents,
+    input.billedAt,
+    deps,
+  );
+
+  if (subjectsToCreate.length > 0) {
+    collector.push(deps.insertSubjects(db, accountsTable, userId, subjectsToCreate));
+  }
+
+  if (resolvedAllocations.length > 0) {
+    collector.push(deps.upsertExpenseCategoryAllocations(db, resolvedAllocations));
+  }
+
+  collector.push(deps.deleteExpenseCategoryAllocationsIfNotInList(db, expenseId, subjectIds));
 }
 
 export async function queueExpenseAttachments(

@@ -147,10 +147,10 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
   };
 }
 
-type AnyCategoryShape = { value?: string | null; label?: string } | undefined | null;
+type AnyCategoryShape = { value: string | null; label: string } | undefined | null;
 
 export type CalculateExpenseCategoryAllocationInput = {
-  items: (Pick<ExpenseItemForCalculation, 'id'> & { category: AnyCategoryShape })[];
+  items: (Pick<ExpenseItemForCalculation, 'id'> & { category?: AnyCategoryShape })[];
   calculateExpenseResult: Pick<ExpenseCalculationResult, 'itemResults'>;
 };
 
