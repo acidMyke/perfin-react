@@ -13,6 +13,7 @@ import {
   CREATE_ID,
   getExistingChildrenData,
   processSaveExpense,
+  queueExpenseAccountAllocations,
   queueExpenseAdjustments,
   queueExpenseAttachments,
   queueExpenseItems,
@@ -125,8 +126,6 @@ describe('helpers', async () => {
       deps.insertSubject.mockThrow('Should not be called');
       deps.upsertMainExpense.mockReturnValue(batchItem0);
 
-      const accountId = nanoid();
-      const categoryId = nanoid();
       const shopName = 'Just another shop';
       const shopMall = 'Just another mall';
 
@@ -398,6 +397,277 @@ describe('helpers', async () => {
         new Set([deletingId]),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+    });
+  });
+
+  describe(queueExpenseAccountAllocations, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    let currentDate: Date;
+    let deps = {
+      generateId: vi.fn(),
+      getExistingSubjects: vi.fn(),
+      insertSubjects: vi.fn(),
+      upsertExpenseAccountAllocations: vi.fn(),
+      deleteExpenseAccountAllocationsIfNotInList: vi.fn(),
+    };
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+      currentDate = new Date();
+    });
+
+    describe('account validation & creation', () => {
+      it('should check for existing account', async () => {
+        const accountId = nanoid();
+        const accountLabel = 'a0';
+        deps.getExistingSubjects.mockResolvedValue([{ label: accountLabel, value: accountId }]);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          accountAllocs: [{ account: { label: accountLabel, value: accountId }, amountCents: 10_00 }],
+          billedAt: currentDate,
+        };
+        const netTotalCents = 1000;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountId, accountLabel]),
+        );
+        expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>({
+            accountId,
+            expenseId,
+            sequence: 0,
+            amountCents: 1000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+      });
+
+      it('should check for existing label, if label exists ignore input value and reuse existing id, not call insertSubjects', async () => {
+        const accountId0 = nanoid();
+        const accountLabel0 = 'a0';
+        const accountId1 = nanoid();
+        const accountLabel1 = 'a1';
+        const unexpectedAccountId = nanoid();
+
+        deps.getExistingSubjects.mockResolvedValue([
+          { label: accountLabel0, value: accountId0 },
+          { label: accountLabel1, value: accountId1 },
+        ]);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          billedAt: currentDate,
+          accountAllocs: [
+            {
+              account: { label: accountLabel0, value: null },
+              amountCents: 10_00,
+            },
+            {
+              account: { label: accountLabel1, value: unexpectedAccountId },
+              amountCents: 6_00,
+            },
+          ],
+        };
+        const netTotalCents = 16_00;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.generateId).not.toHaveBeenCalled();
+        expect(deps.insertSubjects).not.toHaveBeenCalled();
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountLabel0, accountLabel1, unexpectedAccountId]),
+        );
+      });
+
+      it('should check for existing label, if label doesnt exist, create newIds and insertSubject', async () => {
+        const accountId0 = nanoid();
+        const accountLabel0 = 'a0';
+        const accountId1 = nanoid();
+        const accountLabel1 = 'a1';
+        const unexpectedAccountId = nanoid();
+        const batchItem0 = 'deps.insertSubjects';
+
+        deps.getExistingSubjects.mockResolvedValue([]);
+        deps.generateId.mockReturnValueOnce(accountId0).mockReturnValueOnce(accountId1);
+        deps.insertSubjects.mockReturnValue(batchItem0);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          accountAllocs: [
+            {
+              account: { label: accountLabel0, value: null },
+              amountCents: 20_00,
+            },
+            {
+              account: { label: accountLabel1, value: unexpectedAccountId },
+              amountCents: 6_00,
+            },
+          ],
+          billedAt: currentDate,
+        };
+        const netTotalCents = 26_00;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.generateId).toHaveBeenCalledTimes(2);
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountLabel0, accountLabel1, unexpectedAccountId]),
+        );
+        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([
+            { label: accountLabel0, value: accountId0 },
+            { label: accountLabel1, value: accountId1 },
+          ]),
+        );
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      });
+
+      describe('amount distribution & allocation creation', () => {
+        it('should aggregate the amount of similar account', async () => {
+          const accountId0 = nanoid();
+          const accountLabel0 = 'a0';
+          const accountId1 = nanoid();
+          const accountLabel1 = 'a1';
+          const batchItem0 = 'deps.upsertExpenseAccountAllocations';
+          const batchItem1 = 'deps.deleteExpenseAccountAllocationsIfNotInList';
+
+          deps.getExistingSubjects.mockResolvedValue([
+            { label: accountLabel0, value: accountId0 },
+            { label: accountLabel1, value: accountId1 },
+          ]);
+          deps.upsertExpenseAccountAllocations.mockReturnValueOnce(batchItem0);
+          deps.deleteExpenseAccountAllocationsIfNotInList.mockReturnValueOnce(batchItem1);
+
+          const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+            accountAllocs: [
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 10_00,
+              },
+              {
+                account: { label: accountLabel1, value: accountId1 },
+                amountCents: 4_00,
+              },
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 6_00,
+              },
+              {
+                account: { label: accountLabel1, value: accountId1 },
+                amountCents: 8_00,
+              },
+            ],
+            billedAt: currentDate,
+          };
+          const netTotalCents = 28_00;
+          await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expect.arrayContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>([
+              {
+                accountId: accountId0,
+                expenseId,
+                sequence: 0,
+                amountCents: 16_00,
+                expenseBilledAt: currentDate,
+              },
+              {
+                accountId: accountId1,
+                expenseId,
+                sequence: 1,
+                amountCents: 12_00,
+                expenseBilledAt: currentDate,
+              },
+            ]),
+          );
+
+          expect(deps.deleteExpenseAccountAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expenseId,
+            [accountId0, accountId1],
+          );
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+        });
+
+        it("should aggregate the amount null/undefined account and remaining balance as unallocated (accountId = '') ", async () => {
+          const accountId0 = nanoid();
+          const accountLabel0 = 'a0';
+          const batchItem0 = 'deps.upsertExpenseAccountAllocations';
+          const batchItem1 = 'deps.deleteExpenseAccountAllocationsIfNotInList';
+
+          deps.getExistingSubjects.mockResolvedValue([{ label: accountLabel0, value: accountId0 }]);
+          deps.upsertExpenseAccountAllocations.mockReturnValueOnce(batchItem0);
+          deps.deleteExpenseAccountAllocationsIfNotInList.mockReturnValueOnce(batchItem1);
+
+          const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+            accountAllocs: [
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 10_00,
+              },
+              {
+                account: null,
+                amountCents: 9_00,
+              },
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 6_00,
+              },
+              {
+                account: undefined,
+                amountCents: 2_00,
+              },
+            ],
+            billedAt: currentDate,
+          };
+          const netTotalCents = 30_00;
+          await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expect.arrayContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>([
+              {
+                accountId: accountId0,
+                expenseId,
+                sequence: 0,
+                amountCents: 16_00,
+                expenseBilledAt: currentDate,
+              },
+              {
+                accountId: '',
+                expenseId,
+                sequence: 1,
+                amountCents: 14_00,
+                expenseBilledAt: currentDate,
+              },
+            ]),
+          );
+
+          expect(deps.deleteExpenseAccountAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expenseId,
+            [accountId0, ''],
+          );
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+        });
+      });
     });
   });
 

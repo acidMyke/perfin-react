@@ -158,7 +158,7 @@ export const saveExpenseRepo = {
     records: { value: string; label: string }[],
   ) =>
     db.insert(table).values(records.map(({ value, label }) => ({ id: value, name: label, userId, isDeleted: false }))),
-  upsertExpenseAccountAllocations: (db: AppDatabase, records: (typeof expenseAccountAllocationsTable.$inferSelect)[]) =>
+  upsertExpenseAccountAllocations: (db: AppDatabase, records: (typeof expenseAccountAllocationsTable.$inferInsert)[]) =>
     db
       .insert(expenseAccountAllocationsTable)
       .values(records)
@@ -177,7 +177,7 @@ export const saveExpenseRepo = {
       ),
   upsertExpenseCategoryAllocations: (
     db: AppDatabase,
-    records: (typeof expenseCategoryAllocationsTable.$inferSelect)[],
+    records: (typeof expenseCategoryAllocationsTable.$inferInsert)[],
   ) =>
     db
       .insert(expenseCategoryAllocationsTable)
@@ -410,11 +410,7 @@ async function resolveAndAggregateAllocations<TKind extends 'account' | 'categor
 
   for (const allocation of allocations) {
     const { [kind]: subject, amountCents } = allocation;
-    if (amountCents === 0) continue;
-    if (!subject) {
-      accumulateAmount('', amountCents);
-      continue;
-    }
+    if (amountCents === 0 || !subject) continue;
 
     let existingSub = subject.value ? subjectByValue.get(subject.value) : undefined;
     const label = subject.label.trim();
