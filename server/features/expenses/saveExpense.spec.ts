@@ -16,6 +16,7 @@ import {
   queueExpenseAccountAllocations,
   queueExpenseAdjustments,
   queueExpenseAttachments,
+  queueExpenseCategoryAllocations,
   queueExpenseItems,
   queueMainExpenseRecord,
   saveExpenseInputSchema,
@@ -24,7 +25,11 @@ import {
   type SaveExpenseInput,
   type SaveExpenseRepo,
 } from './saveExpense';
-import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
+import {
+  calculateExpense,
+  calculateExpenseCategoryAllocations,
+  type ExpenseCalculationResult,
+} from '#server/lib/expenseHelper';
 import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
 import { getLocationBoxId } from '../../lib/utils';
@@ -39,7 +44,10 @@ vi.mock(import('#schema'), importOriginal => {
   return mockSchemaModule(importOriginal);
 });
 
-vi.mock(import('../../lib/expenseHelper'), () => ({ calculateExpense: vi.fn() }));
+vi.mock(import('../../lib/expenseHelper'), () => ({
+  calculateExpense: vi.fn(),
+  calculateExpenseCategoryAllocations: vi.fn(),
+}));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
 vi.mock(import('../../lib/fileUpload'), () => ({ getFileIdsByRequestId: vi.fn() }));
 vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
@@ -667,6 +675,123 @@ describe('helpers', async () => {
           expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
           expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
         });
+      });
+    });
+  });
+
+  describe(queueExpenseCategoryAllocations, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    let mockedCalculateExpenseCategoryAllocations = vi.mocked(calculateExpenseCategoryAllocations);
+    let currentDate: Date;
+    let deps = {
+      generateId: vi.fn(),
+      getExistingSubjects: vi.fn(),
+      insertSubjects: vi.fn(),
+      upsertExpenseCategoryAllocations: vi.fn(),
+      deleteExpenseCategoryAllocationsIfNotInList: vi.fn(),
+    };
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+      currentDate = new Date();
+    });
+
+    describe('category specific behaviours', () => {
+      it('should use items to calculate category allocation if available', async () => {
+        const categoryId = nanoid();
+        const categoryLabel = 'c0';
+        const unexpectedCategoryId = nanoid();
+        const unexpectedCategoryLabel = 'oops';
+        deps.getExistingSubjects.mockResolvedValue([{ label: categoryLabel, value: categoryId }]);
+        mockedCalculateExpenseCategoryAllocations.mockReturnValueOnce([
+          { category: { label: categoryLabel, value: categoryId }, amountCents: 3000 },
+        ]);
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [{ id: 'i000', category: { label: categoryLabel, value: categoryId } }] as SaveExpenseInput['items'],
+          categoryAllocs: [
+            { category: { label: unexpectedCategoryLabel, value: unexpectedCategoryId }, amountCents: 1000 },
+          ],
+          billedAt: currentDate,
+        };
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: { i000: { grossTotalCents: 2000, netTotalCents: 3000 } },
+          netTotalCents: 3000,
+        };
+        await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          expect.arrayContaining([categoryId, categoryLabel]),
+        );
+        expect(deps.getExistingSubjects.mock.calls[0][3]).toEqual(
+          expect.not.arrayContaining([unexpectedCategoryId, unexpectedCategoryLabel]),
+        );
+        expect(deps.upsertExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseCategoryAllocationsTable.$inferInsert>({
+            categoryId,
+            expenseId,
+            sequence: 0,
+            amountCents: 3000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+      });
+
+      it('should use the correct table', async () => {
+        const categoryId = nanoid();
+        const categoryLabel = 'c0';
+        deps.getExistingSubjects.mockResolvedValue([]);
+        deps.generateId.mockReturnValue(categoryId);
+        deps.insertSubjects.mockReturnValue('deps.insertSubjects');
+        deps.upsertExpenseCategoryAllocations.mockReturnValue('deps.upsertExpenseCategoryAllocations');
+        deps.deleteExpenseCategoryAllocationsIfNotInList.mockReturnValue(
+          'deps.deleteExpenseCategoryAllocationsIfNotInList',
+        );
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [],
+          categoryAllocs: [{ category: { label: categoryLabel, value: null }, amountCents: 1000 }],
+          billedAt: currentDate,
+        };
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: {},
+          netTotalCents: 1000,
+        };
+        await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+        expect(mockedCalculateExpenseCategoryAllocations).not.toHaveBeenCalled();
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          expect.arrayContaining([categoryId, categoryLabel]),
+        );
+        expect(deps.generateId).toHaveBeenCalledOnce();
+        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(db, schema.categoriesTable, userId, {
+          value: categoryId,
+          label: categoryLabel,
+        });
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(1, 'deps.insertSubjects');
+        expect(deps.upsertExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseCategoryAllocationsTable.$inferInsert>({
+            categoryId,
+            expenseId,
+            sequence: 0,
+            amountCents: 1000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(2, 'deps.upsertExpenseCategoryAllocations');
+        expect(deps.deleteExpenseCategoryAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          expenseId,
+          [categoryId],
+        );
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(3, 'deps.upsertExpenseCategoryAllocations');
       });
     });
   });
