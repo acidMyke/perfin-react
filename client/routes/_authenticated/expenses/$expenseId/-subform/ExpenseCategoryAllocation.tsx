@@ -81,7 +81,7 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                             containerCn='mt-0 w-28'
                             inputCn='input-sm text-sm'
                             hideError
-                            disabled={isLast}
+                            disabled={isLast || readOnly}
                             min={0}
                             readOnly={readOnly}
                           />
