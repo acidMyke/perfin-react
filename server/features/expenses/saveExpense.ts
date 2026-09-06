@@ -525,7 +525,7 @@ export async function queueExpenseCategoryAllocations(
   );
 
   if (subjectsToCreate.length > 0) {
-    collector.push(deps.insertSubjects(db, accountsTable, userId, subjectsToCreate));
+    collector.push(deps.insertSubjects(db, categoriesTable, userId, subjectsToCreate));
   }
 
   if (resolvedAllocations.length > 0) {

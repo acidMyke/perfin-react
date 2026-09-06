@@ -768,13 +768,15 @@ describe('helpers', async () => {
           expectMockDatabase(),
           schema.categoriesTable,
           userId,
-          expect.arrayContaining([categoryId, categoryLabel]),
+          expect.arrayContaining([categoryLabel]),
         );
         expect(deps.generateId).toHaveBeenCalledOnce();
-        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(db, schema.categoriesTable, userId, {
-          value: categoryId,
-          label: categoryLabel,
-        });
+        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          [{ value: categoryId, label: categoryLabel }],
+        );
         expect(collectorPushSpy).toHaveBeenNthCalledWith(1, 'deps.insertSubjects');
         expect(deps.upsertExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
           expect.objectContaining<typeof schema.expenseCategoryAllocationsTable.$inferInsert>({
@@ -791,7 +793,7 @@ describe('helpers', async () => {
           expenseId,
           [categoryId],
         );
-        expect(collectorPushSpy).toHaveBeenNthCalledWith(3, 'deps.upsertExpenseCategoryAllocations');
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(3, 'deps.deleteExpenseCategoryAllocationsIfNotInList');
       });
     });
   });
