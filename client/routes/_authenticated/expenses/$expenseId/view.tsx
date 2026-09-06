@@ -109,7 +109,17 @@ function RouteComponent() {
       <BillTotal className='col-span-2' isView />
       <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} readOnly={true} />
       <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} readOnly={true} />
-
+      <form.AppField name='attachments'>
+        {({ AttachmentBox }) => (
+          <AttachmentBox
+            label='Attachment'
+            accept='image/*,application/pdf'
+            max={5}
+            containerCn='col-span-8 my-2'
+            readOnly
+          />
+        )}
+      </form.AppField>
       <ActionSection isDeleted={isDeleted} billedAt={billedAt} />
     </div>
   );
@@ -128,7 +138,6 @@ function ActionSection(props: { isDeleted: boolean; billedAt: Date }) {
         return invalidateAndRedirectBackToList({
           expenseId,
           navigate,
-          optionsCreated: false,
           billedAt,
         });
       },
