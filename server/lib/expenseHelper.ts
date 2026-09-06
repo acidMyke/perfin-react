@@ -7,8 +7,6 @@ export type ExpenseItemForCalculation = {
   isDeleted?: boolean | null | undefined;
   quantity: number;
   priceCents: number;
-  categoryId?: string | undefined;
-  category?: { value?: string | null; label?: string } | undefined;
 };
 
 export type ExpenseAdjustmentForCalculation = {
@@ -42,8 +40,6 @@ export type AdjustmentResult = {
 export type ExpenseCalculationResult = ItemCalculationResult & {
   /** Individual item result */
   itemResults: Record<string, ItemCalculationResult>;
-  /** Amount for each category */
-  categoryResults: [string, ItemCalculationResult][];
   /** Amount for each adjustments*/
   adjustmentResults: [string, AdjustmentResult, Record<string, AdjustmentResult>][];
 };
@@ -54,7 +50,6 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
   const isItemizedExpense = items.length > 0;
   let expenseGrossTotal = 0;
   const itemResultsMap = new Map<string, ItemCalculationResult>();
-  const categoryToItemsMap = new Map<string, string[]>();
 
   if (isItemizedExpense) {
     // Itemized bill. Ignore specifiedAmountCents
@@ -64,12 +59,6 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       const gross = quantity * priceCents;
       expenseGrossTotal += gross;
       itemResultsMap.set(id, { grossTotalCents: gross, netTotalCents: gross });
-      const categoryId = item.categoryId ?? item.category?.value ?? item.category?.label;
-      if (categoryId) {
-        const existing = categoryToItemsMap.get(categoryId);
-        if (existing) existing.push(id);
-        else categoryToItemsMap.set(categoryId, [id]);
-      }
     }
   } else {
     // Non-itemized bill. Just grossTotalCents then adjustments
@@ -150,26 +139,49 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     adjustmentResults.push([id, { amountCents: totalAdjCents, rateBps }, itemsAdjustmentResults]);
   }
 
-  const categoryResults: ExpenseCalculationResult['categoryResults'] = [];
-  for (const [categoryId, itemIds] of categoryToItemsMap) {
-    const acc = { grossTotalCents: 0, netTotalCents: 0 };
-    for (const itemId of itemIds) {
-      const itemResult = itemResultsMap.get(itemId);
-      if (itemResult) {
-        acc.grossTotalCents += itemResult.grossTotalCents;
-        acc.netTotalCents += itemResult.netTotalCents;
-      }
-    }
-    categoryResults.push([categoryId, acc]);
-  }
-
   return {
     itemResults: Object.fromEntries(itemResultsMap),
-    categoryResults,
     grossTotalCents: expenseGrossTotal,
     netTotalCents: expenseNetTotal,
     adjustmentResults,
   };
+}
+
+type AnyCategoryShape = { value?: string | null; label?: string } | undefined | null;
+
+export type CalculateExpenseCategoryAllocationInput = {
+  items: (Pick<ExpenseItemForCalculation, 'id'> & { category: AnyCategoryShape })[];
+  calculateExpenseResult: Pick<ExpenseCalculationResult, 'itemResults'>;
+};
+
+export function calculateExpenseCategoryAllocations(input: CalculateExpenseCategoryAllocationInput) {
+  const covertToIdentifier = (anyShape: AnyCategoryShape) => anyShape?.value ?? anyShape?.label ?? null;
+
+  type TCatIdentifier = ReturnType<typeof covertToIdentifier>;
+  const accumualtePerCategory = new Map<TCatIdentifier, number>();
+  const categoryIdentifierToAnyCategoryInput = new Map<TCatIdentifier, AnyCategoryShape>();
+
+  const accumulateAmount = (anyShape: AnyCategoryShape, amountCents: number) => {
+    const id = covertToIdentifier(anyShape);
+    categoryIdentifierToAnyCategoryInput.set(id, anyShape);
+    const prev = accumualtePerCategory.get(id) ?? 0;
+    accumualtePerCategory.set(id, prev + amountCents);
+  };
+  const itemResults = input.calculateExpenseResult.itemResults;
+
+  for (const { id: itemId, category } of input.items) {
+    if (itemId in itemResults) {
+      const { netTotalCents } = itemResults[itemId];
+      if (netTotalCents > 0) {
+        accumulateAmount(category, netTotalCents);
+      }
+    }
+  }
+
+  return accumualtePerCategory
+    .entries()
+    .map(([id, amountCents]) => ({ category: categoryIdentifierToAnyCategoryInput.get(id), amountCents }))
+    .toArray();
 }
 
 export type CalculationResultWithAllocations = Pick<ExpenseCalculationResult, 'netTotalCents'> & {

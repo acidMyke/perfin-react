@@ -1,4 +1,9 @@
-import { calculateExpense, calculateRemainingAllocation, type CalculationResultWithAllocations } from './expenseHelper';
+import {
+  calculateExpense,
+  calculateExpenseCategoryAllocations,
+  calculateRemainingAllocation,
+  type CalculationResultWithAllocations,
+} from './expenseHelper';
 
 describe('calculateExpense()', () => {
   describe('Non-Itemized Expenses', () => {
@@ -204,69 +209,42 @@ describe('calculateExpense()', () => {
         });
       });
     });
+  });
+});
 
-    describe('With category', () => {
-      it('should sum the prices of all items in the same category by categoryId or category.value or category.label', () => {
-        const result = calculateExpense({
-          specifiedAmountCents: 0,
-          items: [
-            { id: 'i002', priceCents: 5_00, quantity: 3, categoryId: 'c001' },
-            { id: 'i003', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
-            { id: 'i004', priceCents: 9_00, quantity: 5, category: { value: 'c002' } },
-            { id: 'i005', priceCents: 3_00, quantity: 2, category: { label: 'Food' } },
-            { id: 'i006', priceCents: 5_00, quantity: 4, category: { label: 'Food' } },
-          ],
-          adjustments: [],
-        });
-
-        expect(result.categoryResults).toEqual([
-          ['c001', { grossTotalCents: 64_00, netTotalCents: 64_00 }],
-          ['c002', { grossTotalCents: 45_00, netTotalCents: 45_00 }],
-          ['Food', { grossTotalCents: 26_00, netTotalCents: 26_00 }],
-        ]);
-      });
-
-      it('should sum the prices after item level adjustment', () => {
-        const result = calculateExpense({
-          specifiedAmountCents: 0,
-          items: [
-            { id: 'i005', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
-            { id: 'i006', priceCents: 9_00, quantity: 5, category: { value: 'c001' } },
-            { id: 'i007', priceCents: 2_00, quantity: 2, category: { value: 'c002' } },
-          ],
-          adjustments: [
-            { id: 'a001', rateBps: 9_00 },
-            { id: 'a002', rateBps: -10_00, expenseItemId: 'i005' },
-            { id: 'a002', amountCents: -10_00, expenseItemId: 'i006' },
-          ],
-        });
-
-        expect(result.categoryResults).toEqual([
-          ['c001', { grossTotalCents: 94_00, netTotalCents: 87_12 }],
-          ['c002', { grossTotalCents: 4_00, netTotalCents: 4_36 }],
-        ]);
-      });
-
-      it('should sum the prices after adjustment', () => {
-        const result = calculateExpense({
-          specifiedAmountCents: 0,
-          items: [
-            { id: 'i005', priceCents: 7_00, quantity: 7, category: { value: 'c001' } },
-            { id: 'i006', priceCents: 9_00, quantity: 5, category: { value: 'c001' } },
-            { id: 'i007', priceCents: 2_00, quantity: 2, category: { value: 'c002' } },
-          ],
-          adjustments: [
-            { id: 'a001', rateBps: 9_00 },
-            { id: 'a002', amountCents: -10_00 },
-          ],
-        });
-
-        expect(result.categoryResults).toEqual([
-          ['c001', { grossTotalCents: 94_00, netTotalCents: 92_87 }],
-          ['c002', { grossTotalCents: 4_00, netTotalCents: 3_95 }],
-        ]);
-      });
+describe(calculateExpenseCategoryAllocations, () => {
+  it('should sum the net prices of all items in the same category by categoryId or category.value or category.label', () => {
+    const result = calculateExpenseCategoryAllocations({
+      items: [
+        { id: 'i002', category: { value: 'c001' } },
+        { id: 'i003', category: { value: 'c001' } },
+        { id: 'i004', category: { value: 'c002' } },
+        { id: 'i005', category: { label: 'Food' } },
+        { id: 'i006', category: { label: 'Food' } },
+        { id: 'i007', category: undefined },
+        { id: 'i008', category: null },
+        // i009 isDeleted = true, not in itemResults
+        { id: 'i009', category: { value: 'c001' } },
+      ],
+      calculateExpenseResult: {
+        itemResults: {
+          i002: { grossTotalCents: 10_00, netTotalCents: 15_00 },
+          i003: { grossTotalCents: 40_00, netTotalCents: 49_00 },
+          i004: { grossTotalCents: 45_00, netTotalCents: 45_00 },
+          i005: { grossTotalCents: 6_00, netTotalCents: 6_00 },
+          i006: { grossTotalCents: 20_00, netTotalCents: 20_00 },
+          i007: { grossTotalCents: 10_00, netTotalCents: 14_00 },
+          i008: { grossTotalCents: 3_00, netTotalCents: 3_00 },
+        },
+      },
     });
+
+    expect(result).toEqual([
+      { category: { value: 'c001' }, amountCents: 64_00 },
+      { category: { value: 'c002' }, amountCents: 45_00 },
+      { category: { label: 'Food' }, amountCents: 26_00 },
+      { category: null, amountCents: 17_00 },
+    ]);
   });
 });
 
