@@ -1024,6 +1024,38 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(deps.queueExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseAttachments).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      expect.objectContaining({
+        fileUploadRequestId: input.fileUploadRequestId,
+        attachmentFileIds: input.attachmentFileIds,
+      }),
+      expectDeps(),
+    );
+
     expect(mockedIndexing).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
@@ -1033,16 +1065,23 @@ describe(processSaveExpense, async () => {
 
   it('should exectue batch with collected statements', async () => {
     const input = inputGenerator.generate();
+    const literals = ['Test 1', 'Test 2', 'Test 3', 'Test 4', 'Test 5', 'Test 6'];
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueMainExpenseRecord.mockImplementation(collector => collector.push('Test 1', 'Test 1'));
+    deps.queueMainExpenseRecord.mockImplementation(collector => collector.push(literals[0], literals[0]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseItems.mockImplementation(collector => collector.push('Test 2', 'Test 2'));
+    deps.queueExpenseItems.mockImplementation(collector => collector.push(literals[1], literals[1]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseAdjustments.mockImplementation(collector => collector.push('Test 3', 'Test 3'));
-    mockContext.addDbResult(['Result 1', 'Result 2', 'Result 3']);
+    deps.queueExpenseAdjustments.mockImplementation(collector => collector.push(literals[2], literals[2]));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseAccountAllocations.mockImplementation(collector => collector.push(literals[3], literals[3]));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseCategoryAllocations.mockImplementation(collector => collector.push(literals[4], literals[4]));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseAttachments.mockImplementation(collector => collector.push(literals[5], literals[5]));
+
+    mockContext.addDbResult(literals);
 
     await processSaveExpense(mockContext, input, deps);
-
-    expect(mockContext.dbSpies.batch).toHaveBeenCalledExactlyOnceWith(['Test 1', 'Test 2', 'Test 3']);
+    expect(mockContext.dbSpies.batch).toHaveBeenCalledExactlyOnceWith(expect.arrayContaining(literals));
   });
 });
