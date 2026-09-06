@@ -211,6 +211,8 @@ const saveExpenseHelpers = {
   queueMainExpenseRecord,
   queueExpenseItems,
   queueExpenseAdjustments,
+  queueExpenseAccountAllocations,
+  queueExpenseCategoryAllocations,
   queueExpenseAttachments,
 };
 
@@ -237,15 +239,12 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, calculationResult, deps);
   deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
   deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
-  await deps.queueExpenseAttachments(
-    collector,
-    db,
-    userId,
-    expenseId,
-    input.fileUploadRequestId,
-    input.attachmentFileIds,
-    deps,
-  );
+  await Promise.all([
+    deps.queueExpenseAccountAllocations(collector, db, userId, expenseId, input, calculationResult, deps),
+    deps.queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calculationResult, deps),
+    deps.queueExpenseAttachments(collector, db, userId, expenseId, input, deps),
+  ]);
+
   await processSaveExpenseSearchIndexing(collector, db, { ...input, id: expenseId, userId });
 
   await collector.executeBatch(db, true);
@@ -540,10 +539,10 @@ export async function queueExpenseAttachments(
   db: AppDatabase,
   userId: string,
   expenseId: string,
-  fileUploadRequestId: SaveExpenseInput['fileUploadRequestId'],
-  attachmentFileIds: SaveExpenseInput['attachmentFileIds'],
+  input: Pick<SaveExpenseInput, 'fileUploadRequestId' | 'attachmentFileIds'>,
   deps: PickRepos<'upsertAttachments' | 'deleteAttachmentIfNotInList'>,
 ) {
+  const { attachmentFileIds, fileUploadRequestId } = input;
   const fileIds = [...attachmentFileIds];
 
   if (fileUploadRequestId) {

@@ -817,7 +817,8 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [expectedFileId], deps);
+      const input = { fileUploadRequestId: undefined, attachmentFileIds: [expectedFileId] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
 
       expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
         { expenseId, fileId: expectedFileId },
@@ -830,7 +831,8 @@ describe('helpers', async () => {
     it('should not call getFileIdsByRequestId if fileUploadRequestId is falsy', async () => {
       const mockedGetFileIdsByRequestId = vi.mocked(getFileIdsByRequestId);
       mockedGetFileIdsByRequestId.mockRejectedValue('oops');
-      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [], deps);
+      const input = { fileUploadRequestId: undefined, attachmentFileIds: [] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
       expect(mockedGetFileIdsByRequestId).not.toHaveBeenCalled();
     });
 
@@ -845,7 +847,8 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, userId, expenseId, expectRequestId, [], deps);
+      const input = { fileUploadRequestId: expectRequestId, attachmentFileIds: [] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
 
       expect(mockedGetFileIdsByRequestId).toHaveBeenCalledWith(expectMockDatabase(), userId, expectRequestId);
       expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
@@ -863,7 +866,14 @@ describe(processSaveExpense, async () => {
   const expectDeps = () => expectDynamicMock('deps');
   const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
   const netTotalCents = 60_00;
-  const expectedCalculateExpenseResult = { netTotalCents } as ExpenseCalculationResult;
+  const expectedCalculateExpenseResult: ExpenseCalculationResult = {
+    netTotalCents,
+    grossTotalCents: netTotalCents,
+    adjustmentResults: [],
+    itemResults: {
+      i001: { netTotalCents, grossTotalCents: netTotalCents },
+    },
+  };
   const mockedCalculateExpense = vi.mocked(calculateExpense).mockReturnValue(expectedCalculateExpenseResult);
   const mockedIndexing = vi.mocked(processSaveExpenseSearchIndexing);
   const inputGenerator = zocker(saveExpenseInputSchema)
@@ -939,13 +949,35 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(deps.queueExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
     expect(deps.queueExpenseAttachments).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
       userId,
       input.expenseId,
-      input.fileUploadRequestId,
-      input.attachmentFileIds,
+      expect.objectContaining({
+        fileUploadRequestId: input.fileUploadRequestId,
+        attachmentFileIds: input.attachmentFileIds,
+      }),
       expectDeps(),
     );
 
