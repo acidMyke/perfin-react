@@ -7,8 +7,10 @@ export default defineConfig({
     globals: true,
     expect: { requireAssertions: true },
     coverage: {
+      enabled: true,
       provider: 'v8',
       include: ['server/features/expenses/saveExpense.ts', 'server/lib/expenseHelper.ts'],
+      reportOnFailure: true,
     },
   },
   plugins: [],
