@@ -6,6 +6,10 @@ export default defineConfig({
   test: {
     globals: true,
     expect: { requireAssertions: true },
+    coverage: {
+      provider: 'v8',
+      include: ['server/features/expenses/saveExpense.ts', 'server/lib/expenseHelper.ts'],
+    },
   },
   plugins: [],
   resolve: {
