@@ -35,7 +35,7 @@ function RouteComponent() {
   const { itemResults, adjustmentResults } = expense.ui.calculateResult;
 
   return (
-    <div className='mx-auto max-w-md grid-cols-1 gap-1 p-4'>
+    <div className='mx-auto mb-20 max-w-md grid-cols-1 gap-1 p-4'>
       <h1 className='col-span-2 text-lg font-bold'>
         {geolocation ? (
           <Link
