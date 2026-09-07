@@ -147,26 +147,29 @@ const ItemsDetailsSubForm = withForm({
                   return (
                     <>
                       <span>Name</span>
-                      <button className='btn btn-ghost col-start-3' onClick={() => setShowNet(v => !v)}>
+                      <span className='col-start-3'>Category</span>
+                      <button className='btn btn-ghost col-start-4' onClick={() => setShowNet(v => !v)}>
                         {showNet ? 'Net' : 'Gross'}
                       </button>
-                      <span className='col-start-4 col-end-5'>Actions</span>
+                      <span className='col-span-2 col-start-5'>Actions</span>
                       {field.state.value.map((item, itemIndex) => {
-                        const { id, name, quantity } = item;
+                        const { id, name, quantity, category } = item;
                         const { grossTotalCents = 0, netTotalCents = 0 } = itemResults[id] ?? {};
 
                         return (
                           <Fragment key={id}>
-                            <span className='col-start-1 w-full'>{name}</span>
+                            <span className='col-start-1 w-full text-ellipsis'>{name}</span>
 
                             {quantity > 1 && <span>x{quantity}</span>}
 
-                            <span className='col-start-3 text-right'>
+                            <span className='col-start-3'>{category?.label}</span>
+
+                            <span className='col-start-4 text-right'>
                               {formatCents(showNet ? netTotalCents : grossTotalCents)}
                             </span>
 
                             <Link
-                              className='btn btn-sm btn-primary col-start-4'
+                              className='btn btn-sm btn-primary col-start-5'
                               to='/expenses/$expenseId/items/$indexStr'
                               params={{ expenseId, indexStr: itemIndex.toString() }}
                             >
@@ -174,7 +177,7 @@ const ItemsDetailsSubForm = withForm({
                             </Link>
 
                             <button
-                              className='btn-link btn btn-sm col-start-5 p-0'
+                              className='btn-link btn btn-sm col-start-6 p-0'
                               onClick={() => removeItem(itemIndex, field.state.value.length)}
                             >
                               <X />
