@@ -75,6 +75,7 @@ function RouteComponent() {
                 <button className='btn-soft btn-primary btn' onClick={() => createItem(field.state.value.length, true)}>
                   <Plus />
                   Add item
+                  <ChevronRight />
                 </button>
               )}
             </div>
