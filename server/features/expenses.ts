@@ -13,7 +13,8 @@ import {
   textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
-import { and, asc, avg, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, avg, count, countDistinct, desc, eq, gte } from 'drizzle-orm';
+import { inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
@@ -146,7 +147,7 @@ const listExpenseProcedure = protectedProcedure
       lt(expensesTable.billedAt, filterEnd),
     ];
 
-    const itemCount = count(expenseItemsTable.id);
+    const itemCount = countDistinct(expenseItemsTable.id);
     const itemOne = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
     const itemTwo = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
@@ -170,16 +171,34 @@ const listExpenseProcedure = protectedProcedure
           name: categoriesTable.name,
           isDeleted: categoriesTable.isDeleted,
         },
+        categories: jsonGroupObjectArray(
+          {
+            id: categoriesTable.id,
+            name: categoriesTable.name,
+            isDeleted: categoriesTable.isDeleted,
+          },
+          { distinct: true },
+        ),
+        accounts: jsonGroupObjectArray(
+          {
+            id: accountsTable.id,
+            name: accountsTable.name,
+            isDeleted: accountsTable.isDeleted,
+          },
+          { distinct: true },
+        ),
         createdAt: expensesTable.createdAt,
         isDeleted: expensesTable.isDeleted,
       })
       .from(expensesTable)
-      .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
-      .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
       .leftJoin(
         expenseItemsTable,
         and(eq(expensesTable.id, expenseItemsTable.expenseId), eq(expenseItemsTable.isDeleted, false)),
       )
+      .leftJoin(expenseAccountAllocationsTable, and(eq(expensesTable.id, expenseAccountAllocationsTable.expenseId)))
+      .leftJoin(expenseCategoryAllocationsTable, and(eq(expensesTable.id, expenseCategoryAllocationsTable.expenseId)))
+      .leftJoin(accountsTable, eq(expenseAccountAllocationsTable.accountId, accountsTable.id))
+      .leftJoin(categoriesTable, eq(expenseCategoryAllocationsTable.categoryId, categoriesTable.id))
       .where(and(...filterList))
       .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
