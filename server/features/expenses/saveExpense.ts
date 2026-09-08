@@ -237,13 +237,14 @@ export async function processSaveExpense(context: ProtectedContext, input: SaveE
   const collector = new BatchCollector();
   const calculationResult = calculateExpense(input);
   deps.queueMainExpenseRecord(collector, db, userId, expenseId, input, calculationResult, deps);
-  deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, deps);
   deps.queueExpenseAdjustments(collector, db, expenseId, input.adjustments, extgAdjIds, deps);
-  await Promise.all([
-    deps.queueExpenseAccountAllocations(collector, db, userId, expenseId, input, calculationResult, deps),
+  const [{ itemIdToCatIdMap }] = await Promise.all([
     deps.queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calculationResult, deps),
+    deps.queueExpenseAccountAllocations(collector, db, userId, expenseId, input, calculationResult, deps),
     deps.queueExpenseAttachments(collector, db, userId, expenseId, input, deps),
   ]);
+
+  deps.queueExpenseItems(collector, db, expenseId, input.items, extgItemIds, itemIdToCatIdMap, deps);
 
   await processSaveExpenseSearchIndexing(collector, db, { ...input, id: expenseId, userId });
 
@@ -327,15 +328,17 @@ export function queueExpenseItems(
   expenseId: string,
   items: SaveExpenseInput['items'],
   extgItemIds: Set<string>,
+  itemIdToCatIdMap: Awaited<ReturnType<typeof queueExpenseCategoryAllocations>>['itemIdToCatIdMap'],
   deps: PickRepos<'generateId' | 'upsertExpenseItems' | 'markExpenseChildAsDeleted'> = saveExpenseRepo,
 ) {
   const itemsRecords: (typeof expenseItemsTable.$inferInsert)[] = [];
   const removedItemIds = new Set(extgItemIds);
-  for (const item of items) {
+  for (const { category, ...item } of items) {
     if (item.isDeleted) continue;
     if (item.id === CREATE_ID) item.id = deps.generateId();
     removedItemIds.delete(item.id);
-    itemsRecords.push({ ...item, expenseId, sequence: itemsRecords.length });
+    const categoryId = itemIdToCatIdMap.get(item.id);
+    itemsRecords.push({ ...item, expenseId, sequence: itemsRecords.length, categoryId });
   }
 
   if (itemsRecords.length > 0) {
@@ -398,9 +401,9 @@ async function resolveAndAggregateAllocations<TKind extends 'account' | 'categor
   const subjectByValue = new Map<string, Subject>();
   const subjectByLabel = new Map<string, Subject>();
 
-  for (const account of existingSubjects) {
-    subjectByLabel.set(account.label, account);
-    subjectByValue.set(account.value, account);
+  for (const subject of existingSubjects) {
+    subjectByLabel.set(subject.label, subject);
+    subjectByValue.set(subject.value, subject);
   }
 
   const subjectsToCreate = new Map<string, Subject>();
@@ -424,6 +427,7 @@ async function resolveAndAggregateAllocations<TKind extends 'account' | 'categor
       subjectId = deps.generateId();
       const newSubject: Subject = { label, value: subjectId };
       subjectsToCreate.set(label, newSubject);
+      subjectByLabel.set(subject.label, newSubject);
     }
     accumulateAmount(subjectId, amountCents);
   }
@@ -434,6 +438,7 @@ async function resolveAndAggregateAllocations<TKind extends 'account' | 'categor
   }
 
   return {
+    mapSubjectByLabel: subjectByLabel,
     subjectsToCreate: subjectsToCreate.values().toArray(),
     subjectIds: amountsBySubjectId.keys().toArray(),
     resolvedAllocations: amountsBySubjectId
@@ -512,7 +517,7 @@ export async function queueExpenseCategoryAllocations(
       ? input.categoryAllocs
       : calculateExpenseCategoryAllocations({ items: input.items, calculateExpenseResult });
 
-  const { subjectsToCreate, subjectIds, resolvedAllocations } = await resolveAndAggregateAllocations(
+  const { subjectsToCreate, subjectIds, resolvedAllocations, mapSubjectByLabel } = await resolveAndAggregateAllocations(
     'category',
     db,
     userId,
@@ -532,6 +537,19 @@ export async function queueExpenseCategoryAllocations(
   }
 
   collector.push(deps.deleteExpenseCategoryAllocationsIfNotInList(db, expenseId, subjectIds));
+
+  const itemIdToCatIdMap = new Map<string, string>();
+
+  if (input.items.length !== 0) {
+    for (const { id, category } of input.items) {
+      if (!category) continue;
+      const resolvedCategory = mapSubjectByLabel.get(category.label);
+      if (!resolvedCategory) continue;
+      itemIdToCatIdMap.set(id, resolvedCategory.value);
+    }
+  }
+
+  return { itemIdToCatIdMap };
 }
 
 export async function queueExpenseAttachments(

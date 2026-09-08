@@ -220,7 +220,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
@@ -241,7 +241,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], id: expectedId, expenseId, sequence: 0 }),
@@ -262,7 +262,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockReturnValue(batchItem1);
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
@@ -288,7 +288,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockThrow('shouldnt have been called');
       deps.markExpenseChildAsDeleted.mockReturnValue(batchItem0);
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).not.toHaveBeenCalled();
       expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
@@ -298,6 +298,34 @@ describe('helpers', async () => {
         new Set([deletingId]),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+    });
+
+    it('should capture category id using the provided mapping by item id', () => {
+      const extgItemIds = new Set<string>();
+      const items: SaveExpenseInput['items'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', priceCents: 500, quantity: 2 },
+        { id: 'id2', isDeleted: false, name: 'name2', priceCents: 300, quantity: 3 },
+        { id: 'id3', isDeleted: false, name: 'name3', priceCents: 600, quantity: 1 },
+      ];
+      const itemIdToCatIdMap = new Map([
+        ['id1', 'cat1'],
+        ['id2', 'cat2'],
+        ['id3', 'cat1'],
+      ]);
+      const batchItem0 = 'Expense Items Upserted';
+
+      deps.upsertExpenseItems.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, itemIdToCatIdMap, deps);
+
+      expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...items[0], expenseId, sequence: 0, categoryId: 'cat1' }),
+        expect.objectContaining({ ...items[1], expenseId, sequence: 1, categoryId: 'cat2' }),
+        expect.objectContaining({ ...items[2], expenseId, sequence: 2, categoryId: 'cat1' }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
     });
   });
 
@@ -795,6 +823,45 @@ describe('helpers', async () => {
         );
         expect(collectorPushSpy).toHaveBeenNthCalledWith(3, 'deps.deleteExpenseCategoryAllocationsIfNotInList');
       });
+
+      it('should return an mapping from item id to category id', async () => {
+        const categoryId0 = nanoid();
+        const categoryLabel0 = 'c0';
+        const categoryId1 = nanoid();
+        const categoryLabel1 = 'c1';
+        deps.generateId.mockReturnValueOnce(categoryId0).mockReturnValueOnce(categoryId1);
+
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [
+            { id: 'i000', category: { label: categoryLabel0, value: null } },
+            { id: 'i001', category: { label: categoryLabel1, value: null } },
+          ] as SaveExpenseInput['items'],
+          categoryAllocs: [],
+          billedAt: currentDate,
+        };
+
+        mockedCalculateExpenseCategoryAllocations.mockReturnValueOnce([
+          { category: { label: categoryLabel0, value: null }, amountCents: 3000 },
+          { category: { label: categoryLabel1, value: null }, amountCents: 6000 },
+        ]);
+
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: {
+            i000: { grossTotalCents: 2000, netTotalCents: 3000 },
+            i001: { grossTotalCents: 5000, netTotalCents: 6000 },
+          },
+          netTotalCents: 9000,
+        };
+
+        const result = await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+
+        expect(result.itemIdToCatIdMap).toEqual(
+          new Map([
+            ['i000', categoryId0],
+            ['i001', categoryId1],
+          ]),
+        );
+      });
     });
   });
 
@@ -895,6 +962,8 @@ describe(processSaveExpense, async () => {
 
   it('should call helper verify and fetch extg record, when input.expenseId is not create', async () => {
     const input = inputGenerator.generate();
+    const expectedItemIdToCatIdMap = new Map();
+    deps.queueExpenseCategoryAllocations.mockResolvedValueOnce({ itemIdToCatIdMap: expectedItemIdToCatIdMap });
     await processSaveExpense(mockContext, input, deps);
 
     expect(deps.verifyExpenseVersion).toHaveBeenCalledExactlyOnceWith(
@@ -937,6 +1006,7 @@ describe(processSaveExpense, async () => {
       input.expenseId,
       input.items,
       expect.any(Set),
+      expectedItemIdToCatIdMap,
       expectDeps(),
     );
 
@@ -991,6 +1061,11 @@ describe(processSaveExpense, async () => {
   it('should call generateId when input.expenseId is create and use the id when calling helper methods', async () => {
     const expectedExpenseId = nanoid();
     deps.generateId.mockReturnValue(expectedExpenseId);
+    const expectedItemIdToCatIdMap = new Map([
+      ['i000', 'cat0'],
+      ['i001', 'cat1'],
+    ]);
+    deps.queueExpenseCategoryAllocations.mockResolvedValueOnce({ itemIdToCatIdMap: expectedItemIdToCatIdMap });
     const input = inputGenerator.generate();
     input.expenseId = null;
     await processSaveExpense(mockContext, input, deps);
@@ -1012,6 +1087,7 @@ describe(processSaveExpense, async () => {
       expectedExpenseId,
       input.items,
       expect.any(Set),
+      expectedItemIdToCatIdMap,
       expectDeps(),
     );
 
@@ -1069,15 +1145,17 @@ describe(processSaveExpense, async () => {
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
     deps.queueMainExpenseRecord.mockImplementation(collector => collector.push(literals[0], literals[0]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseItems.mockImplementation(collector => collector.push(literals[1], literals[1]));
-    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
     deps.queueExpenseAdjustments.mockImplementation(collector => collector.push(literals[2], literals[2]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
     deps.queueExpenseAccountAllocations.mockImplementation(collector => collector.push(literals[3], literals[3]));
-    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseCategoryAllocations.mockImplementation(collector => collector.push(literals[4], literals[4]));
+    deps.queueExpenseCategoryAllocations.mockImplementation(
+      // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+      collector => (collector.push(literals[4], literals[4]), { itemIdToCatIdMap: new Map() }),
+    );
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
     deps.queueExpenseAttachments.mockImplementation(collector => collector.push(literals[5], literals[5]));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseItems.mockImplementation(collector => collector.push(literals[1], literals[1]));
 
     mockContext.addDbResult(literals);
 
