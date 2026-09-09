@@ -24,11 +24,16 @@ select id, coalesce(account_id, ''), amount_cents, 0 as sequence, billed_at
 from expenses
 where true
 on conflict (expense_id, account_id)
-do update set amount_cents = excluded.amount_cents, expense_billed_at = excluded.expense_billed_at
+do update set amount_cents = excluded.amount_cents, expense_billed_at = excluded.expense_billed_at;
 
 insert into expense_category_allocs (expense_id, category_id, amount_cents, sequence, expense_billed_at)
 select id, coalesce(category_id, ''), amount_cents, 0 as sequence, billed_at 
 from expenses
 where true
 on conflict (expense_id, category_id)
-do update set amount_cents = excluded.amount_cents, expense_billed_at = excluded.expense_billed_at
+do update set amount_cents = excluded.amount_cents, expense_billed_at = excluded.expense_billed_at;
+
+UPDATE expense_items
+SET category_id = expenses.category_id
+FROM expenses
+WHERE expenses.id = expense_items.expense_id and expense_items.category_id is NULL;
