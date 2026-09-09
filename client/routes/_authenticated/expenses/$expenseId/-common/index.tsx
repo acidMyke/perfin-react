@@ -437,14 +437,14 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
         const { accountOptions, categoryOptions } = optionsData;
         const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
         const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
-        if (accountIds.length > 1) {
+        if (accountIds.length > 0) {
           form.setFieldValue(
             'accountAllocs',
             accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
             updateMetaOpts,
           );
         }
-        if (categoryIds.length > 1) {
+        if (categoryIds.length > 0) {
           form.setFieldValue(
             'categoryAllocs',
             categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
