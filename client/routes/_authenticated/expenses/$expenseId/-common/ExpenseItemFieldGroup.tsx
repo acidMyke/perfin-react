@@ -2,7 +2,7 @@ import { withFieldGroup, type Option } from '#components/Form';
 import { defaultExpenseItem, useExpenseForm, usePushIntoOptions, type TGetExpenseFormField } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
-import { useStore } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '#client/trpc';
@@ -38,8 +38,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
   },
   render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
     const { pushIntoOptions } = usePushIntoOptions();
-    const itemId = useStore(group.store, state => state.values.id);
-    const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
+    const itemId = useSelector(group.store, state => state.values.id);
+    const inferItemPriceMutation = useMutation(trpc.expense.inferItemDetails.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
@@ -60,6 +60,12 @@ export const ItemDetailFieldGroup = withFieldGroup({
               inferItemPriceMutation.mutateAsync({ itemName: suggestion, shopName }).then(([itemDetail]) => {
                 if (itemDetail) {
                   group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+                  if (itemDetail.categoryId) {
+                    const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
+                    if (category) {
+                      group.setFieldValue('category', category, { dontUpdateMeta: true });
+                    }
+                  }
                 }
               });
             }

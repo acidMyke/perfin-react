@@ -317,7 +317,7 @@ const getShopDetailProcedure = protectedProcedure
     return data;
   });
 
-const inferItemPricesProcedure = protectedProcedure
+const inferItemDetailsProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
@@ -335,13 +335,12 @@ const inferItemPricesProcedure = protectedProcedure
       where.push(isNull(expenseTextsTable.ctxTextHash));
     }
     return db
-      .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
+      .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
       .from(expenseTextsTable)
       .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
       .where(and(...where))
-      .groupBy(expenseItemsTable.priceCents)
-      .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
+      .orderBy(desc(expensesTable.billedAt))
       .limit(1);
   });
 
@@ -482,7 +481,7 @@ export const expenseProcedures = {
   suggestShopByLocation: suggestShopByLocationProcedure,
   searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
-  inferItemPrice: inferItemPricesProcedure,
+  inferItemDetails: inferItemDetailsProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,
