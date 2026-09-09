@@ -7,8 +7,14 @@ import {
   type UpdateMetaOptions,
 } from '@tanstack/react-form';
 import { queryClient, trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
-import { useAppForm, useFormContext } from '#components/Form';
-import { calculateExpense, GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { useAppForm, useFormContext, type Option } from '#components/Form';
+import {
+  calculateExpense,
+  calculateExpenseCategoryAllocations,
+  calculateRemainingAllocation,
+  GST_NAME,
+  SERVICE_CHARGE_NAME,
+} from '#server/lib/expenseHelper';
 import type { UseNavigateResult } from '@tanstack/react-router';
 import { generateId } from '#client/utils';
 import { useMemo } from 'react';
@@ -19,24 +25,18 @@ export type ExpenseOptions = RouterOutputs['expense']['loadOptions'];
 export type LoadExpenseDetailResponse = RouterOutputs['expense']['loadDetail'];
 export type SaveExpenseDetailPayload = RouterInputs['expense']['save'];
 export type ExpenseItem = LoadExpenseDetailResponse['items'][number];
+export type ExpenseFormItem = Omit<ExpenseItem, 'categoryId'> & { category: Option | undefined };
 export type ExpenseAdjustment = LoadExpenseDetailResponse['adjustments'][number];
 export type InputSource = null | 'user' | 'autocomplete';
 
-type NullableValueExpenseOptions = {
-  [Key in keyof ExpenseOptions]: {
-    [InnerKey in keyof ExpenseOptions[Key][number]]: InnerKey extends 'value'
-      ? ExpenseOptions[Key][number][InnerKey] | null
-      : ExpenseOptions[Key][number][InnerKey];
-  }[];
-};
-
-export function defaultExpenseItem(priceCents?: number): ExpenseItem {
+export function defaultExpenseItem(priceCents?: number): ExpenseFormItem {
   return {
     id: generateId(),
     name: '',
     isDeleted: false,
     priceCents: priceCents ?? 0,
     quantity: 1,
+    category: undefined,
   };
 }
 
@@ -53,15 +53,13 @@ export function defaultExpenseAdjustment(): ExpenseAdjustment {
 
 export const MAX_ITEMS_IN_MAIN = 2;
 
-function processApiResponse(
-  detail: LoadExpenseDetailResponse,
-  options: NullableValueExpenseOptions,
-  param?: { isCopy: boolean },
-) {
+function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
   const { accountOptions, categoryOptions } = options;
-  const { billedAt, accountId, categoryId, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
-  const account = accountId ? accountOptions.find(({ value }) => value === accountId) : undefined;
-  const category = categoryId ? categoryOptions.find(({ value }) => value === categoryId) : undefined;
+  const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
+  const idOptionMapping = new Map([
+    ...accountOptions.map(option => [option.value, option] as [string, Option]),
+    ...categoryOptions.map(option => [option.value, option] as [string, Option]),
+  ]);
 
   if (param?.isCopy) {
     const remappedItemId = new Map<string, string>();
@@ -79,11 +77,21 @@ function processApiResponse(
 
   return {
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
-    account,
-    category,
     geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
     attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
+    items: rest.items.map(({ categoryId, ...item }) => ({
+      category: categoryId ? idOptionMapping.get(categoryId) : undefined,
+      ...item,
+    })),
+    accountAllocs: rest.accountAllocs.map(({ accountId, amountCents }) => ({
+      account: accountId ? idOptionMapping.get(accountId) : undefined,
+      amountCents,
+    })),
+    categoryAllocs: rest.categoryAllocs.map(({ categoryId, amountCents }) => ({
+      category: categoryId ? idOptionMapping.get(categoryId) : undefined,
+      amountCents,
+    })),
   };
 }
 
@@ -92,8 +100,6 @@ function createNewExpenseForm() {
     version: 0,
     amountCents: 0,
     billedAt: new Date(),
-    account: undefined,
-    category: undefined,
     type: 'online',
     geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
     shopName: null,
@@ -103,6 +109,8 @@ function createNewExpenseForm() {
     items: [],
     adjustments: [],
     attachments: [],
+    accountAllocs: [{ account: undefined, amountCents: 0 }],
+    categoryAllocs: [{ category: undefined, amountCents: 0 }],
   } satisfies ReturnType<typeof processApiResponse> | { type: undefined };
 }
 
@@ -122,6 +130,11 @@ export function mapExpenseDetailToForm(
 ) {
   const isEmptyCreate = !detail || !options;
   const formValues = isEmptyCreate ? createNewExpenseForm() : processApiResponse(detail, options, param);
+  const calculateResult = calculateExpense(formValues);
+  const categoryAllocation =
+    formValues.items.length > 0
+      ? calculateExpenseCategoryAllocations({ items: formValues.items, calculateExpenseResult: calculateResult })
+      : [];
 
   return {
     ...formValues,
@@ -131,8 +144,10 @@ export function mapExpenseDetailToForm(
       shouldInferShopDetail: isEmptyCreate,
       shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
-      calculateResult: calculateExpense(formValues),
+      calculateResult,
+      categoryAllocation,
       currentCoordResult: undefined as CurrentCoordResult | undefined,
+      isInvalidCategoryAllocation: false,
     },
     history: {
       past: [] as HistoryEntry[][],
@@ -224,27 +239,57 @@ export function calculateExpenseForm(form: ExpenseFormApi) {
   const items = form.getFieldValue('items');
   const adjustments = form.getFieldValue('adjustments');
 
-  const result = calculateExpense({ specifiedAmountCents, items, adjustments });
-  form.setFieldValue('ui.calculateResult', result);
+  const calculateExpenseResult = calculateExpense({ specifiedAmountCents, items, adjustments });
+  form.setFieldValue('ui.calculateResult', calculateExpenseResult);
+
+  calculateExpenseFormRemainingAllocation(form, 'account', calculateExpenseResult.netTotalCents);
+  if (items.length === 0) {
+    calculateExpenseFormRemainingAllocation(form, 'category', calculateExpenseResult.netTotalCents);
+  } else {
+    const categoryAllocation = calculateExpenseCategoryAllocations({ items, calculateExpenseResult });
+    form.setFieldValue('ui.categoryAllocation', categoryAllocation);
+  }
+}
+
+export function calculateExpenseFormRemainingAllocation(
+  form: ExpenseFormApi,
+  allocKind: 'account' | 'category',
+  lazyNetTotalCents?: number,
+) {
+  const netTotalCents = lazyNetTotalCents ?? form.getFieldValue('ui.calculateResult.netTotalCents');
+  const allocations = form.getFieldValue(`${allocKind}Allocs`);
+  const { remainingCents, lastAllocationCents, isValidForCategory } = calculateRemainingAllocation({
+    netTotalCents,
+    allocations,
+  });
+  if (remainingCents !== 0) {
+    const lastIndex = allocations.length - 1;
+    form.setFieldValue(`${allocKind}Allocs[${lastIndex}].amountCents`, lastAllocationCents);
+  }
+
+  if (allocKind === 'category') {
+    form.setFieldValue('ui.isInvalidCategoryAllocation', !isValidForCategory);
+  }
 }
 
 type InvalidateAndRedirectBackToListOptions = {
   navigate: UseNavigateResult<any>;
   billedAt: Date;
-  optionsCreated: boolean;
   expenseId: string;
 };
 
 export async function invalidateAndRedirectBackToList(opts: InvalidateAndRedirectBackToListOptions) {
-  const { navigate, billedAt, optionsCreated, expenseId } = opts;
+  const { navigate, billedAt, expenseId } = opts;
 
   const monthYear = { month: billedAt.getMonth(), year: billedAt.getFullYear() };
   const promises = [queryClient.refetchQueries(trpc.expense.list.queryFilter(monthYear))];
   if (expenseId !== 'create') {
     promises.push(queryClient.invalidateQueries(trpc.expense.loadDetail.queryFilter({ expenseId })));
   }
+  const optionsCreated = queryClient.getQueryDefaults(trpc.expense.loadOptions.queryKey()).meta?.isPushed ?? false;
   if (optionsCreated) {
     promises.push(queryClient.invalidateQueries(trpc.expense.loadOptions.queryFilter()));
+    queryClient.setQueryDefaults(trpc.expense.loadOptions.queryKey(), { meta: undefined });
   }
   await Promise.all(promises);
   return navigate({ to: '/expenses', search: monthYear });
@@ -390,15 +435,21 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
       onSuccess([shopDetail]) {
         if (!shopDetail) return;
         const { accountOptions, categoryOptions } = optionsData;
-        const { accountId, categoryId, isGstExcluded, serviceChargeBps } = shopDetail;
+        const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
         const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
-        if (accountId) {
-          const account = accountOptions.find(({ value }) => value === accountId);
-          form.setFieldValue('account', account, updateMetaOpts);
+        if (accountIds.length > 0) {
+          form.setFieldValue(
+            'accountAllocs',
+            accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
+            updateMetaOpts,
+          );
         }
-        if (categoryId) {
-          const category = categoryOptions.find(({ value }) => value === categoryId);
-          form.setFieldValue('category', category, updateMetaOpts);
+        if (categoryIds.length > 0) {
+          form.setFieldValue(
+            'categoryAllocs',
+            categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
+            updateMetaOpts,
+          );
         }
         if (serviceChargeBps) {
           createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
@@ -407,7 +458,7 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
           createAdjustment({ special: GST_NAME, ...updateMetaOpts });
         }
         form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-        pushHistory(form, ['account', 'category', 'adjustments']);
+        pushHistory(form, ['accountAllocs', 'categoryAllocs', 'adjustments']);
       },
     }),
   );
@@ -418,5 +469,34 @@ export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData:
       if (!shopName) return;
       await shopDetailMutation.mutateAsync({ shopName });
     },
+  };
+}
+
+type PushIntoOptionsValueArg = {
+  kind: 'account' | 'category';
+  option: Option;
+};
+
+export function usePushIntoOptions() {
+  const pushIntoOptionsMutation = useMutation({
+    mutationFn: async (allocOption: PushIntoOptionsValueArg, { client }) => {
+      const loadOptionQueryKey = trpc.expense.loadOptions.queryKey();
+      await client.cancelQueries({ queryKey: loadOptionQueryKey });
+      client.setQueryData(loadOptionQueryKey, old => {
+        if (!old) return undefined;
+        const { kind, option } = allocOption;
+        const key = `${kind}Options` as const;
+        const existingOptions = old[key];
+        const notAdded = existingOptions.every(({ value, label }) => value !== option.value || label !== option.label);
+        if (notAdded) {
+          old[key] = [...existingOptions, option];
+        }
+        return old;
+      });
+      client.setQueryDefaults(loadOptionQueryKey, { meta: { isPushed: true } });
+    },
+  });
+  return {
+    pushIntoOptions: (allocOption: PushIntoOptionsValueArg) => pushIntoOptionsMutation.mutateAsync(allocOption),
   };
 }

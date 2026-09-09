@@ -24,6 +24,8 @@ import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { Fragment, useState } from 'react';
+import { ExpenseAccountAllocationSubForm } from './-subform/ExpenseAccountAllocation';
+import { ExpenseCategoryAllocationSubForm } from './-subform/ExpenseCategoryAllocation';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -69,14 +71,11 @@ function RouteComponent() {
           </label>
         )}
       </form.Field>
-      <form.AppField name='category'>
-        {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-4 mt-2' />}
-      </form.AppField>
-      <form.AppField name='account'>
-        {({ ComboBox }) => <ComboBox label='Account' options={accountOptions} containerCn='col-span-4 mt-2' />}
-      </form.AppField>
+
       <AdjustmentsDetailsSubForm form={form} />
       <BillTotal className='col-span-8' />
+      <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} readOnly={false} />
+      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} readOnly={false} />
       <form.AppField name='attachments'>
         {({ AttachmentBox }) => (
           <AttachmentBox label='Attachment' accept='image/*,application/pdf' max={5} containerCn='col-span-8 my-2' />
@@ -106,6 +105,10 @@ function RouteComponent() {
 const ItemsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const {
+      data: { categoryOptions },
+    } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+
     const { expenseId } = Route.useParams();
     const navigate = Route.useNavigate();
     const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
@@ -144,26 +147,29 @@ const ItemsDetailsSubForm = withForm({
                   return (
                     <>
                       <span>Name</span>
-                      <button className='btn btn-ghost col-start-3' onClick={() => setShowNet(v => !v)}>
+                      <span className='col-start-3'>Category</span>
+                      <button className='btn btn-ghost col-start-4' onClick={() => setShowNet(v => !v)}>
                         {showNet ? 'Net' : 'Gross'}
                       </button>
-                      <span className='col-start-4 col-end-5'>Actions</span>
+                      <span className='col-span-2 col-start-5'>Actions</span>
                       {field.state.value.map((item, itemIndex) => {
-                        const { id, name, quantity } = item;
+                        const { id, name, quantity, category } = item;
                         const { grossTotalCents = 0, netTotalCents = 0 } = itemResults[id] ?? {};
 
                         return (
                           <Fragment key={id}>
-                            <span className='col-start-1 w-full'>{name}</span>
+                            <span className='col-start-1 w-full text-ellipsis'>{name}</span>
 
                             {quantity > 1 && <span>x{quantity}</span>}
 
-                            <span className='col-start-3 text-right'>
+                            <span className='col-start-3'>{category?.label}</span>
+
+                            <span className='col-start-4 text-right'>
                               {formatCents(showNet ? netTotalCents : grossTotalCents)}
                             </span>
 
                             <Link
-                              className='btn btn-sm btn-primary col-start-4'
+                              className='btn btn-sm btn-primary col-start-5'
                               to='/expenses/$expenseId/items/$indexStr'
                               params={{ expenseId, indexStr: itemIndex.toString() }}
                             >
@@ -171,7 +177,7 @@ const ItemsDetailsSubForm = withForm({
                             </Link>
 
                             <button
-                              className='btn-link btn btn-sm col-start-5 p-0'
+                              className='btn-link btn btn-sm col-start-6 p-0'
                               onClick={() => removeItem(itemIndex, field.state.value.length)}
                             >
                               <X />
@@ -207,6 +213,7 @@ const ItemsDetailsSubForm = withForm({
                     getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
+                    categoryOptions={categoryOptions}
                   />
                 );
               })}

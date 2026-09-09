@@ -83,6 +83,13 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
       if (itemResult) {
         itemizedAdj[expenseItemId] = adjRes;
         itemResult.netTotalCents += amountCents;
+      } else {
+        for (const [itemId, itemResult] of itemResultsMap.entries()) {
+          const adjCentBps = itemResult.netTotalCents * rateBps;
+          const adjAmount = Math.round(adjCentBps / 100_00);
+          itemizedAdj[itemId] = { amountCents: adjAmount, rateBps };
+          itemResult.netTotalCents += adjAmount;
+        }
       }
       adjustmentResults.push([id, adjRes, itemizedAdj]);
 
@@ -137,5 +144,67 @@ export function calculateExpense(detail: ExpenseDetailForCalculation): ExpenseCa
     grossTotalCents: expenseGrossTotal,
     netTotalCents: expenseNetTotal,
     adjustmentResults,
+  };
+}
+
+type AnyCategoryShape = { value: string | null; label: string } | undefined | null;
+
+export type CalculateExpenseCategoryAllocationInput = {
+  items: (Pick<ExpenseItemForCalculation, 'id'> & { category?: AnyCategoryShape })[];
+  calculateExpenseResult: Pick<ExpenseCalculationResult, 'itemResults'>;
+};
+
+export function calculateExpenseCategoryAllocations(input: CalculateExpenseCategoryAllocationInput) {
+  const covertToIdentifier = (anyShape: AnyCategoryShape) => anyShape?.value ?? anyShape?.label ?? null;
+
+  type TCatIdentifier = ReturnType<typeof covertToIdentifier>;
+  const accumualtePerCategory = new Map<TCatIdentifier, number>();
+  const categoryIdentifierToAnyCategoryInput = new Map<TCatIdentifier, AnyCategoryShape>();
+
+  const accumulateAmount = (anyShape: AnyCategoryShape, amountCents: number) => {
+    const id = covertToIdentifier(anyShape);
+    categoryIdentifierToAnyCategoryInput.set(id, anyShape);
+    const prev = accumualtePerCategory.get(id) ?? 0;
+    accumualtePerCategory.set(id, prev + amountCents);
+  };
+  const itemResults = input.calculateExpenseResult.itemResults;
+
+  for (const { id: itemId, category } of input.items) {
+    if (itemId in itemResults) {
+      const { netTotalCents } = itemResults[itemId];
+      if (netTotalCents > 0) {
+        accumulateAmount(category, netTotalCents);
+      }
+    }
+  }
+
+  return accumualtePerCategory
+    .entries()
+    .map(([id, amountCents]) => ({ category: categoryIdentifierToAnyCategoryInput.get(id), amountCents }))
+    .toArray();
+}
+
+export type CalculationResultWithAllocations = Pick<ExpenseCalculationResult, 'netTotalCents'> & {
+  allocations: { amountCents: number }[];
+};
+
+export function calculateRemainingAllocation(input: CalculationResultWithAllocations) {
+  const { netTotalCents, allocations } = input;
+  let remainingCents = netTotalCents;
+  let isValidForCategory = true;
+  for (let i = 0; i < allocations.length; i++) {
+    const { amountCents } = allocations[i];
+    remainingCents -= amountCents;
+    if (amountCents < 0 || remainingCents < 0) {
+      isValidForCategory = false;
+    }
+  }
+
+  const lastAllocationCents = (allocations.at(-1)?.amountCents ?? 0) + remainingCents;
+
+  return {
+    remainingCents,
+    lastAllocationCents,
+    isValidForCategory,
   };
 }

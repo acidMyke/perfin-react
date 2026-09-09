@@ -13,8 +13,10 @@ import {
   CREATE_ID,
   getExistingChildrenData,
   processSaveExpense,
+  queueExpenseAccountAllocations,
   queueExpenseAdjustments,
   queueExpenseAttachments,
+  queueExpenseCategoryAllocations,
   queueExpenseItems,
   queueMainExpenseRecord,
   saveExpenseInputSchema,
@@ -23,7 +25,11 @@ import {
   type SaveExpenseInput,
   type SaveExpenseRepo,
 } from './saveExpense';
-import { calculateExpense, type ExpenseCalculationResult } from '#server/lib/expenseHelper';
+import {
+  calculateExpense,
+  calculateExpenseCategoryAllocations,
+  type ExpenseCalculationResult,
+} from '#server/lib/expenseHelper';
 import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
 import { getLocationBoxId } from '../../lib/utils';
@@ -38,7 +44,10 @@ vi.mock(import('#schema'), importOriginal => {
   return mockSchemaModule(importOriginal);
 });
 
-vi.mock(import('../../lib/expenseHelper'), () => ({ calculateExpense: vi.fn() }));
+vi.mock(import('../../lib/expenseHelper'), () => ({
+  calculateExpense: vi.fn(),
+  calculateExpenseCategoryAllocations: vi.fn(),
+}));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
 vi.mock(import('../../lib/fileUpload'), () => ({ getFileIdsByRequestId: vi.fn() }));
 vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
@@ -119,16 +128,12 @@ describe('helpers', async () => {
     it('should call upsertMainExpense to save values base on info and push return into batch collector', async () => {
       const netTotalCents = 60_00;
       const expectedBoxId = 2903487923848;
-      const mockedCalculateExpense = vi
-        .mocked(calculateExpense)
-        .mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
+      const mockResult = { netTotalCents } as ExpenseCalculationResult;
       const mockedGetLocationBoxId = vi.mocked(getLocationBoxId).mockReturnValue([expectedBoxId]);
       const batchItem0 = 'Main Expense Upserted';
       deps.insertSubject.mockThrow('Should not be called');
       deps.upsertMainExpense.mockReturnValue(batchItem0);
 
-      const accountId = nanoid();
-      const categoryId = nanoid();
       const shopName = 'Just another shop';
       const shopMall = 'Just another mall';
 
@@ -142,8 +147,6 @@ describe('helpers', async () => {
         version: 1,
         latitude: 1.258837,
         longitude: 103.8093661,
-        account: { value: accountId, label: '' },
-        category: { value: categoryId, label: '' },
         items: [
           {
             id: nanoid(),
@@ -164,17 +167,11 @@ describe('helpers', async () => {
           },
         ],
         attachmentFileIds: [],
+        accountAllocs: [],
+        categoryAllocs: [],
       };
 
-      queueMainExpenseRecord(collector, db, userId, expenseId, input, deps);
-
-      expect(mockedCalculateExpense).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({
-          specifiedAmountCents: input.specifiedAmountCents,
-          items: input.items,
-          adjustments: input.adjustments,
-        }),
-      );
+      queueMainExpenseRecord(collector, db, userId, expenseId, input, mockResult, deps);
 
       expect(mockedGetLocationBoxId).toHaveBeenCalledExactlyOnceWith(
         expect.objectContaining({ latitude: input.latitude, longitude: input.longitude }),
@@ -188,8 +185,6 @@ describe('helpers', async () => {
           updatedBy: userId,
           shopMall,
           shopName,
-          accountId,
-          categoryId,
           amountCents: netTotalCents,
           boxId: expectedBoxId,
           type: input.type,
@@ -198,76 +193,6 @@ describe('helpers', async () => {
         }),
       );
       expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
-    });
-
-    it('should create account if account.id is null', () => {
-      const netTotalCents = 80_00;
-      const expectedAccountId = nanoid();
-      vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
-      const batchItem0 = 'Account created';
-      const batchItem1 = 'Main Expense Upserted';
-      const accountName = 'accountName';
-      deps.insertSubject.mockReturnValue(batchItem0);
-      deps.upsertMainExpense.mockReturnValue(batchItem1);
-      deps.generateId.mockReturnValueOnce(expectedAccountId);
-
-      queueMainExpenseRecord(
-        collector,
-        db,
-        userId,
-        expenseId,
-        { account: { value: null, label: accountName } } as SaveExpenseInput,
-        deps,
-      );
-
-      expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        schema.accountsTable,
-        expectedAccountId,
-        accountName,
-        userId,
-      );
-      expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        expect.objectContaining({ accountId: expectedAccountId }),
-      );
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
-    });
-
-    it('should create category if category.id is null', () => {
-      const netTotalCents = 80_00;
-      const expectedAccountId = nanoid();
-      vi.mocked(calculateExpense).mockReturnValue({ netTotalCents } as ExpenseCalculationResult);
-      const batchItem0 = 'Category created';
-      const batchItem1 = 'Main Expense Upserted';
-      const categoryName = 'categoryName';
-      deps.insertSubject.mockReturnValue(batchItem0);
-      deps.upsertMainExpense.mockReturnValue(batchItem1);
-      deps.generateId.mockReturnValueOnce(expectedAccountId);
-
-      queueMainExpenseRecord(
-        collector,
-        db,
-        userId,
-        expenseId,
-        { category: { value: null, label: categoryName } } as SaveExpenseInput,
-        deps,
-      );
-
-      expect(deps.insertSubject).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        schema.categoriesTable,
-        expectedAccountId,
-        categoryName,
-        userId,
-      );
-      expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
-        expectMockDatabase(),
-        expect.objectContaining({ categoryId: expectedAccountId }),
-      );
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
-      expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
     });
   });
 
@@ -295,7 +220,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
@@ -316,7 +241,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], id: expectedId, expenseId, sequence: 0 }),
@@ -337,7 +262,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockReturnValue(batchItem0);
       deps.markExpenseChildAsDeleted.mockReturnValue(batchItem1);
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
         expect.objectContaining({ ...items[0], expenseId, sequence: 0 }),
@@ -363,7 +288,7 @@ describe('helpers', async () => {
       deps.upsertExpenseItems.mockThrow('shouldnt have been called');
       deps.markExpenseChildAsDeleted.mockReturnValue(batchItem0);
 
-      queueExpenseItems(collector, db, expenseId, items, extgItemIds, deps);
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, new Map(), deps);
 
       expect(deps.upsertExpenseItems).not.toHaveBeenCalled();
       expect(deps.markExpenseChildAsDeleted).toHaveBeenCalledExactlyOnceWith(
@@ -373,6 +298,34 @@ describe('helpers', async () => {
         new Set([deletingId]),
       );
       expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+    });
+
+    it('should capture category id using the provided mapping by item id', () => {
+      const extgItemIds = new Set<string>();
+      const items: SaveExpenseInput['items'] = [
+        { id: 'id1', isDeleted: false, name: 'name1', priceCents: 500, quantity: 2 },
+        { id: 'id2', isDeleted: false, name: 'name2', priceCents: 300, quantity: 3 },
+        { id: 'id3', isDeleted: false, name: 'name3', priceCents: 600, quantity: 1 },
+      ];
+      const itemIdToCatIdMap = new Map([
+        ['id1', 'cat1'],
+        ['id2', 'cat2'],
+        ['id3', 'cat1'],
+      ]);
+      const batchItem0 = 'Expense Items Upserted';
+
+      deps.upsertExpenseItems.mockReturnValue(batchItem0);
+      deps.markExpenseChildAsDeleted.mockThrow('shouldnt have happened');
+
+      queueExpenseItems(collector, db, expenseId, items, extgItemIds, itemIdToCatIdMap, deps);
+
+      expect(deps.upsertExpenseItems).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+        expect.objectContaining({ ...items[0], expenseId, sequence: 0, categoryId: 'cat1' }),
+        expect.objectContaining({ ...items[1], expenseId, sequence: 1, categoryId: 'cat2' }),
+        expect.objectContaining({ ...items[2], expenseId, sequence: 2, categoryId: 'cat1' }),
+      ]);
+      expect(deps.markExpenseChildAsDeleted).not.toHaveBeenCalled();
+      expect(collectorPushSpy).toHaveBeenCalledExactlyOnceWith(batchItem0);
     });
   });
 
@@ -483,6 +436,435 @@ describe('helpers', async () => {
     });
   });
 
+  describe(queueExpenseAccountAllocations, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    let currentDate: Date;
+    let deps = {
+      generateId: vi.fn(),
+      getExistingSubjects: vi.fn(),
+      insertSubjects: vi.fn(),
+      upsertExpenseAccountAllocations: vi.fn(),
+      deleteExpenseAccountAllocationsIfNotInList: vi.fn(),
+    };
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+      currentDate = new Date();
+    });
+
+    describe('account validation & creation', () => {
+      it('should check for existing account', async () => {
+        const accountId = nanoid();
+        const accountLabel = 'a0';
+        deps.getExistingSubjects.mockResolvedValue([{ label: accountLabel, value: accountId }]);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          accountAllocs: [{ account: { label: accountLabel, value: accountId }, amountCents: 10_00 }],
+          billedAt: currentDate,
+        };
+        const netTotalCents = 1000;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountId, accountLabel]),
+        );
+        expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>({
+            accountId,
+            expenseId,
+            sequence: 0,
+            amountCents: 1000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+      });
+
+      it('should check for existing label, if label exists ignore input value and reuse existing id, not call insertSubjects', async () => {
+        const accountId0 = nanoid();
+        const accountLabel0 = 'a0';
+        const accountId1 = nanoid();
+        const accountLabel1 = 'a1';
+        const unexpectedAccountId = nanoid();
+
+        deps.getExistingSubjects.mockResolvedValue([
+          { label: accountLabel0, value: accountId0 },
+          { label: accountLabel1, value: accountId1 },
+        ]);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          billedAt: currentDate,
+          accountAllocs: [
+            {
+              account: { label: accountLabel0, value: null },
+              amountCents: 10_00,
+            },
+            {
+              account: { label: accountLabel1, value: unexpectedAccountId },
+              amountCents: 6_00,
+            },
+          ],
+        };
+        const netTotalCents = 16_00;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.generateId).not.toHaveBeenCalled();
+        expect(deps.insertSubjects).not.toHaveBeenCalled();
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountLabel0, accountLabel1, unexpectedAccountId]),
+        );
+      });
+
+      it('should check for existing label, if label doesnt exist, create newIds and insertSubject', async () => {
+        const accountId0 = nanoid();
+        const accountLabel0 = 'a0';
+        const accountId1 = nanoid();
+        const accountLabel1 = 'a1';
+        const unexpectedAccountId = nanoid();
+        const batchItem0 = 'deps.insertSubjects';
+
+        deps.getExistingSubjects.mockResolvedValue([]);
+        deps.generateId.mockReturnValueOnce(accountId0).mockReturnValueOnce(accountId1);
+        deps.insertSubjects.mockReturnValue(batchItem0);
+        const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+          accountAllocs: [
+            {
+              account: { label: accountLabel0, value: null },
+              amountCents: 20_00,
+            },
+            {
+              account: { label: accountLabel1, value: unexpectedAccountId },
+              amountCents: 6_00,
+            },
+          ],
+          billedAt: currentDate,
+        };
+        const netTotalCents = 26_00;
+        await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+        expect(deps.generateId).toHaveBeenCalledTimes(2);
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([accountLabel0, accountLabel1, unexpectedAccountId]),
+        );
+        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.accountsTable,
+          userId,
+          expect.arrayContaining([
+            { label: accountLabel0, value: accountId0 },
+            { label: accountLabel1, value: accountId1 },
+          ]),
+        );
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+      });
+
+      describe('amount distribution & allocation creation', () => {
+        it('should aggregate the amount of similar account', async () => {
+          const accountId0 = nanoid();
+          const accountLabel0 = 'a0';
+          const accountId1 = nanoid();
+          const accountLabel1 = 'a1';
+          const batchItem0 = 'deps.upsertExpenseAccountAllocations';
+          const batchItem1 = 'deps.deleteExpenseAccountAllocationsIfNotInList';
+
+          deps.getExistingSubjects.mockResolvedValue([
+            { label: accountLabel0, value: accountId0 },
+            { label: accountLabel1, value: accountId1 },
+          ]);
+          deps.upsertExpenseAccountAllocations.mockReturnValueOnce(batchItem0);
+          deps.deleteExpenseAccountAllocationsIfNotInList.mockReturnValueOnce(batchItem1);
+
+          const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+            accountAllocs: [
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 10_00,
+              },
+              {
+                account: { label: accountLabel1, value: accountId1 },
+                amountCents: 4_00,
+              },
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 6_00,
+              },
+              {
+                account: { label: accountLabel1, value: accountId1 },
+                amountCents: 8_00,
+              },
+            ],
+            billedAt: currentDate,
+          };
+          const netTotalCents = 28_00;
+          await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expect.arrayContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>([
+              {
+                accountId: accountId0,
+                expenseId,
+                sequence: 0,
+                amountCents: 16_00,
+                expenseBilledAt: currentDate,
+              },
+              {
+                accountId: accountId1,
+                expenseId,
+                sequence: 1,
+                amountCents: 12_00,
+                expenseBilledAt: currentDate,
+              },
+            ]),
+          );
+
+          expect(deps.deleteExpenseAccountAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expenseId,
+            [accountId0, accountId1],
+          );
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+        });
+
+        it("should aggregate the amount null/undefined account and remaining balance as unallocated (accountId = '') ", async () => {
+          const accountId0 = nanoid();
+          const accountLabel0 = 'a0';
+          const batchItem0 = 'deps.upsertExpenseAccountAllocations';
+          const batchItem1 = 'deps.deleteExpenseAccountAllocationsIfNotInList';
+
+          deps.getExistingSubjects.mockResolvedValue([{ label: accountLabel0, value: accountId0 }]);
+          deps.upsertExpenseAccountAllocations.mockReturnValueOnce(batchItem0);
+          deps.deleteExpenseAccountAllocationsIfNotInList.mockReturnValueOnce(batchItem1);
+
+          const input: Parameters<typeof queueExpenseAccountAllocations>[4] = {
+            accountAllocs: [
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 10_00,
+              },
+              {
+                account: null,
+                amountCents: 9_00,
+              },
+              {
+                account: { label: accountLabel0, value: accountId0 },
+                amountCents: 6_00,
+              },
+              {
+                account: undefined,
+                amountCents: 2_00,
+              },
+            ],
+            billedAt: currentDate,
+          };
+          const netTotalCents = 30_00;
+          await queueExpenseAccountAllocations(collector, db, userId, expenseId, input, { netTotalCents }, deps);
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(deps.upsertExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expect.arrayContaining<typeof schema.expenseAccountAllocationsTable.$inferInsert>([
+              {
+                accountId: accountId0,
+                expenseId,
+                sequence: 0,
+                amountCents: 16_00,
+                expenseBilledAt: currentDate,
+              },
+              {
+                accountId: '',
+                expenseId,
+                sequence: 1,
+                amountCents: 14_00,
+                expenseBilledAt: currentDate,
+              },
+            ]),
+          );
+
+          expect(deps.deleteExpenseAccountAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+            expectMockDatabase(),
+            expenseId,
+            [accountId0, ''],
+          );
+
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(1, batchItem0);
+          expect(collectorPushSpy).toHaveBeenNthCalledWith(2, batchItem1);
+        });
+      });
+    });
+  });
+
+  describe(queueExpenseCategoryAllocations, () => {
+    let collector: BatchCollector;
+    let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
+    let mockedCalculateExpenseCategoryAllocations = vi.mocked(calculateExpenseCategoryAllocations);
+    let currentDate: Date;
+    let deps = {
+      generateId: vi.fn(),
+      getExistingSubjects: vi.fn(),
+      insertSubjects: vi.fn(),
+      upsertExpenseCategoryAllocations: vi.fn(),
+      deleteExpenseCategoryAllocationsIfNotInList: vi.fn(),
+    };
+
+    beforeEach(() => {
+      collector = new BatchCollector();
+      collectorPushSpy = vi.spyOn(collector, 'push');
+      expenseId = nanoid();
+      vi.clearAllMocks();
+      currentDate = new Date();
+    });
+
+    describe('category specific behaviours', () => {
+      it('should use items to calculate category allocation if available', async () => {
+        const categoryId = nanoid();
+        const categoryLabel = 'c0';
+        const unexpectedCategoryId = nanoid();
+        const unexpectedCategoryLabel = 'oops';
+        deps.getExistingSubjects.mockResolvedValue([{ label: categoryLabel, value: categoryId }]);
+        mockedCalculateExpenseCategoryAllocations.mockReturnValueOnce([
+          { category: { label: categoryLabel, value: categoryId }, amountCents: 3000 },
+        ]);
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [{ id: 'i000', category: { label: categoryLabel, value: categoryId } }] as SaveExpenseInput['items'],
+          categoryAllocs: [
+            { category: { label: unexpectedCategoryLabel, value: unexpectedCategoryId }, amountCents: 1000 },
+          ],
+          billedAt: currentDate,
+        };
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: { i000: { grossTotalCents: 2000, netTotalCents: 3000 } },
+          netTotalCents: 3000,
+        };
+        await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          expect.arrayContaining([categoryId, categoryLabel]),
+        );
+        expect(deps.getExistingSubjects.mock.calls[0][3]).toEqual(
+          expect.not.arrayContaining([unexpectedCategoryId, unexpectedCategoryLabel]),
+        );
+        expect(deps.upsertExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseCategoryAllocationsTable.$inferInsert>({
+            categoryId,
+            expenseId,
+            sequence: 0,
+            amountCents: 3000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+      });
+
+      it('should use the correct table', async () => {
+        const categoryId = nanoid();
+        const categoryLabel = 'c0';
+        deps.getExistingSubjects.mockResolvedValue([]);
+        deps.generateId.mockReturnValue(categoryId);
+        deps.insertSubjects.mockReturnValue('deps.insertSubjects');
+        deps.upsertExpenseCategoryAllocations.mockReturnValue('deps.upsertExpenseCategoryAllocations');
+        deps.deleteExpenseCategoryAllocationsIfNotInList.mockReturnValue(
+          'deps.deleteExpenseCategoryAllocationsIfNotInList',
+        );
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [],
+          categoryAllocs: [{ category: { label: categoryLabel, value: null }, amountCents: 1000 }],
+          billedAt: currentDate,
+        };
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: {},
+          netTotalCents: 1000,
+        };
+        await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+        expect(mockedCalculateExpenseCategoryAllocations).not.toHaveBeenCalled();
+        expect(deps.getExistingSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          expect.arrayContaining([categoryLabel]),
+        );
+        expect(deps.generateId).toHaveBeenCalledOnce();
+        expect(deps.insertSubjects).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          schema.categoriesTable,
+          userId,
+          [{ value: categoryId, label: categoryLabel }],
+        );
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(1, 'deps.insertSubjects');
+        expect(deps.upsertExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(expectMockDatabase(), [
+          expect.objectContaining<typeof schema.expenseCategoryAllocationsTable.$inferInsert>({
+            categoryId,
+            expenseId,
+            sequence: 0,
+            amountCents: 1000,
+            expenseBilledAt: currentDate,
+          }),
+        ]);
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(2, 'deps.upsertExpenseCategoryAllocations');
+        expect(deps.deleteExpenseCategoryAllocationsIfNotInList).toHaveBeenCalledExactlyOnceWith(
+          expectMockDatabase(),
+          expenseId,
+          [categoryId],
+        );
+        expect(collectorPushSpy).toHaveBeenNthCalledWith(3, 'deps.deleteExpenseCategoryAllocationsIfNotInList');
+      });
+
+      it('should return an mapping from item id to category id', async () => {
+        const categoryId0 = nanoid();
+        const categoryLabel0 = 'c0';
+        const categoryId1 = nanoid();
+        const categoryLabel1 = 'c1';
+        deps.generateId.mockReturnValueOnce(categoryId0).mockReturnValueOnce(categoryId1);
+
+        const input: Parameters<typeof queueExpenseCategoryAllocations>[4] = {
+          items: [
+            { id: 'i000', category: { label: categoryLabel0, value: null } },
+            { id: 'i001', category: { label: categoryLabel1, value: null } },
+          ] as SaveExpenseInput['items'],
+          categoryAllocs: [],
+          billedAt: currentDate,
+        };
+
+        mockedCalculateExpenseCategoryAllocations.mockReturnValueOnce([
+          { category: { label: categoryLabel0, value: null }, amountCents: 3000 },
+          { category: { label: categoryLabel1, value: null }, amountCents: 6000 },
+        ]);
+
+        const calcResult: Parameters<typeof queueExpenseCategoryAllocations>[5] = {
+          itemResults: {
+            i000: { grossTotalCents: 2000, netTotalCents: 3000 },
+            i001: { grossTotalCents: 5000, netTotalCents: 6000 },
+          },
+          netTotalCents: 9000,
+        };
+
+        const result = await queueExpenseCategoryAllocations(collector, db, userId, expenseId, input, calcResult, deps);
+
+        expect(result.itemIdToCatIdMap).toEqual(
+          new Map([
+            ['i000', categoryId0],
+            ['i001', categoryId1],
+          ]),
+        );
+      });
+    });
+  });
+
   describe(queueExpenseAttachments, () => {
     let collector: BatchCollector;
     let collectorPushSpy: Mock<(...arg: Parameters<BatchCollector['push']>) => void>;
@@ -502,7 +884,8 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [expectedFileId], deps);
+      const input = { fileUploadRequestId: undefined, attachmentFileIds: [expectedFileId] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
 
       expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
         { expenseId, fileId: expectedFileId },
@@ -515,7 +898,8 @@ describe('helpers', async () => {
     it('should not call getFileIdsByRequestId if fileUploadRequestId is falsy', async () => {
       const mockedGetFileIdsByRequestId = vi.mocked(getFileIdsByRequestId);
       mockedGetFileIdsByRequestId.mockRejectedValue('oops');
-      await queueExpenseAttachments(collector, db, userId, expenseId, undefined, [], deps);
+      const input = { fileUploadRequestId: undefined, attachmentFileIds: [] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
       expect(mockedGetFileIdsByRequestId).not.toHaveBeenCalled();
     });
 
@@ -530,7 +914,8 @@ describe('helpers', async () => {
       deps.upsertAttachments.mockReturnValue(batchItem0);
       deps.deleteAttachmentIfNotInList.mockReturnValue(batchItem1);
 
-      await queueExpenseAttachments(collector, db, userId, expenseId, expectRequestId, [], deps);
+      const input = { fileUploadRequestId: expectRequestId, attachmentFileIds: [] };
+      await queueExpenseAttachments(collector, db, userId, expenseId, input, deps);
 
       expect(mockedGetFileIdsByRequestId).toHaveBeenCalledWith(expectMockDatabase(), userId, expectRequestId);
       expect(deps.upsertAttachments).toHaveBeenCalledWith(expectMockDatabase(), [
@@ -547,6 +932,16 @@ describe(processSaveExpense, async () => {
   let deps = createDynamicMock<SaveExpenseHelpers & SaveExpenseRepo>('deps');
   const expectDeps = () => expectDynamicMock('deps');
   const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
+  const netTotalCents = 60_00;
+  const expectedCalculateExpenseResult: ExpenseCalculationResult = {
+    netTotalCents,
+    grossTotalCents: netTotalCents,
+    adjustmentResults: [],
+    itemResults: {
+      i001: { netTotalCents, grossTotalCents: netTotalCents },
+    },
+  };
+  const mockedCalculateExpense = vi.mocked(calculateExpense).mockReturnValue(expectedCalculateExpenseResult);
   const mockedIndexing = vi.mocked(processSaveExpenseSearchIndexing);
   const inputGenerator = zocker(saveExpenseInputSchema)
     .supply(saveExpenseInputSchema.shape.expenseId, () => nanoid())
@@ -567,6 +962,8 @@ describe(processSaveExpense, async () => {
 
   it('should call helper verify and fetch extg record, when input.expenseId is not create', async () => {
     const input = inputGenerator.generate();
+    const expectedItemIdToCatIdMap = new Map();
+    deps.queueExpenseCategoryAllocations.mockResolvedValueOnce({ itemIdToCatIdMap: expectedItemIdToCatIdMap });
     await processSaveExpense(mockContext, input, deps);
 
     expect(deps.verifyExpenseVersion).toHaveBeenCalledExactlyOnceWith(
@@ -585,12 +982,21 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(mockedCalculateExpense).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({
+        specifiedAmountCents: input.specifiedAmountCents,
+        items: input.items,
+        adjustments: input.adjustments,
+      }),
+    );
+
     expect(deps.queueMainExpenseRecord).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
       userId,
       input.expenseId,
       input,
+      expectedCalculateExpenseResult,
       expectDeps(),
     );
 
@@ -600,6 +1006,7 @@ describe(processSaveExpense, async () => {
       input.expenseId,
       input.items,
       expect.any(Set),
+      expectedItemIdToCatIdMap,
       expectDeps(),
     );
 
@@ -612,13 +1019,35 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(deps.queueExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      input.expenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
     expect(deps.queueExpenseAttachments).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
       userId,
       input.expenseId,
-      input.fileUploadRequestId,
-      input.attachmentFileIds,
+      expect.objectContaining({
+        fileUploadRequestId: input.fileUploadRequestId,
+        attachmentFileIds: input.attachmentFileIds,
+      }),
       expectDeps(),
     );
 
@@ -632,6 +1061,11 @@ describe(processSaveExpense, async () => {
   it('should call generateId when input.expenseId is create and use the id when calling helper methods', async () => {
     const expectedExpenseId = nanoid();
     deps.generateId.mockReturnValue(expectedExpenseId);
+    const expectedItemIdToCatIdMap = new Map([
+      ['i000', 'cat0'],
+      ['i001', 'cat1'],
+    ]);
+    deps.queueExpenseCategoryAllocations.mockResolvedValueOnce({ itemIdToCatIdMap: expectedItemIdToCatIdMap });
     const input = inputGenerator.generate();
     input.expenseId = null;
     await processSaveExpense(mockContext, input, deps);
@@ -643,6 +1077,7 @@ describe(processSaveExpense, async () => {
       userId,
       expectedExpenseId,
       input,
+      expectedCalculateExpenseResult,
       expectDeps(),
     );
 
@@ -652,6 +1087,7 @@ describe(processSaveExpense, async () => {
       expectedExpenseId,
       input.items,
       expect.any(Set),
+      expectedItemIdToCatIdMap,
       expectDeps(),
     );
 
@@ -664,6 +1100,38 @@ describe(processSaveExpense, async () => {
       expectDeps(),
     );
 
+    expect(deps.queueExpenseAccountAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseCategoryAllocations).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      input,
+      expectedCalculateExpenseResult,
+      expectDeps(),
+    );
+
+    expect(deps.queueExpenseAttachments).toHaveBeenCalledExactlyOnceWith(
+      expect.any(BatchCollector),
+      expectMockDatabase(),
+      userId,
+      expectedExpenseId,
+      expect.objectContaining({
+        fileUploadRequestId: input.fileUploadRequestId,
+        attachmentFileIds: input.attachmentFileIds,
+      }),
+      expectDeps(),
+    );
+
     expect(mockedIndexing).toHaveBeenCalledExactlyOnceWith(
       expect.any(BatchCollector),
       expectMockDatabase(),
@@ -673,16 +1141,25 @@ describe(processSaveExpense, async () => {
 
   it('should exectue batch with collected statements', async () => {
     const input = inputGenerator.generate();
+    const literals = ['Test 1', 'Test 2', 'Test 3', 'Test 4', 'Test 5', 'Test 6'];
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueMainExpenseRecord.mockImplementation(collector => collector.push('Test 1', 'Test 1'));
+    deps.queueMainExpenseRecord.mockImplementation(collector => collector.push(literals[0], literals[0]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseItems.mockImplementation(collector => collector.push('Test 2', 'Test 2'));
+    deps.queueExpenseAdjustments.mockImplementation(collector => collector.push(literals[2], literals[2]));
     // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
-    deps.queueExpenseAdjustments.mockImplementation(collector => collector.push('Test 3', 'Test 3'));
-    mockContext.addDbResult(['Result 1', 'Result 2', 'Result 3']);
+    deps.queueExpenseAccountAllocations.mockImplementation(collector => collector.push(literals[3], literals[3]));
+    deps.queueExpenseCategoryAllocations.mockImplementation(
+      // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+      collector => (collector.push(literals[4], literals[4]), { itemIdToCatIdMap: new Map() }),
+    );
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseAttachments.mockImplementation(collector => collector.push(literals[5], literals[5]));
+    // @ts-expect-error, collector will put these into an array, dont need to be sqlite query
+    deps.queueExpenseItems.mockImplementation(collector => collector.push(literals[1], literals[1]));
+
+    mockContext.addDbResult(literals);
 
     await processSaveExpense(mockContext, input, deps);
-
-    expect(mockContext.dbSpies.batch).toHaveBeenCalledExactlyOnceWith(['Test 1', 'Test 2', 'Test 3']);
+    expect(mockContext.dbSpies.batch).toHaveBeenCalledExactlyOnceWith(expect.arrayContaining(literals));
   });
 });

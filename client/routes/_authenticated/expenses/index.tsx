@@ -135,7 +135,7 @@ function RoutePendingComponent() {
   );
 }
 
-const unspecifiedOption = { label: '(Unspecified)', value: '--unspecified--' };
+const unspecifiedOption = { label: '(Unspecified)', value: '' };
 
 function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expenses'], options: ExpenseListOptions) {
   const { showDeleted, accountIds, categoryIds } = options;
@@ -164,10 +164,10 @@ function FilterAndGroupExpenses(expenses: RouterOutputs['expense']['list']['expe
 
     let isShown = true;
     if (accountIdSet.size > 0) {
-      isShown &&= accountIdSet.has(expense.account?.id ?? unspecifiedOption.value);
+      isShown &&= expense.accounts.some(({ id }) => accountIdSet.has(id));
     }
     if (categoryIdSet.size > 0) {
-      isShown &&= categoryIdSet.has(expense.category?.id ?? unspecifiedOption.value);
+      isShown &&= expense.categories.some(({ id }) => categoryIdSet.has(id));
     }
 
     const key = dateFormat.format(new Date(expense.billedAt));
@@ -310,13 +310,13 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
                 <ChevronRight className='col-start-2 row-start-1 self-start justify-self-end' size={40} />
 
                 <p className='text-base-content/80 col-start-1 text-sm'>
-                  Account: {expense.account?.name ?? 'Unspecified'}
+                  Accounts: {expense.accounts.map(({ name }) => name).join(', ')}
                 </p>
                 <p className='col-start-2 row-span-2 self-end pr-2 pb-2 text-right text-xl'>
                   ${expense.amount.toFixed(2)}
                 </p>
                 <p className='text-base-content/80 col-start-1 text-sm'>
-                  Category: {expense.category?.name ?? 'Unspecified'}
+                  Categories: {expense.categories.map(({ name }) => name).join(', ')}
                 </p>
               </Link>
             ))}

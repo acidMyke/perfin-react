@@ -2,8 +2,10 @@ import { protectedProcedure } from '../lib/trpc';
 import {
   accountsTable,
   categoriesTable,
+  expenseAccountAllocationsTable,
   expenseAdjustmentsTable,
   expenseAttachmentsTable,
+  expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
@@ -11,7 +13,8 @@ import {
   textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
-import { and, asc, avg, count, desc, eq, gte, inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, avg, countDistinct, desc, eq, gte } from 'drizzle-orm';
+import { inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
@@ -21,6 +24,11 @@ import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../l
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
 import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
 import { filesColumns } from '#server/lib/fileUpload';
+
+export type Option = {
+  label: string;
+  value: string | null;
+};
 
 const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db, user } }) => {
   const [accountOptions, categoryOptions] = await db.batch([
@@ -37,8 +45,8 @@ const loadExpenseOptionsProcedure = protectedProcedure.query(async ({ ctx: { db,
   ]);
 
   return {
-    accountOptions,
-    categoryOptions,
+    accountOptions: accountOptions as Option[],
+    categoryOptions: categoryOptions as Option[],
   };
 });
 
@@ -48,13 +56,11 @@ const loadExpenseDetailProcedure = protectedProcedure
     const { user, db } = ctx;
     const userId = user.id;
 
-    const [[expense], items, adjustments, attachmentDetails] = await db.batch([
+    const [[expense], items, adjustments, attachmentDetails, accountAllocs, categoryAllocs] = await db.batch([
       db
         .select({
           amountCents: expensesTable.amountCents,
           billedAt: expensesTable.billedAt,
-          accountId: expensesTable.accountId,
-          categoryId: expensesTable.categoryId,
           type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
@@ -74,6 +80,7 @@ const loadExpenseDetailProcedure = protectedProcedure
           name: expenseItemsTable.name,
           quantity: expenseItemsTable.quantity,
           priceCents: expenseItemsTable.priceCents,
+          categoryId: expenseItemsTable.categoryId,
           isDeleted: expenseItemsTable.isDeleted,
         })
         .from(expenseItemsTable)
@@ -96,13 +103,29 @@ const loadExpenseDetailProcedure = protectedProcedure
         .from(expenseAttachmentsTable)
         .innerJoin(uploadedFilesTable, eq(expenseAttachmentsTable.fileId, uploadedFilesTable.id))
         .where(and(eq(expenseAttachmentsTable.expenseId, input.expenseId), eq(uploadedFilesTable.userId, userId))),
+      db
+        .select({
+          accountId: expenseAccountAllocationsTable.accountId,
+          amountCents: expenseAccountAllocationsTable.amountCents,
+        })
+        .from(expenseAccountAllocationsTable)
+        .where(and(eq(expenseAccountAllocationsTable.expenseId, input.expenseId)))
+        .orderBy(expenseAccountAllocationsTable.sequence),
+      db
+        .select({
+          categoryId: expenseCategoryAllocationsTable.categoryId,
+          amountCents: expenseCategoryAllocationsTable.amountCents,
+        })
+        .from(expenseCategoryAllocationsTable)
+        .where(and(eq(expenseCategoryAllocationsTable.expenseId, input.expenseId)))
+        .orderBy(expenseCategoryAllocationsTable.sequence),
     ]);
 
     if (!expense) {
       throw new TRPCError({ code: 'NOT_FOUND' });
     }
 
-    return { ...expense, items, adjustments, attachmentDetails };
+    return { ...expense, items, adjustments, attachmentDetails, accountAllocs, categoryAllocs };
   });
 
 const saveExpenseProcedure = protectedProcedure
@@ -124,7 +147,7 @@ const listExpenseProcedure = protectedProcedure
       lt(expensesTable.billedAt, filterEnd),
     ];
 
-    const itemCount = count(expenseItemsTable.id);
+    const itemCount = countDistinct(expenseItemsTable.id);
     const itemOne = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('0')), expenseItemsTable.name));
     const itemTwo = max(caseWhen<string>(eq(expenseItemsTable.sequence, sql.raw('1')), expenseItemsTable.name));
 
@@ -138,26 +161,34 @@ const listExpenseProcedure = protectedProcedure
         shopDetail: concat(expensesTable.shopName, coalesce(concat(sql.raw("' @ '"), expensesTable.shopMall))),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
-        account: {
-          id: accountsTable.id,
-          name: accountsTable.name,
-          isDeleted: accountsTable.isDeleted,
-        },
-        category: {
-          id: categoriesTable.id,
-          name: categoriesTable.name,
-          isDeleted: categoriesTable.isDeleted,
-        },
+        categories: jsonGroupObjectArray(
+          {
+            id: expenseCategoryAllocationsTable.categoryId,
+            name: categoriesTable.name,
+            isDeleted: categoriesTable.isDeleted,
+          },
+          { distinct: true },
+        ),
+        accounts: jsonGroupObjectArray(
+          {
+            id: expenseAccountAllocationsTable.accountId,
+            name: accountsTable.name,
+            isDeleted: accountsTable.isDeleted,
+          },
+          { distinct: true },
+        ),
         createdAt: expensesTable.createdAt,
         isDeleted: expensesTable.isDeleted,
       })
       .from(expensesTable)
-      .leftJoin(accountsTable, eq(expensesTable.accountId, accountsTable.id))
-      .leftJoin(categoriesTable, eq(expensesTable.categoryId, categoriesTable.id))
       .leftJoin(
         expenseItemsTable,
         and(eq(expensesTable.id, expenseItemsTable.expenseId), eq(expenseItemsTable.isDeleted, false)),
       )
+      .leftJoin(expenseAccountAllocationsTable, and(eq(expensesTable.id, expenseAccountAllocationsTable.expenseId)))
+      .leftJoin(expenseCategoryAllocationsTable, and(eq(expensesTable.id, expenseCategoryAllocationsTable.expenseId)))
+      .leftJoin(accountsTable, eq(expenseAccountAllocationsTable.accountId, accountsTable.id))
+      .leftJoin(categoriesTable, eq(expenseCategoryAllocationsTable.categoryId, categoriesTable.id))
       .where(and(...filterList))
       .groupBy(expensesTable.id)
       .orderBy(desc(expensesTable.billedAt));
@@ -226,43 +257,67 @@ const getShopDetailProcedure = protectedProcedure
     const shopNameHash = await getTextHash(userId, input.shopName);
     const expensesCte = db.$with('expense_id_cte').as(
       db
-        .select({
-          expenseId: expenseTextsTable.expenseId.as('expense_id'),
-          accountId: expensesTable.accountId.as('account_id'),
-          categoryId: expensesTable.categoryId.as('category_id'),
-        })
+        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
         .from(expenseTextsTable)
         .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
         .where(eq(expenseTextsTable.textHash, shopNameHash))
-        .groupBy(expenseTextsTable.expenseId)
         .orderBy(desc(expensesTable.billedAt))
         .limit(1),
     );
 
+    const adjustmentsCte = db.$with('adjustments_cte').as(
+      db
+        .select({
+          isGstExcluded: max(
+            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
+          ).as('is_gst'),
+          serviceChargeBps: max(
+            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+          ).as('service_charge'),
+        })
+        .from(expensesCte)
+        .leftJoin(
+          expenseAdjustmentsTable,
+          and(
+            eq(expenseAdjustmentsTable.isInferable, true),
+            eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
+          ),
+        )
+        .groupBy(expenseAdjustmentsTable.expenseId),
+    );
+
+    const accountsCte = db.$with('accounts_cte').as(
+      db
+        .select({ accountIds: jsonGroupArray(expenseAccountAllocationsTable.accountId).as('accountIds') })
+        .from(expensesCte)
+        .leftJoin(expenseAccountAllocationsTable, eq(expensesCte.expenseId, expenseAccountAllocationsTable.expenseId))
+        .groupBy(expenseAccountAllocationsTable.expenseId),
+    );
+
+    const categoriesCte = db.$with('categories_cte').as(
+      db
+        .select({ categoryIds: jsonGroupArray(expenseCategoryAllocationsTable.categoryId).as('categoryIds') })
+        .from(expensesCte)
+        .leftJoin(expenseCategoryAllocationsTable, eq(expensesCte.expenseId, expenseCategoryAllocationsTable.expenseId))
+        .groupBy(expenseCategoryAllocationsTable.expenseId),
+    );
+
     const data = await db
-      .with(expensesCte)
+      .with(expensesCte, adjustmentsCte, accountsCte, categoriesCte)
       .select({
-        accountId: expensesCte.accountId,
-        categoryId: expensesCte.categoryId,
-        isGstExcluded: max(caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`)),
-        serviceChargeBps: max(
-          caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
-        ),
+        accountIds: accountsCte.accountIds,
+        categoryIds: categoriesCte.categoryIds,
+        isGstExcluded: adjustmentsCte.isGstExcluded,
+        serviceChargeBps: adjustmentsCte.serviceChargeBps,
       })
-      .from(expensesCte)
-      .leftJoin(
-        expenseAdjustmentsTable,
-        and(
-          eq(expenseAdjustmentsTable.isInferable, true),
-          eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
-        ),
-      )
-      .groupBy(expenseAdjustmentsTable.expenseId);
+      .from(adjustmentsCte)
+      .crossJoin(accountsCte)
+      .crossJoin(categoriesCte);
 
     return data;
   });
 
-const inferItemPricesProcedure = protectedProcedure
+const inferItemDetailsProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
   .mutation(async ({ input, ctx }) => {
     const { db, userId } = ctx;
@@ -280,13 +335,12 @@ const inferItemPricesProcedure = protectedProcedure
       where.push(isNull(expenseTextsTable.ctxTextHash));
     }
     return db
-      .select({ priceCents: expenseItemsTable.priceCents, billedAt: max(expensesTable.billedAt), count: count() })
+      .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
       .from(expenseTextsTable)
       .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
       .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
       .where(and(...where))
-      .groupBy(expenseItemsTable.priceCents)
-      .orderBy(desc(max(expensesTable.billedAt)), desc(count()))
+      .orderBy(desc(expensesTable.billedAt))
       .limit(1);
   });
 
@@ -427,7 +481,7 @@ export const expenseProcedures = {
   suggestShopByLocation: suggestShopByLocationProcedure,
   searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
-  inferItemPrice: inferItemPricesProcedure,
+  inferItemDetails: inferItemDetailsProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,

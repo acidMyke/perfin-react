@@ -1,8 +1,8 @@
-import { withFieldGroup } from '#components/Form';
-import { defaultExpenseItem, useExpenseForm, type TGetExpenseFormField } from '.';
+import { withFieldGroup, type Option } from '#components/Form';
+import { defaultExpenseItem, useExpenseForm, usePushIntoOptions, type TGetExpenseFormField } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
-import { useStore } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 import { useMutation } from '@tanstack/react-query';
 import { trpc } from '#client/trpc';
@@ -30,14 +30,16 @@ export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
   props: {
     itemIndex: 0,
+    categoryOptions: [] as Option[],
     onRemoveClick: () => {},
     getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
     createAdjustment: (_: string) => {},
   },
-  render({ group, itemIndex, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
-    const itemId = useStore(group.store, state => state.values.id);
-    const inferItemPriceMutation = useMutation(trpc.expense.inferItemPrice.mutationOptions());
+  render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
+    const { pushIntoOptions } = usePushIntoOptions();
+    const itemId = useSelector(group.store, state => state.values.id);
+    const inferItemPriceMutation = useMutation(trpc.expense.inferItemDetails.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
@@ -47,7 +49,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
           scope='itemName'
           getContext={() => getFormField('shopName')}
           label={`Item ${itemIndex + 1} name`}
-          containerCn='col-span-7 w-full'
+          containerCn='col-span-4 w-full'
           triggerChangeOnFocus
           hideError
           onSuggestionSelected={suggestion => {
@@ -58,11 +60,31 @@ export const ItemDetailFieldGroup = withFieldGroup({
               inferItemPriceMutation.mutateAsync({ itemName: suggestion, shopName }).then(([itemDetail]) => {
                 if (itemDetail) {
                   group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+                  if (itemDetail.categoryId) {
+                    const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
+                    if (category) {
+                      group.setFieldValue('category', category, { dontUpdateMeta: true });
+                    }
+                  }
                 }
               });
             }
           }}
         />
+
+        <group.AppField
+          name={`category`}
+          listeners={{
+            onChange: fieldApi => {
+              if (fieldApi.value && fieldApi.value.value == null) {
+                pushIntoOptions({ kind: 'category', option: fieldApi.value });
+              }
+              onPricingChange();
+            },
+          }}
+        >
+          {({ ComboBox }) => <ComboBox label='Category' options={categoryOptions} containerCn='col-span-3' />}
+        </group.AppField>
 
         <button className='btn-ghost btn btn-sm' onClick={onRemoveClick}>
           <X />
