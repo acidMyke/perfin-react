@@ -235,33 +235,9 @@ export const expenseItemsTable = sqliteTable(
     priceCents: centsColumn(),
     expenseId: idColumn(),
     categoryId: nullableIdColumn(),
-    /** @deprecated refund is deprecated */
-    expenseRefundId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
   },
   t => [index('idx_expense_items_expense_id').on(t.expenseId)],
-);
-
-/** @deprecated use expenseAdjustmentsTable instead*/
-export const expenseRefundsTable = sqliteTable(
-  'expense_refunds',
-  {
-    ...baseColumns(),
-    expenseId: idColumn(),
-    expenseItemId: nullableIdColumn(),
-    expectedAmountCents: centsColumn(),
-    actualAmountCents: integer(),
-    confirmedAt: integer({ mode: 'timestamp' }),
-    source: citext().notNull(),
-    note: text(),
-    sequence: integer().notNull(),
-    isDeleted: boolean().notNull().default(false),
-  },
-  t => [
-    index('idx_expense_refund_expense_id').on(t.expenseId),
-    index('idx_expense_refund_expense_item_id').on(t.expenseItemId),
-    index('idx_expense_refund_source').on(t.source),
-  ],
 );
 
 export const expenseAdjustmentsTable = sqliteTable(
@@ -326,24 +302,6 @@ export const expenseCategoryAllocationsTable = sqliteTable(
   ],
 );
 
-/** @deprecated replaced by v2_search */
-export const searchTable = sqliteTable(
-  'search',
-  {
-    chunk: text().notNull(),
-    text: citext().notNull(),
-    type: text().notNull(),
-    userId: idColumn(),
-    usageCount: integer().default(1),
-    context: citext().notNull().default(''),
-  },
-  t => [
-    primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
-    index('idx_search_chunk').on(t.userId, t.type, t.chunk),
-    index('idx_search_context').on(t.userId, t.type, t.context),
-  ],
-);
-
 export const searchIndexVersionTable = sqliteTable(
   'search_index_versions',
   {
@@ -390,19 +348,6 @@ export const textChunksTable = sqliteTable(
     primaryKey({ columns: [t.textHash, t.chunk] }),
     // covering index to quickly lookup textHash with provided userId & chunk
     index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
-  ],
-);
-
-/** @deprecated use expenseTextsTable.ctxTextHash instead */
-export const textsContextsTable = sqliteTable(
-  'texts_contexts',
-  {
-    textHash: textHashColumn(),
-    ctxTextHash: textHashColumn(),
-  },
-  t => [
-    primaryKey({ columns: [t.textHash, t.ctxTextHash] }),
-    index('idx_texts_contexts_ctxTextHash_textHash').on(t.ctxTextHash, t.textHash),
   ],
 );
 
