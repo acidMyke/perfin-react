@@ -307,29 +307,30 @@ export const searchIndexVersionTable = sqliteTable(
   {
     id: pkIdColumn(),
     userId: idColumn(),
-    version: integer().notNull(),
+    currentGen: integer().notNull(),
     createdAt: createdAtColumn(),
     completedAt: timestampColumn(),
     recordsProcessed: integer().notNull().default(0),
     totalDeletedCount: integer().notNull().default(0),
     deletedExpenseTextsCount: integer().notNull().default(0),
   },
-  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.version)],
+  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.currentGen)],
 );
 
 export const textsTable = sqliteTable(
   'texts',
   {
-    textHash: integer().primaryKey({ onConflict: 'ignore' }),
+    textHash: blob({ mode: 'buffer' }).primaryKey(),
     userId: idColumn(),
+    kind: text().notNull(),
     text: text().notNull(),
-    version: integer().notNull().default(0),
+    indexGen: integer().notNull().default(0),
   },
-  t => [unique('uq_texts_userId').on(t.userId, t.text)],
+  t => [unique('uq_texts_kind_userId').on(t.userId, t.kind, t.text)],
 );
 
 const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
-  integer()
+  blob({ mode: 'buffer' })
     .notNull()
     .references(() => textsTable.textHash, { onDelete, onUpdate });
 
@@ -337,18 +338,40 @@ export const textChunksTable = sqliteTable(
   'texts_chunks',
   {
     userId: idColumn(),
+    kind: text().notNull(),
     /** Use getTrigrams() to create chunks for texts*/
     chunk: text().notNull(),
     /** Use getTextHash() to calculate this value */
     textHash: textHashColumn(),
-    version: integer().notNull().default(0),
+    indexGen: integer().notNull().default(0),
   },
   t => [
     // textHash includes userId in hashing
     primaryKey({ columns: [t.textHash, t.chunk] }),
-    // covering index to quickly lookup textHash with provided userId & chunk
-    index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
+    // covering index to quickly lookup textHash with provided userId, kind & chunk
+    index('idx_user_chunks').on(t.userId, t.kind, t.chunk, t.textHash),
   ],
+);
+
+export const geoCellsTable = sqliteTable('geo_cells', {
+  id: integer().primaryKey(),
+  minLat: real().notNull(),
+  maxLat: real().notNull(),
+  minLng: real().notNull(),
+  maxLng: real().notNull(),
+  indexGen: integer().notNull().default(0),
+});
+
+export const geoTextsTable = sqliteTable(
+  'geo_texts',
+  {
+    textHash: textHashColumn(),
+    geoCellId: integer()
+      .notNull()
+      .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    indexGen: integer().notNull().default(0),
+  },
+  t => [primaryKey({ columns: [t.geoCellId, t.textHash] })],
 );
 
 export const expenseTextsTable = sqliteTable(
@@ -359,8 +382,14 @@ export const expenseTextsTable = sqliteTable(
     textHash: textHashColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
-    ctxTextHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    version: integer().notNull().default(0),
+    // Duplicated from expense main table for quick filtering
+    expenseBilledAt: dateColumn(),
+
+    ctxTextHash: blob({ mode: 'buffer' }).references(() => textsTable.textHash, {
+      onDelete: 'cascade',
+      onUpdate: 'cascade',
+    }),
+    indexGen: integer().notNull().default(0),
   },
   t => [
     primaryKey({ columns: [t.textHash, t.sourceId] }),
