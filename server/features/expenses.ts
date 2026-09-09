@@ -161,19 +161,9 @@ const listExpenseProcedure = protectedProcedure
         shopDetail: concat(expensesTable.shopName, coalesce(concat(sql.raw("' @ '"), expensesTable.shopMall))),
         amount: sql<number>`ROUND(${expensesTable.amountCents} / CAST(100 AS REAL), 2)`,
         billedAt: expensesTable.billedAt,
-        account: {
-          id: accountsTable.id,
-          name: accountsTable.name,
-          isDeleted: accountsTable.isDeleted,
-        },
-        category: {
-          id: categoriesTable.id,
-          name: categoriesTable.name,
-          isDeleted: categoriesTable.isDeleted,
-        },
         categories: jsonGroupObjectArray(
           {
-            id: categoriesTable.id,
+            id: expenseCategoryAllocationsTable.categoryId,
             name: categoriesTable.name,
             isDeleted: categoriesTable.isDeleted,
           },
@@ -181,7 +171,7 @@ const listExpenseProcedure = protectedProcedure
         ),
         accounts: jsonGroupObjectArray(
           {
-            id: accountsTable.id,
+            id: expenseAccountAllocationsTable.accountId,
             name: accountsTable.name,
             isDeleted: accountsTable.isDeleted,
           },
