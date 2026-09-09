@@ -13,7 +13,7 @@ import {
   textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
-import { and, asc, avg, count, countDistinct, desc, eq, gte } from 'drizzle-orm';
+import { and, asc, avg, countDistinct, desc, eq, gte } from 'drizzle-orm';
 import { inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
