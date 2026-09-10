@@ -1,7 +1,7 @@
-import { generateSearchChunks, generateTextIds, getGeoCellId } from './indexing';
+import { generateSearchChunks, createTextIdLookup, getGeoCellId } from './indexing';
 
 describe(getGeoCellId, () => {});
 
-describe(generateTextIds, () => {});
+describe(createTextIdLookup, () => {});
 
 describe(generateSearchChunks, () => {});
