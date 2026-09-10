@@ -9,7 +9,7 @@ import {
   expenseItemsTable,
   expensesTable,
   expenseTextsTable,
-  searchIndexVersionTable,
+  searchIndexGenerationsTable,
   textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
@@ -260,7 +260,7 @@ const getShopDetailProcedure = protectedProcedure
         .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
         .from(expenseTextsTable)
         .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
-        .where(eq(expenseTextsTable.textHash, shopNameHash))
+        .where(eq(expenseTextsTable.textId, shopNameHash))
         .orderBy(desc(expensesTable.billedAt))
         .limit(1),
     );
@@ -328,11 +328,11 @@ const inferItemDetailsProcedure = protectedProcedure
     }
 
     const hashes = await getTextsHashes(userId, texts);
-    const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
+    const where: SQL[] = [eq(expenseTextsTable.textId, hashes.get(input.itemName)!)];
     if (input.shopName) {
-      where.push(eq(expenseTextsTable.ctxTextHash, hashes.get(input.shopName)!));
+      where.push(eq(expenseTextsTable.ctxTextId, hashes.get(input.shopName)!));
     } else {
-      where.push(isNull(expenseTextsTable.ctxTextHash));
+      where.push(isNull(expenseTextsTable.ctxTextId));
     }
     return db
       .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
@@ -384,11 +384,11 @@ const searchExpenseProcedure = protectedProcedure
     const chunkCte = db.$with('chunk_cte').as(
       db
         .select({
-          textHash: textChunksTable.textHash.as('text_hash'),
+          textHash: textChunksTable.textId.as('text_hash'),
           chunkCount: sql<number>`sum(length(${textChunksTable.chunk}) / 3.0)`.as('chunk_count'),
         })
         .from(textChunksTable)
-        .groupBy(textChunksTable.textHash)
+        .groupBy(textChunksTable.textId)
         .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
         .having(sql`chunk_count > 1`),
     );
@@ -405,7 +405,7 @@ const searchExpenseProcedure = protectedProcedure
           }).as('source_matches'),
         })
         .from(chunkCte)
-        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textHash))
+        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textId))
         .leftJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
         .leftJoin(expenseAdjustmentsTable, eq(expenseTextsTable.sourceId, expenseAdjustmentsTable.id))
         .groupBy(expenseTextsTable.expenseId),
@@ -434,28 +434,28 @@ const listReindexHistoryProcedure = protectedProcedure.query(async ({ ctx }) => 
 
   return db
     .select({
-      version: searchIndexVersionTable.version,
-      createdAt: searchIndexVersionTable.createdAt,
-      completedAt: searchIndexVersionTable.completedAt,
-      recordsProcessed: searchIndexVersionTable.recordsProcessed,
-      totalDeletedCount: searchIndexVersionTable.totalDeletedCount,
-      deletedExpenseTextsCount: searchIndexVersionTable.deletedExpenseTextsCount,
+      version: searchIndexGenerationsTable.currentGen,
+      createdAt: searchIndexGenerationsTable.createdAt,
+      completedAt: searchIndexGenerationsTable.completedAt,
+      recordsProcessed: searchIndexGenerationsTable.recordsProcessed,
+      totalDeletedCount: searchIndexGenerationsTable.totalDeletedCount,
+      deletedExpenseTextsCount: searchIndexGenerationsTable.deletedExpenseTextsCount,
     })
-    .from(searchIndexVersionTable)
-    .where(eq(searchIndexVersionTable.userId, userId))
-    .orderBy(desc(searchIndexVersionTable.version));
+    .from(searchIndexGenerationsTable)
+    .where(eq(searchIndexGenerationsTable.userId, userId))
+    .orderBy(desc(searchIndexGenerationsTable.currentGen));
 });
 
 const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, userId } = ctx;
 
-  const [{ version = 0, createdAt = new Date(0) } = {}] = await db
+  const [{ currentGen = 0, createdAt = new Date(0) } = {}] = await db
     .select({
-      version: max(searchIndexVersionTable.version),
-      createdAt: max(searchIndexVersionTable.createdAt).mapWith(searchIndexVersionTable.createdAt),
+      currentGen: max(searchIndexGenerationsTable.currentGen),
+      createdAt: max(searchIndexGenerationsTable.createdAt).mapWith(searchIndexGenerationsTable.createdAt),
     })
-    .from(searchIndexVersionTable)
-    .where(eq(searchIndexVersionTable.userId, userId));
+    .from(searchIndexGenerationsTable)
+    .where(eq(searchIndexGenerationsTable.userId, userId));
 
   if (differenceInDays(new Date(), createdAt) < 7) {
     throw new TRPCError({
@@ -464,12 +464,11 @@ const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
     });
   }
 
-  const newVersion = version + 1;
-  const payload = { userId, version: newVersion };
-  await db.insert(searchIndexVersionTable).values(payload);
-  await env.EXPENSE_REINDEXER.create({ params: payload });
+  const nextGeneration = currentGen + 1;
+  await db.insert(searchIndexGenerationsTable).values({ userId, currentGen: nextGeneration });
+  await env.EXPENSE_REINDEXER.create({ params: { userId, version: nextGeneration } });
 
-  return { newVersion };
+  return { nextGeneration };
 });
 
 export const expenseProcedures = {

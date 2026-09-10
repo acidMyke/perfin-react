@@ -286,7 +286,7 @@ async function processSearchables(searchables: Searchable[], db: AppDatabase) {
   const existenceResult = await db.batch(
     // @ts-ignore
     splitArray(Array.from(searchableHashes.getAllHash()), 70).map(hashes =>
-      db.select({ hash: textsTable.textHash }).from(textsTable).where(inArray(textsTable.textHash, hashes)),
+      db.select({ hash: textsTable.id }).from(textsTable).where(inArray(textsTable.id, hashes)),
     ),
   );
 

@@ -7,7 +7,7 @@ import {
   textsTable,
   textChunksTable,
   expenseTextsTable,
-  searchIndexVersionTable,
+  searchIndexGenerationsTable,
   expenseAdjustmentsTable,
   expenseItemsTable,
   expensesTable,
@@ -135,8 +135,8 @@ function queueSaveSearchables(
         .insert(textsTable)
         .values(values)
         .onConflictDoUpdate({
-          target: textsTable.textHash,
-          set: { version: excluded(textsTable.version) },
+          target: textsTable.id,
+          set: { indexGen: excluded(textsTable.indexGen) },
         }),
     ),
     ...splitArray(textChunkUpserts, 24).map(values =>
@@ -144,8 +144,8 @@ function queueSaveSearchables(
         .insert(textChunksTable)
         .values(values)
         .onConflictDoUpdate({
-          target: [textChunksTable.textHash, textChunksTable.chunk],
-          set: { version: excluded(textChunksTable.version) },
+          target: [textChunksTable.textId, textChunksTable.chunk],
+          set: { indexGen: excluded(textChunksTable.indexGen) },
         }),
     ),
     ...splitArray(expenseTextsUpserts, 19).map(values =>
@@ -153,8 +153,8 @@ function queueSaveSearchables(
         .insert(expenseTextsTable)
         .values(values)
         .onConflictDoUpdate({
-          target: [expenseTextsTable.textHash, expenseTextsTable.sourceId],
-          set: { version: excluded(expenseTextsTable.version), ctxTextHash: excluded(expenseTextsTable.ctxTextHash) },
+          target: [expenseTextsTable.textId, expenseTextsTable.sourceId],
+          set: { indexGen: excluded(expenseTextsTable.indexGen), ctxTextHash: excluded(expenseTextsTable.ctxTextId) },
         }),
     ),
   );
@@ -162,10 +162,10 @@ function queueSaveSearchables(
 
 async function getLatestUserIndexVersion(db: AppDatabase, userId: string) {
   const [{ version = 0 } = {}] = await db
-    .select({ version: searchIndexVersionTable.version })
-    .from(searchIndexVersionTable)
-    .where(eq(searchIndexVersionTable.userId, userId))
-    .orderBy(desc(searchIndexVersionTable.version))
+    .select({ version: searchIndexGenerationsTable.currentGen })
+    .from(searchIndexGenerationsTable)
+    .where(eq(searchIndexGenerationsTable.userId, userId))
+    .orderBy(desc(searchIndexGenerationsTable.currentGen))
     .limit(1);
 
   return version;
@@ -197,21 +197,23 @@ export async function processReindexing(
 }
 
 export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVersion: number) {
-  const textsTableCond = and(eq(textsTable.userId, userId), lt(textsTable.version, currentVersion));
-  const textsTableSq = db.select({ hash: textsTable.textHash }).from(textsTable).where(textsTableCond);
+  const textsTableCond = and(eq(textsTable.userId, userId), lt(textsTable.indexGen, currentVersion));
+  const textsTableSq = db.select({ hash: textsTable.id }).from(textsTable).where(textsTableCond);
 
   const [[{ deletedExpenseTextsCount }], { meta: deleteMeta }] = await db.batch([
     db
       .select({ deletedExpenseTextsCount: count() })
       .from(expenseTextsTable)
-      .where(inArray(expenseTextsTable.textHash, textsTableSq)),
+      .where(inArray(expenseTextsTable.textId, textsTableSq)),
     db.delete(textsTable).where(textsTableCond),
   ]);
 
   await db
-    .update(searchIndexVersionTable)
+    .update(searchIndexGenerationsTable)
     .set({ deletedExpenseTextsCount, totalDeletedCount: deleteMeta.changes, completedAt: new Date() })
-    .where(and(eq(searchIndexVersionTable.userId, userId), eq(searchIndexVersionTable.version, currentVersion)));
+    .where(
+      and(eq(searchIndexGenerationsTable.userId, userId), eq(searchIndexGenerationsTable.currentGen, currentVersion)),
+    );
 }
 
 export const getSuggestionInputSchema = z.object({
@@ -260,8 +262,8 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       .select({ text: min(textColumn) })
       .from(expenseTextsTable)
       .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
-      .where(and(eq(expenseTextsTable.ctxTextHash, contextHash!), isNotNull(textColumn)))
-      .groupBy(expenseTextsTable.textHash)
+      .where(and(eq(expenseTextsTable.ctxTextId, contextHash!), isNotNull(textColumn)))
+      .groupBy(expenseTextsTable.textId)
       .limit(10);
 
     return { suggestions: results.map(({ text }) => text!) };
@@ -273,12 +275,12 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
 
   const baseMatchedChunks = db
     .select({
-      textHash: textChunksTable.textHash.as('text_hash'),
+      textHash: textChunksTable.textId.as('text_hash'),
       matchCount: count(textChunksTable.chunk).as('match_count'),
     })
     .from(textChunksTable)
     .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
-    .groupBy(textChunksTable.textHash);
+    .groupBy(textChunksTable.textId);
 
   // filter out lower quality matches
   const matchedChunks = (
@@ -290,14 +292,14 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   const orderLogic: SQL[] = [];
   if (contextHash) {
     // sort by context exists
-    orderLogic.push(desc(max(caseWhen(eq(expenseTextsTable.ctxTextHash, contextHash), 1).else(0))));
+    orderLogic.push(desc(max(caseWhen(eq(expenseTextsTable.ctxTextId, contextHash), 1).else(0))));
   }
   orderLogic.push(desc(max(matchedChunks.matchCount)));
 
   const results = await db
     .select({ text: min(textColumn) })
     .from(matchedChunks)
-    .innerJoin(expenseTextsTable, eq(matchedChunks.textHash, expenseTextsTable.textHash))
+    .innerJoin(expenseTextsTable, eq(matchedChunks.textHash, expenseTextsTable.textId))
     .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
     .where(isNotNull(textColumn))
     .groupBy(matchedChunks.textHash)

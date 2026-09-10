@@ -302,8 +302,8 @@ export const expenseCategoryAllocationsTable = sqliteTable(
   ],
 );
 
-export const searchIndexVersionTable = sqliteTable(
-  'search_index_versions',
+export const searchIndexGenerationsTable = sqliteTable(
+  'search_index_generations',
   {
     id: pkIdColumn(),
     userId: idColumn(),
@@ -320,19 +320,19 @@ export const searchIndexVersionTable = sqliteTable(
 export const textsTable = sqliteTable(
   'texts',
   {
-    textHash: blob({ mode: 'buffer' }).primaryKey(),
+    id: blob({ mode: 'buffer' }).primaryKey(),
     userId: idColumn(),
     kind: text().notNull(),
     text: text().notNull(),
     indexGen: integer().notNull().default(0),
   },
-  t => [unique('uq_texts_kind_userId').on(t.userId, t.kind, t.text)],
+  t => [unique('uq_texts_user_id_kind_text').on(t.userId, t.kind, t.text)],
 );
 
-const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
+const textIdColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
   blob({ mode: 'buffer' })
     .notNull()
-    .references(() => textsTable.textHash, { onDelete, onUpdate });
+    .references(() => textsTable.id, { onDelete, onUpdate });
 
 export const textChunksTable = sqliteTable(
   'texts_chunks',
@@ -342,14 +342,14 @@ export const textChunksTable = sqliteTable(
     /** Use getTrigrams() to create chunks for texts*/
     chunk: text().notNull(),
     /** Use getTextHash() to calculate this value */
-    textHash: textHashColumn(),
+    textId: textIdColumn(),
     indexGen: integer().notNull().default(0),
   },
   t => [
     // textHash includes userId in hashing
-    primaryKey({ columns: [t.textHash, t.chunk] }),
+    primaryKey({ columns: [t.textId, t.chunk] }),
     // covering index to quickly lookup textHash with provided userId, kind & chunk
-    index('idx_user_chunks').on(t.userId, t.kind, t.chunk, t.textHash),
+    index('idx_user_chunks').on(t.userId, t.kind, t.chunk, t.textId),
   ],
 );
 
@@ -365,13 +365,13 @@ export const geoCellsTable = sqliteTable('geo_cells', {
 export const geoTextsTable = sqliteTable(
   'geo_texts',
   {
-    textHash: textHashColumn(),
+    textId: textIdColumn(),
     geoCellId: integer()
       .notNull()
       .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     indexGen: integer().notNull().default(0),
   },
-  t => [primaryKey({ columns: [t.geoCellId, t.textHash] })],
+  t => [primaryKey({ columns: [t.geoCellId, t.textId] })],
 );
 
 export const expenseTextsTable = sqliteTable(
@@ -379,21 +379,21 @@ export const expenseTextsTable = sqliteTable(
   {
     expenseId: idColumn(),
     /** Use getTextHash() to calculate this value */
-    textHash: textHashColumn(),
+    textId: textIdColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
     // Duplicated from expense main table for quick filtering
     expenseBilledAt: dateColumn(),
 
-    ctxTextHash: blob({ mode: 'buffer' }).references(() => textsTable.textHash, {
+    ctxTextId: blob({ mode: 'buffer' }).references(() => textsTable.id, {
       onDelete: 'cascade',
       onUpdate: 'cascade',
     }),
     indexGen: integer().notNull().default(0),
   },
   t => [
-    primaryKey({ columns: [t.textHash, t.sourceId] }),
+    primaryKey({ columns: [t.textId, t.sourceId] }),
     index('idx_expenses_texts_sourceId').on(t.sourceId),
-    index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
+    index('idx_textHash_expenseId').on(t.textId, t.expenseId),
   ],
 );
