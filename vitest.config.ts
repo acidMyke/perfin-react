@@ -9,7 +9,7 @@ export default defineConfig({
     coverage: {
       enabled: true,
       provider: 'v8',
-      include: ['server/features/expenses/saveExpense.ts', 'server/lib/expenseHelper.ts'],
+      include: ['server/features/expenses/saveExpense.ts', 'server/lib/expenseHelper.ts', 'server/lib/indexing.ts'],
       reportOnFailure: true,
     },
   },
