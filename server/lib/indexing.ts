@@ -30,7 +30,7 @@ export type TextIdParamter = {
 
 const getTextParamKey = ({ userId, kind, text }: TextIdParamter) => [userId, kind, text].join(':');
 
-export async function createTextIdLookup(...params: TextIdParamter[]) {
+export async function createGetTextId(...params: TextIdParamter[]) {
   const encoder = new TextEncoder();
   const promises: Promise<any>[] = [];
   const textIdMap = new Map<string, ArrayBuffer>();
