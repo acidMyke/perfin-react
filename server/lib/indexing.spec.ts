@@ -60,4 +60,16 @@ describe(createGetTextId, () => {
   });
 });
 
-describe(generateSearchChunks, () => {});
+describe(generateSearchChunks, () => {
+  it('should break up to 10 chunks per phrase', () => {
+    expect
+      .soft(generateSearchChunks('Worcestershire'))
+      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers']);
+  });
+
+  it('should break up to unlimited chunks per phrase if unlimited is set to true', () => {
+    expect
+      .soft(generateSearchChunks('Worcestershire', { unlimited: true }))
+      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers', 'rsh', 'shi', 'hir', 'ire']);
+  });
+});

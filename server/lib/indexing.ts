@@ -49,7 +49,7 @@ export async function createGetTextId(...params: TextIdParamter[]) {
   return (param: TextIdParamter) => textIdMap.get(getTextParamKey(param));
 }
 
-export function generateSearchChunks(text: string, { unlimited = false }) {
+export function generateSearchChunks(text: string, { unlimited = false } = {}) {
   const phrases = text
     .trim()
     .toLowerCase()
