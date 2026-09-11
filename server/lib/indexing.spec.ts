@@ -16,6 +16,7 @@ describe(createGetTextId, () => {
     { userId: 'user001', kind: 'shopName', text: 'text000' },
     { userId: 'user000', kind: 'mallName', text: 'text000' },
     { userId: 'user000', kind: 'shopName', text: 'text001' },
+    { userId: 'user000', kind: 'shopName', text: 'text000' },
   ];
 
   it('should return a method to get text id of 16 bytes', async () => {
@@ -58,13 +59,18 @@ describe(createGetTextId, () => {
 
     expect.soft(id2).not.toBe(id3);
   });
+
+  it('should be the same for the same input', async () => {
+    const getTextId = await createGetTextId(...paramPermutations);
+    expect(getTextId(paramPermutations[0])).toEqual(getTextId(paramPermutations[4]));
+  });
 });
 
 describe(generateSearchChunks, () => {
   it('should break up to 10 chunks per phrase', () => {
     expect
       .soft(generateSearchChunks('Worcestershire'))
-      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers']);
+      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers', '']);
   });
 
   it('should break up to unlimited chunks per phrase if unlimited is set to true', () => {
