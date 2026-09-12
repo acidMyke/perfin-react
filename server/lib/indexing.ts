@@ -9,6 +9,18 @@ export function getGeoCellId({ latitude, longitude }: Coordinate) {
   return latCell * MAX_LON + lonCell;
 }
 
+export function getGeoCellBounds({ latitude, longitude }: Coordinate) {
+  const latCell = Math.floor(latitude / GRID_SIZE);
+  const lonCell = Math.floor(longitude / GRID_SIZE);
+
+  return {
+    minLat: latCell * GRID_SIZE,
+    maxLat: (latCell + 1) * GRID_SIZE,
+    minLng: lonCell * GRID_SIZE,
+    maxLng: (lonCell + 1) * GRID_SIZE,
+  };
+}
+
 export const SHOP_NAME_TEXT_KIND = 'shopName' as const;
 export const MALL_NAME_TEXT_KIND = 'mallName' as const;
 export const ITEM_NAME_TEXT_KIND = 'itemName' as const;

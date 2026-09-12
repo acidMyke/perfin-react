@@ -1,7 +1,7 @@
 import { caseWhen, excluded, max, type AppDatabase } from '#server/lib/db';
 import type BatchCollector from '#server/lib/BatchCollector';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
-import { getMultiUserTextsHashes, getTextHash, getTrigrams, splitArray } from '#server/lib/utils';
+import { getTextHash, getTrigrams, splitArray } from '#server/lib/utils';
 import { and, eq, desc, lt, inArray, count, SQL, isNotNull, min, gte } from 'drizzle-orm';
 import {
   textsTable,
@@ -11,10 +11,20 @@ import {
   expenseAdjustmentsTable,
   expenseItemsTable,
   expensesTable,
+  geoCellsTable,
+  geoTextsTable,
 } from '../../../db/schema';
 import z from 'zod';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { ProtectedContext } from '#server/lib/trpc';
+import {
+  createGetTextId,
+  generateSearchChunks,
+  getGeoCellBounds,
+  getGeoCellId,
+  TEXT_KIND,
+  type TextIdParamter,
+} from '#server/lib/indexing';
 
 type ExpenseInfoChildrenForIndexing = {
   id: string;
@@ -25,18 +35,21 @@ type ExpenseInfoChildrenForIndexing = {
 export type ExpenseInfoForIndexing = {
   id: string;
   userId: string;
+  latitude?: number | undefined | null;
+  longitude?: number | undefined | null;
+  billedAt: Date;
   shopName?: null | undefined | string;
   shopMall?: null | undefined | string;
   items?: ExpenseInfoChildrenForIndexing[];
   adjustments?: ExpenseInfoChildrenForIndexing[];
 };
 
-type Searchable = {
-  userId: string;
+type Searchable = TextIdParamter & {
   expenseId: string;
-  context?: string | null;
-  text: string;
+  expenseBilledAt: Date;
+  coordinate?: Pick<ExpenseInfoForIndexing, 'latitude' | 'longitude'>;
   sourceId: string;
+  context?: Omit<TextIdParamter, 'userId'> | null | undefined | '';
 };
 
 function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
@@ -47,9 +60,18 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
       searchables.push({
         userId: expense.userId,
         expenseId: expense.id,
-        context: expense.shopMall,
+        expenseBilledAt: expense.billedAt,
         text: expense.shopName,
         sourceId: expense.id,
+        kind: TEXT_KIND.SHOP_NAME,
+        context: expense.shopMall && {
+          kind: TEXT_KIND.MALL_NAME,
+          text: expense.shopMall,
+        },
+        coordinate: {
+          latitude: expense.latitude,
+          longitude: expense.longitude,
+        },
       });
     }
 
@@ -57,8 +79,14 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
       searchables.push({
         userId: expense.userId,
         expenseId: expense.id,
+        expenseBilledAt: expense.billedAt,
         text: expense.shopMall,
         sourceId: expense.id,
+        kind: TEXT_KIND.MALL_NAME,
+        coordinate: {
+          latitude: expense.latitude,
+          longitude: expense.longitude,
+        },
       });
     }
 
@@ -68,9 +96,14 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
         searchables.push({
           userId: expense.userId,
           expenseId: expense.id,
-          context: expense.shopName,
+          expenseBilledAt: expense.billedAt,
           text: item.name,
           sourceId: item.id,
+          kind: TEXT_KIND.ITEM_NAME,
+          context: expense.shopName && {
+            kind: TEXT_KIND.SHOP_NAME,
+            text: expense.shopName,
+          },
         });
       }
     }
@@ -81,9 +114,14 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
         searchables.push({
           userId: expense.userId,
           expenseId: expense.id,
-          context: expense.shopName,
+          expenseBilledAt: expense.billedAt,
           text: adj.name,
           sourceId: adj.id,
+          kind: TEXT_KIND.ADJ_NAME,
+          context: expense.shopName && {
+            kind: TEXT_KIND.SHOP_NAME,
+            text: expense.shopName,
+          },
         });
       }
     }
@@ -92,32 +130,54 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
   return searchables;
 }
 
-async function prepareSearchables(searchables: Searchable[], version: number) {
-  const searchableHashes = await getMultiUserTextsHashes(searchables);
+async function prepareSearchables(searchables: Searchable[], indexGen: number) {
+  const getTextId = await createGetTextId(...searchables);
 
   const textsUpserts: (typeof textsTable.$inferInsert)[] = [];
   const textChunkUpserts: (typeof textChunksTable.$inferInsert)[] = [];
   const expenseTextsUpserts: (typeof expenseTextsTable.$inferInsert)[] = [];
+  const geoCellsUpserts: (typeof geoCellsTable.$inferInsert)[] = [];
+  const geoTextsUpserts: (typeof geoTextsTable.$inferInsert)[] = [];
 
-  const processedTextHashes = new Set<number>();
+  const processedTextIdArrayBuffer = new Set<ArrayBuffer>();
+  const processedGeoCellId = new Set<number>();
 
-  for (const { userId, expenseId, text, sourceId, context } of searchables) {
+  for (const searchable of searchables) {
+    const { userId, expenseId, expenseBilledAt, sourceId, kind, text, context, coordinate } = searchable;
     if (blacklistSearchableText.has(text)) continue;
 
-    const textHash = searchableHashes.getHash(userId, text)!;
-    let ctxTextHash: number | null = null;
-    if (context) ctxTextHash = searchableHashes.getHash(userId, context) ?? null;
+    const textIdArrayBuffer = getTextId(searchable);
+    if (!textIdArrayBuffer) continue;
+    const textId = Buffer.from(textIdArrayBuffer);
 
-    if (!processedTextHashes.has(textHash)) {
-      processedTextHashes.add(textHash);
-      textsUpserts.push({ textHash, userId, text, version });
-      textChunkUpserts.push(...getTrigrams(text).map(chunk => ({ userId, chunk, textHash, version })));
+    let ctxTextId: Buffer<ArrayBuffer> | null = null;
+    if (context) {
+      const ctxTextIdArrayBuffer = getTextId({ ...context, userId });
+      if (ctxTextIdArrayBuffer) {
+        ctxTextId = Buffer.from(ctxTextIdArrayBuffer);
+      }
     }
 
-    expenseTextsUpserts.push({ textHash, sourceId, expenseId, ctxTextHash, version });
+    if (!processedTextIdArrayBuffer.has(textIdArrayBuffer)) {
+      processedTextIdArrayBuffer.add(textIdArrayBuffer);
+      textsUpserts.push({ id: Buffer.from(textIdArrayBuffer), userId, kind, text, indexGen });
+      textChunkUpserts.push(...generateSearchChunks(text).map(chunk => ({ textId, userId, kind, chunk, indexGen })));
+    }
+
+    if (coordinate?.latitude && coordinate.longitude) {
+      const geoCellParam = { latitude: coordinate?.latitude, longitude: coordinate.longitude };
+      const geoCellId = getGeoCellId(geoCellParam);
+      if (!processedGeoCellId.has(geoCellId)) {
+        const geoCellBounds = getGeoCellBounds(geoCellParam);
+        geoCellsUpserts.push({ ...geoCellBounds, id: geoCellId, indexGen });
+      }
+      geoTextsUpserts.push({ geoCellId, textId, indexGen });
+    }
+
+    expenseTextsUpserts.push({ expenseId, expenseBilledAt, sourceId, textId, ctxTextId, indexGen });
   }
 
-  return { textsUpserts, textChunkUpserts, expenseTextsUpserts };
+  return { textsUpserts, textChunkUpserts, expenseTextsUpserts, geoCellsUpserts, geoTextsUpserts };
 }
 
 function queueDeleteExpenseTextsByExpenseId(collector: BatchCollector, db: AppDatabase, expenseId: string) {
@@ -127,10 +187,16 @@ function queueDeleteExpenseTextsByExpenseId(collector: BatchCollector, db: AppDa
 function queueSaveSearchables(
   collector: BatchCollector,
   db: AppDatabase,
-  { textsUpserts, textChunkUpserts, expenseTextsUpserts }: Awaited<ReturnType<typeof prepareSearchables>>,
+  {
+    textsUpserts,
+    textChunkUpserts,
+    expenseTextsUpserts,
+    geoCellsUpserts,
+    geoTextsUpserts,
+  }: Awaited<ReturnType<typeof prepareSearchables>>,
 ) {
   collector.pushAll(
-    ...splitArray(textsUpserts, 24).map(values =>
+    ...splitArray(textsUpserts, 19).map(values =>
       db
         .insert(textsTable)
         .values(values)
@@ -139,7 +205,7 @@ function queueSaveSearchables(
           set: { indexGen: excluded(textsTable.indexGen) },
         }),
     ),
-    ...splitArray(textChunkUpserts, 24).map(values =>
+    ...splitArray(textChunkUpserts, 19).map(values =>
       db
         .insert(textChunksTable)
         .values(values)
@@ -148,13 +214,31 @@ function queueSaveSearchables(
           set: { indexGen: excluded(textChunksTable.indexGen) },
         }),
     ),
-    ...splitArray(expenseTextsUpserts, 19).map(values =>
+    ...splitArray(expenseTextsUpserts, 16).map(values =>
       db
         .insert(expenseTextsTable)
         .values(values)
         .onConflictDoUpdate({
           target: [expenseTextsTable.textId, expenseTextsTable.sourceId],
-          set: { indexGen: excluded(expenseTextsTable.indexGen), ctxTextHash: excluded(expenseTextsTable.ctxTextId) },
+          set: { indexGen: excluded(expenseTextsTable.indexGen), ctxTextId: excluded(expenseTextsTable.ctxTextId) },
+        }),
+    ),
+    ...splitArray(geoCellsUpserts, 16).map(values =>
+      db
+        .insert(geoCellsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: geoCellsTable.id,
+          set: { indexGen: excluded(geoCellsTable.indexGen) },
+        }),
+    ),
+    ...splitArray(geoTextsUpserts, 33).map(values =>
+      db
+        .insert(geoTextsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [geoTextsTable.geoCellId, geoTextsTable.textId],
+          set: { indexGen: excluded(geoTextsTable.indexGen) },
         }),
     ),
   );
