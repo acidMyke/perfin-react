@@ -367,12 +367,13 @@ export const geoTextsTable = sqliteTable(
   'geo_texts',
   {
     textId: textIdColumn(),
+    userId: idColumn(),
     geoCellId: integer()
       .notNull()
       .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     indexGen: integer().notNull().default(0),
   },
-  t => [primaryKey({ columns: [t.geoCellId, t.textId] }), index('idx_geo_texts').on(t.textId, t.geoCellId)],
+  t => [primaryKey({ columns: [t.userId, t.geoCellId, t.textId] }), index('idx_geo_texts').on(t.textId, t.geoCellId)],
 );
 
 export const ctxTextsTable = sqliteTable(
@@ -389,6 +390,8 @@ export const expenseTextsTable = sqliteTable(
   'expenses_texts',
   {
     expenseId: idColumn(),
+    // Duplicated from expense main table for quick filtering
+    expenseBilledAt: dateColumn(),
     /** Use getTextHash() to calculate this value */
     textId: textIdColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */

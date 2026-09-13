@@ -42,6 +42,7 @@ CREATE TABLE `ctx_texts` (
 
 CREATE TABLE `expenses_texts` (
 	`expense_id` text(21) NOT NULL,
+	`expense_billed_at` integer NOT NULL,
 	`text_id` blob NOT NULL,
 	`source_id` text(21) NOT NULL,
 	`index_gen` integer DEFAULT 0 NOT NULL,
@@ -67,9 +68,10 @@ CREATE TABLE `ctx_texts` (
 
 CREATE TABLE `geo_texts` (
 	`text_id` blob NOT NULL,
+	`user_id` text(21) NOT NULL,
 	`geo_cell_id` integer NOT NULL,
 	`index_gen` integer DEFAULT 0 NOT NULL,
-	CONSTRAINT `geo_texts_pk` PRIMARY KEY(`geo_cell_id`, `text_id`),
+	CONSTRAINT `geo_texts_pk` PRIMARY KEY(`user_id`, `geo_cell_id`, `text_id`),
 	CONSTRAINT `fk_geo_texts_text_id_texts_id_fk` FOREIGN KEY (`text_id`) REFERENCES `texts`(`id`) ON UPDATE CASCADE ON DELETE CASCADE,
 	CONSTRAINT `fk_geo_texts_geo_cell_id_geo_cells_id_fk` FOREIGN KEY (`geo_cell_id`) REFERENCES `geo_cells`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
 ) WITHOUT ROWID;

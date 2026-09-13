@@ -170,10 +170,10 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
         const geoCellBounds = getGeoCellBounds(geoCellParam);
         geoCellsUpserts.push({ ...geoCellBounds, id: geoCellId, indexGen });
       }
-      geoTextsUpserts.push({ geoCellId, textId, indexGen });
+      geoTextsUpserts.push({ geoCellId, userId, textId, indexGen });
     }
 
-    expenseTextsUpserts.push({ expenseId, sourceId, textId, indexGen });
+    expenseTextsUpserts.push({ expenseId, expenseBilledAt: billedAt, sourceId, textId, indexGen });
   }
 
   return { textsUpserts, textChunkUpserts, expenseTextsUpserts, geoCellsUpserts, ctxTextsUpserts, geoTextsUpserts };
@@ -218,16 +218,16 @@ function queueSaveSearchables(
           set: { indexGen: excluded(textChunksTable.indexGen) },
         }),
     ),
-    ...splitArray(expenseTextsUpserts, 16).map(values =>
+    ...splitArray(expenseTextsUpserts, 19).map(values =>
       db
         .insert(expenseTextsTable)
         .values(values)
         .onConflictDoUpdate({
           target: [expenseTextsTable.textId, expenseTextsTable.sourceId],
-          set: { indexGen: excluded(expenseTextsTable.indexGen) },
+          set: excludedAll(expenseTextsTable, ['textId', 'sourceId']),
         }),
     ),
-    ...splitArray(geoCellsUpserts, 16).map(values =>
+    ...splitArray(geoCellsUpserts, 24).map(values =>
       db
         .insert(geoCellsTable)
         .values(values)
@@ -245,7 +245,7 @@ function queueSaveSearchables(
           set: { indexGen: excluded(ctxTextsTable.indexGen) },
         }),
     ),
-    ...splitArray(geoTextsUpserts, 33).map(values =>
+    ...splitArray(geoTextsUpserts, 24).map(values =>
       db
         .insert(geoTextsTable)
         .values(values)

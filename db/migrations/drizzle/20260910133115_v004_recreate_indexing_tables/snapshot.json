@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "d3247314-ded9-499c-8e03-8f7800953cb3",
+  "id": "37b3983c-c699-4119-97c7-ef436beb8299",
   "prevIds": [
-    "3ef6b37a-46d5-4049-9580-92bbd006c3fc"
+    "b3c1a37e-99cd-4d24-bea2-86d5f492dbae"
   ],
   "ddl": [
     {
@@ -745,6 +745,16 @@
       "table": "expenses_texts"
     },
     {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "expense_billed_at",
+      "entityType": "columns",
+      "table": "expenses_texts"
+    },
+    {
       "type": "blob",
       "notNull": true,
       "autoincrement": false,
@@ -1031,6 +1041,16 @@
       "default": null,
       "generated": null,
       "name": "text_id",
+      "entityType": "columns",
+      "table": "geo_texts"
+    },
+    {
+      "type": "text(21)",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "user_id",
       "entityType": "columns",
       "table": "geo_texts"
     },
@@ -1996,6 +2016,7 @@
     },
     {
       "columns": [
+        "user_id",
         "geo_cell_id",
         "text_id"
       ],
