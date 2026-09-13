@@ -1,9 +1,9 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "3ef6b37a-46d5-4049-9580-92bbd006c3fc",
+  "id": "d3247314-ded9-499c-8e03-8f7800953cb3",
   "prevIds": [
-    "b3c1a37e-99cd-4d24-bea2-86d5f492dbae"
+    "3ef6b37a-46d5-4049-9580-92bbd006c3fc"
   ],
   "ddl": [
     {
@@ -12,6 +12,10 @@
     },
     {
       "name": "categories",
+      "entityType": "tables"
+    },
+    {
+      "name": "ctx_texts",
       "entityType": "tables"
     },
     {
@@ -269,6 +273,36 @@
       "name": "is_deleted",
       "entityType": "columns",
       "table": "categories"
+    },
+    {
+      "type": "blob",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "text_id",
+      "entityType": "columns",
+      "table": "ctx_texts"
+    },
+    {
+      "type": "blob",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "ctx_text_id",
+      "entityType": "columns",
+      "table": "ctx_texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": "0",
+      "generated": null,
+      "name": "index_gen",
+      "entityType": "columns",
+      "table": "ctx_texts"
     },
     {
       "type": "text(21)",
@@ -734,26 +768,6 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "expense_billed_at",
-      "entityType": "columns",
-      "table": "expenses_texts"
-    },
-    {
-      "type": "blob",
-      "notNull": false,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "ctx_text_id",
-      "entityType": "columns",
-      "table": "expenses_texts"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
       "default": "0",
       "generated": null,
       "name": "index_gen",
@@ -981,42 +995,22 @@
       "table": "geo_cells"
     },
     {
-      "type": "real",
+      "type": "integer",
       "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "min_lat",
+      "name": "lat_index",
       "entityType": "columns",
       "table": "geo_cells"
     },
     {
-      "type": "real",
+      "type": "integer",
       "notNull": true,
       "autoincrement": false,
       "default": null,
       "generated": null,
-      "name": "max_lat",
-      "entityType": "columns",
-      "table": "geo_cells"
-    },
-    {
-      "type": "real",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "min_lng",
-      "entityType": "columns",
-      "table": "geo_cells"
-    },
-    {
-      "type": "real",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "max_lng",
+      "name": "lon_index",
       "entityType": "columns",
       "table": "geo_cells"
     },
@@ -1531,6 +1525,26 @@
       "table": "texts"
     },
     {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_used_at",
+      "entityType": "columns",
+      "table": "texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "usage_count",
+      "entityType": "columns",
+      "table": "texts"
+    },
+    {
       "type": "text(21)",
       "notNull": false,
       "autoincrement": false,
@@ -1851,9 +1865,9 @@
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "fk_expenses_texts_text_id_texts_id_fk",
+      "name": "fk_ctx_texts_text_id_texts_id_fk",
       "entityType": "fks",
-      "table": "expenses_texts"
+      "table": "ctx_texts"
     },
     {
       "columns": [
@@ -1866,7 +1880,22 @@
       "onUpdate": "CASCADE",
       "onDelete": "CASCADE",
       "nameExplicit": false,
-      "name": "fk_expenses_texts_ctx_text_id_texts_id_fk",
+      "name": "fk_ctx_texts_ctx_text_id_texts_id_fk",
+      "entityType": "fks",
+      "table": "ctx_texts"
+    },
+    {
+      "columns": [
+        "text_id"
+      ],
+      "tableTo": "texts",
+      "columnsTo": [
+        "id"
+      ],
+      "onUpdate": "CASCADE",
+      "onDelete": "CASCADE",
+      "nameExplicit": false,
+      "name": "fk_expenses_texts_text_id_texts_id_fk",
       "entityType": "fks",
       "table": "expenses_texts"
     },
@@ -1914,6 +1943,16 @@
       "name": "fk_texts_chunks_text_id_texts_id_fk",
       "entityType": "fks",
       "table": "texts_chunks"
+    },
+    {
+      "columns": [
+        "ctx_text_id",
+        "text_id"
+      ],
+      "nameExplicit": false,
+      "name": "ctx_texts_pk",
+      "entityType": "pks",
+      "table": "ctx_texts"
     },
     {
       "columns": [
@@ -2158,6 +2197,24 @@
     {
       "columns": [
         {
+          "value": "text_id",
+          "isExpression": false
+        },
+        {
+          "value": "ctx_text_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_ctx_texts",
+      "entityType": "indexes",
+      "table": "ctx_texts"
+    },
+    {
+      "columns": [
+        {
           "value": "code",
           "isExpression": false
         }
@@ -2370,6 +2427,24 @@
       "name": "idx_expenses_user_billedAt",
       "entityType": "indexes",
       "table": "expenses"
+    },
+    {
+      "columns": [
+        {
+          "value": "text_id",
+          "isExpression": false
+        },
+        {
+          "value": "geo_cell_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_geo_texts",
+      "entityType": "indexes",
+      "table": "geo_texts"
     },
     {
       "columns": [

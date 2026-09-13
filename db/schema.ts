@@ -207,6 +207,7 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
+    /** @deprecated save to geoCellsTable and join via textId system*/
     boxId: integer(),
     shopName: citext(),
     shopMall: citext(),
@@ -325,6 +326,8 @@ export const textsTable = sqliteTable(
     kind: text().notNull(),
     text: text().notNull(),
     indexGen: integer().notNull().default(0),
+    lastUsedAt: dateColumn().notNull(),
+    usageCount: integer().notNull(),
   },
   t => [unique('uq_texts_user_id_kind_text').on(t.userId, t.kind, t.text)],
 );
@@ -355,10 +358,8 @@ export const textChunksTable = sqliteTable(
 
 export const geoCellsTable = sqliteTable('geo_cells', {
   id: integer().primaryKey(),
-  minLat: real().notNull(),
-  maxLat: real().notNull(),
-  minLng: real().notNull(),
-  maxLng: real().notNull(),
+  latIndex: integer().notNull(),
+  lonIndex: integer().notNull(),
   indexGen: integer().notNull().default(0),
 });
 
@@ -371,7 +372,17 @@ export const geoTextsTable = sqliteTable(
       .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     indexGen: integer().notNull().default(0),
   },
-  t => [primaryKey({ columns: [t.geoCellId, t.textId] })],
+  t => [primaryKey({ columns: [t.geoCellId, t.textId] }), index('idx_geo_texts').on(t.textId, t.geoCellId)],
+);
+
+export const ctxTextsTable = sqliteTable(
+  'ctx_texts',
+  {
+    textId: textIdColumn(),
+    ctxTextId: textIdColumn(),
+    indexGen: integer().notNull().default(0),
+  },
+  t => [primaryKey({ columns: [t.ctxTextId, t.textId] }), index('idx_ctx_texts').on(t.textId, t.ctxTextId)],
 );
 
 export const expenseTextsTable = sqliteTable(
@@ -382,13 +393,6 @@ export const expenseTextsTable = sqliteTable(
     textId: textIdColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
-    // Duplicated from expense main table for quick filtering
-    expenseBilledAt: dateColumn(),
-
-    ctxTextId: blob({ mode: 'buffer' }).references(() => textsTable.id, {
-      onDelete: 'cascade',
-      onUpdate: 'cascade',
-    }),
     indexGen: integer().notNull().default(0),
   },
   t => [
