@@ -1,8 +1,8 @@
-import { caseWhen, excluded, max, type AppDatabase } from '#server/lib/db';
+import { caseWhen, excluded, excludedAll, sumAsNumber, type AppDatabase } from '#server/lib/db';
 import type BatchCollector from '#server/lib/BatchCollector';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
 import { splitArray } from '#server/lib/utils';
-import { and, eq, desc, lt, inArray, count, sql, countDistinct } from 'drizzle-orm';
+import { and, eq, desc, lt, inArray, count, sql, countDistinct, gte } from 'drizzle-orm';
 import {
   textsTable,
   textChunksTable,
@@ -23,6 +23,7 @@ import {
   TEXT_KIND,
   type TextIdParamter,
 } from '#server/lib/indexing';
+import { subDays } from 'date-fns';
 
 type ExpenseInfoChildrenForIndexing = {
   id: string;
@@ -314,94 +315,133 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
 }
 
 export const getSuggestionInputSchema = z.object({
-  scope: z.enum(['shopName', 'shopMall', 'itemName', 'adjName']),
+  kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
   search: z.string(),
-  context: z.string().optional(),
+  context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
+  coordinate: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
 });
 
 type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
 
 export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
   const { db, userId } = ctx;
+  const { kind, context, coordinate } = input;
   const search = input.search.trim();
-  const context = input.context?.trim();
 
-  if (!search && !context) {
-    return { suggestions: [] as string[] };
+  if (!search && !context?.text && !coordinate) {
+    return { suggestions: [] };
   }
 
-  let textColumn: AnySQLiteColumn<{ data: string }>;
-  let sourceTable: typeof expensesTable | typeof expenseItemsTable | typeof expenseAdjustmentsTable;
+  const textIdCol = 'text_id' as const;
+  const chunkCountScoreCol = 'chunk_score' as const;
+  const frequencyScoreCol = 'frequency_score' as const;
+  const recencyScoreCol = 'recency_score' as const;
+  const contextScoreCol = 'context_score' as const;
+  const spatialScoreCol = 'spatial_score' as const;
 
-  switch (input.scope) {
-    case 'shopName':
-      textColumn = expensesTable.shopName;
-      sourceTable = expensesTable;
-      break;
-    case 'shopMall':
-      textColumn = expensesTable.shopMall;
-      sourceTable = expensesTable;
-      break;
-    case 'itemName':
-      textColumn = expenseItemsTable.name;
-      sourceTable = expenseItemsTable;
-      break;
-    case 'adjName':
-      textColumn = expenseAdjustmentsTable.name;
-      sourceTable = expenseAdjustmentsTable;
-      break;
-  }
-  const contextHash = context ? await getTextHash(userId, context) : undefined;
-
-  if (!search) {
-    // Suggestion via context
-    const results = await db
-      .select({ text: min(textColumn) })
-      .from(expenseTextsTable)
-      .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
-      .where(and(eq(expenseTextsTable.ctxTextId, contextHash!), isNotNull(textColumn)))
-      .groupBy(expenseTextsTable.textId)
-      .limit(10);
-
-    return { suggestions: results.map(({ text }) => text!) };
-  }
-  // Search by input
-
-  const trigrams = getTrigrams(search);
-  if (trigrams.length === 0) return { suggestions: [] };
-
-  const baseMatchedChunks = db
+  let searchQuery = db
     .select({
-      textHash: textChunksTable.textId.as('text_hash'),
-      matchCount: count(textChunksTable.chunk).as('match_count'),
+      textId: sql<null | Buffer<ArrayBufferLike>>`NULL`.as(textIdCol),
+      chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
+      contextScore: sql<number>`0`.as(contextScoreCol),
+      spatialScore: sql<number>`0`.as(spatialScoreCol),
     })
     .from(textChunksTable)
-    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
-    .groupBy(textChunksTable.textId);
+    .where(sql`false`)
+    .$dynamic();
 
-  // filter out lower quality matches
-  const matchedChunks = (
-    trigrams.length > 5
-      ? baseMatchedChunks.having(gte(count(textChunksTable.chunk), trigrams.length - 5))
-      : baseMatchedChunks
-  ).as('matchedChunks');
-
-  const orderLogic: SQL[] = [];
-  if (contextHash) {
-    // sort by context exists
-    orderLogic.push(desc(max(caseWhen(eq(expenseTextsTable.ctxTextId, contextHash), 1).else(0))));
+  if (search) {
+    const searchChunks = generateSearchChunks(search);
+    searchQuery = searchQuery.unionAll(
+      db
+        .select({
+          textId: textChunksTable.textId.as(textIdCol),
+          chunkCountScore: countDistinct(textChunksTable.chunk).as(chunkCountScoreCol),
+          contextScore: sql<number>`0`.as(contextScoreCol),
+          spatialScore: sql<number>`0`.as(spatialScoreCol),
+        })
+        .from(textChunksTable)
+        .where(
+          and(
+            eq(textChunksTable.userId, userId),
+            eq(textChunksTable.kind, kind),
+            inArray(textChunksTable.chunk, searchChunks),
+          ),
+        )
+        .groupBy(textChunksTable.textId),
+    );
   }
-  orderLogic.push(desc(max(matchedChunks.matchCount)));
 
-  const results = await db
-    .select({ text: min(textColumn) })
-    .from(matchedChunks)
-    .innerJoin(expenseTextsTable, eq(matchedChunks.textHash, expenseTextsTable.textId))
-    .innerJoin(sourceTable, eq(expenseTextsTable.sourceId, sourceTable.id))
-    .where(isNotNull(textColumn))
-    .groupBy(matchedChunks.textHash)
-    .orderBy(...orderLogic)
-    .limit(10);
+  if (context) {
+    const ctxTextId = await getSingleTextId({ userId, ...context });
+    searchQuery = searchQuery.unionAll(
+      db
+        .select({
+          textId: ctxTextsTable.textId.as(textIdCol),
+          chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
+          contextScore: sql<number>`2`.as(contextScoreCol),
+          spatialScore: sql<number>`0`.as(spatialScoreCol),
+        })
+        .from(ctxTextsTable)
+        .where(eq(ctxTextsTable.ctxTextId, Buffer.from(ctxTextId))),
+    );
+  }
 
-  return { suggestions: results.map(({ text }) => text!) };
+  if (coordinate) {
+    const geoCell = getGeoCell(coordinate);
+    searchQuery = searchQuery.unionAll(
+      db
+        .select({
+          textId: geoTextsTable.textId.as(textIdCol),
+          chunkCountScore: sql<0>`0`.as(chunkCountScoreCol),
+          contextScore: sql<0>`0`.as(contextScoreCol),
+          spatialScore: sql<2>`2`.as(spatialScoreCol),
+        })
+        .from(geoTextsTable)
+        .where(and(eq(geoTextsTable.userId, userId), eq(geoTextsTable.geoCellId, geoCell.id))),
+    );
+  }
+
+  const searchSubquery = searchQuery.as('search_sq');
+
+  const aggregatedSubquery = db
+    .select({
+      textId: searchSubquery.textId,
+      chunkCountScore: sumAsNumber(searchSubquery.chunkCountScore).as(chunkCountScoreCol),
+      contextScore: sumAsNumber(searchSubquery.contextScore).as(contextScoreCol),
+      spatialScore: sumAsNumber(searchSubquery.spatialScore).as(spatialScoreCol),
+    })
+    .from(searchSubquery)
+    .groupBy(sql.raw(textIdCol))
+    .as('input_scoring_sq');
+
+  const result = await db
+    .select({
+      text: textsTable.text,
+      chunkCountScore: aggregatedSubquery.chunkCountScore,
+      contextScore: aggregatedSubquery.contextScore,
+      spatialScore: aggregatedSubquery.spatialScore,
+      frequencyScore: caseWhen(gte(textsTable.usageCount, 10), 2)
+        .whenThen(gte(textsTable.usageCount, 3), 1)
+        .else(0)
+        .as(frequencyScoreCol),
+      recencyScore: caseWhen(gte(textsTable.lastUsedAt, subDays(Date.now(), 4)), -1)
+        .whenThen(gte(textsTable.lastUsedAt, subDays(Date.now(), 28)), 2)
+        .whenThen(gte(textsTable.lastUsedAt, subDays(Date.now(), 63)), 1)
+        .else(0)
+        .as(recencyScoreCol),
+    })
+    .from(aggregatedSubquery)
+    .innerJoin(textsTable, eq(aggregatedSubquery.textId, textsTable.id))
+    .orderBy(
+      desc(
+        sql.join(
+          [chunkCountScoreCol, frequencyScoreCol, recencyScoreCol, contextScoreCol, spatialScoreCol].map(sql.raw),
+          ' + ',
+        ),
+      ),
+    );
+
+  console.log('Suggestion:', { input, result });
+  return { suggestions: result };
 }
