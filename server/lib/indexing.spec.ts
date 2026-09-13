@@ -1,12 +1,36 @@
 import { nanoid } from 'nanoid';
-import { generateSearchChunks, createGetTextId, getGeoCellId, type TextIdParamter } from './indexing';
+import { generateSearchChunks, createGetTextId, getGeoCell, type TextIdParamter } from './indexing';
 
-describe(getGeoCellId, () => {
+describe(getGeoCell, () => {
   it('should create an determinstic id based on the input', () => {
-    expect.soft(getGeoCellId({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`69551938`);
-    expect.soft(getGeoCellId({ latitude: 1.302563, longitude: 103.684676 })).toMatchInlineSnapshot(`65151842`);
-    expect.soft(getGeoCellId({ latitude: 1.384888, longitude: 103.827751 })).toMatchInlineSnapshot(`69251913`);
-    expect.soft(getGeoCellId({ latitude: 1.371579, longitude: 103.626539 })).toMatchInlineSnapshot(`68551813`);
+    expect.soft(getGeoCell({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+      {
+        "id": 37599,
+        "latIndex": 130,
+        "lonIndex": 159,
+      }
+    `);
+    expect.soft(getGeoCell({ latitude: 1.302563, longitude: 103.684676 })).toMatchInlineSnapshot(`
+      {
+        "id": 24831,
+        "latIndex": 86,
+        "lonIndex": 63,
+      }
+    `);
+    expect.soft(getGeoCell({ latitude: 1.384888, longitude: 103.827751 })).toMatchInlineSnapshot(`
+      {
+        "id": 36711,
+        "latIndex": 127,
+        "lonIndex": 135,
+      }
+    `);
+    expect.soft(getGeoCell({ latitude: 1.371579, longitude: 103.626539 })).toMatchInlineSnapshot(`
+      {
+        "id": 34594,
+        "latIndex": 120,
+        "lonIndex": 34,
+      }
+    `);
   });
 });
 
@@ -70,7 +94,7 @@ describe(generateSearchChunks, () => {
   it('should break up to 10 chunks per phrase', () => {
     expect
       .soft(generateSearchChunks('Worcestershire'))
-      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers', '']);
+      .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers']);
   });
 
   it('should break up to unlimited chunks per phrase if unlimited is set to true', () => {

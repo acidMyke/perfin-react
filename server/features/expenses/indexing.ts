@@ -1,27 +1,25 @@
 import { caseWhen, excluded, max, type AppDatabase } from '#server/lib/db';
 import type BatchCollector from '#server/lib/BatchCollector';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
-import { getTextHash, getTrigrams, splitArray } from '#server/lib/utils';
-import { and, eq, desc, lt, inArray, count, SQL, isNotNull, min, gte } from 'drizzle-orm';
+import { splitArray } from '#server/lib/utils';
+import { and, eq, desc, lt, inArray, count, sql, countDistinct } from 'drizzle-orm';
 import {
   textsTable,
   textChunksTable,
   expenseTextsTable,
   searchIndexGenerationsTable,
-  expenseAdjustmentsTable,
-  expenseItemsTable,
-  expensesTable,
   geoCellsTable,
   geoTextsTable,
+  ctxTextsTable,
 } from '../../../db/schema';
 import z from 'zod';
-import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import type { ProtectedContext } from '#server/lib/trpc';
 import {
   createGetTextId,
   generateSearchChunks,
   getGeoCellBounds,
-  getGeoCellId,
+  getGeoCell,
+  getSingleTextId,
   TEXT_KIND,
   type TextIdParamter,
 } from '#server/lib/indexing';
@@ -46,7 +44,7 @@ export type ExpenseInfoForIndexing = {
 
 type Searchable = TextIdParamter & {
   expenseId: string;
-  expenseBilledAt: Date;
+  billedAt: Date;
   coordinate?: Pick<ExpenseInfoForIndexing, 'latitude' | 'longitude'>;
   sourceId: string;
   context?: Omit<TextIdParamter, 'userId'> | null | undefined | '';
@@ -60,7 +58,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
       searchables.push({
         userId: expense.userId,
         expenseId: expense.id,
-        expenseBilledAt: expense.billedAt,
+        billedAt: expense.billedAt,
         text: expense.shopName,
         sourceId: expense.id,
         kind: TEXT_KIND.SHOP_NAME,
@@ -79,7 +77,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
       searchables.push({
         userId: expense.userId,
         expenseId: expense.id,
-        expenseBilledAt: expense.billedAt,
+        billedAt: expense.billedAt,
         text: expense.shopMall,
         sourceId: expense.id,
         kind: TEXT_KIND.MALL_NAME,
@@ -96,7 +94,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
         searchables.push({
           userId: expense.userId,
           expenseId: expense.id,
-          expenseBilledAt: expense.billedAt,
+          billedAt: expense.billedAt,
           text: item.name,
           sourceId: item.id,
           kind: TEXT_KIND.ITEM_NAME,
@@ -114,7 +112,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
         searchables.push({
           userId: expense.userId,
           expenseId: expense.id,
-          expenseBilledAt: expense.billedAt,
+          billedAt: expense.billedAt,
           text: adj.name,
           sourceId: adj.id,
           kind: TEXT_KIND.ADJ_NAME,
@@ -137,36 +135,37 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
   const textChunkUpserts: (typeof textChunksTable.$inferInsert)[] = [];
   const expenseTextsUpserts: (typeof expenseTextsTable.$inferInsert)[] = [];
   const geoCellsUpserts: (typeof geoCellsTable.$inferInsert)[] = [];
+  const ctxTextsUpserts: (typeof ctxTextsTable.$inferInsert)[] = [];
   const geoTextsUpserts: (typeof geoTextsTable.$inferInsert)[] = [];
 
   const processedTextIdArrayBuffer = new Set<ArrayBuffer>();
   const processedGeoCellId = new Set<number>();
 
   for (const searchable of searchables) {
-    const { userId, expenseId, expenseBilledAt, sourceId, kind, text, context, coordinate } = searchable;
+    const { userId, expenseId, sourceId, kind, text, context, coordinate, billedAt } = searchable;
     if (blacklistSearchableText.has(text)) continue;
 
     const textIdArrayBuffer = getTextId(searchable);
     if (!textIdArrayBuffer) continue;
     const textId = Buffer.from(textIdArrayBuffer);
 
-    let ctxTextId: Buffer<ArrayBuffer> | null = null;
+    if (!processedTextIdArrayBuffer.has(textIdArrayBuffer)) {
+      processedTextIdArrayBuffer.add(textIdArrayBuffer);
+      textsUpserts.push({ id: textId, userId, kind, text, indexGen, lastUsedAt: billedAt, usageCount: 1 });
+      textChunkUpserts.push(...generateSearchChunks(text).map(chunk => ({ textId, userId, kind, chunk, indexGen })));
+    }
+
     if (context) {
       const ctxTextIdArrayBuffer = getTextId({ ...context, userId });
       if (ctxTextIdArrayBuffer) {
-        ctxTextId = Buffer.from(ctxTextIdArrayBuffer);
+        const ctxTextId = Buffer.from(ctxTextIdArrayBuffer);
+        ctxTextsUpserts.push({ ctxTextId, textId, indexGen });
       }
-    }
-
-    if (!processedTextIdArrayBuffer.has(textIdArrayBuffer)) {
-      processedTextIdArrayBuffer.add(textIdArrayBuffer);
-      textsUpserts.push({ id: Buffer.from(textIdArrayBuffer), userId, kind, text, indexGen });
-      textChunkUpserts.push(...generateSearchChunks(text).map(chunk => ({ textId, userId, kind, chunk, indexGen })));
     }
 
     if (coordinate?.latitude && coordinate.longitude) {
       const geoCellParam = { latitude: coordinate?.latitude, longitude: coordinate.longitude };
-      const geoCellId = getGeoCellId(geoCellParam);
+      const { id: geoCellId } = getGeoCell(geoCellParam);
       if (!processedGeoCellId.has(geoCellId)) {
         const geoCellBounds = getGeoCellBounds(geoCellParam);
         geoCellsUpserts.push({ ...geoCellBounds, id: geoCellId, indexGen });
@@ -174,10 +173,10 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
       geoTextsUpserts.push({ geoCellId, textId, indexGen });
     }
 
-    expenseTextsUpserts.push({ expenseId, expenseBilledAt, sourceId, textId, ctxTextId, indexGen });
+    expenseTextsUpserts.push({ expenseId, sourceId, textId, indexGen });
   }
 
-  return { textsUpserts, textChunkUpserts, expenseTextsUpserts, geoCellsUpserts, geoTextsUpserts };
+  return { textsUpserts, textChunkUpserts, expenseTextsUpserts, geoCellsUpserts, ctxTextsUpserts, geoTextsUpserts };
 }
 
 function queueDeleteExpenseTextsByExpenseId(collector: BatchCollector, db: AppDatabase, expenseId: string) {
@@ -192,17 +191,22 @@ function queueSaveSearchables(
     textChunkUpserts,
     expenseTextsUpserts,
     geoCellsUpserts,
+    ctxTextsUpserts,
     geoTextsUpserts,
   }: Awaited<ReturnType<typeof prepareSearchables>>,
 ) {
   collector.pushAll(
-    ...splitArray(textsUpserts, 19).map(values =>
+    ...splitArray(textsUpserts, 14).map(values =>
       db
         .insert(textsTable)
         .values(values)
         .onConflictDoUpdate({
           target: textsTable.id,
-          set: { indexGen: excluded(textsTable.indexGen) },
+          set: {
+            indexGen: excluded(textsTable.indexGen),
+            lastUsedAt: sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`,
+            usageCount: sql`${textsTable.usageCount} + 1`,
+          },
         }),
     ),
     ...splitArray(textChunkUpserts, 19).map(values =>
@@ -220,7 +224,7 @@ function queueSaveSearchables(
         .values(values)
         .onConflictDoUpdate({
           target: [expenseTextsTable.textId, expenseTextsTable.sourceId],
-          set: { indexGen: excluded(expenseTextsTable.indexGen), ctxTextId: excluded(expenseTextsTable.ctxTextId) },
+          set: { indexGen: excluded(expenseTextsTable.indexGen) },
         }),
     ),
     ...splitArray(geoCellsUpserts, 16).map(values =>
@@ -230,6 +234,15 @@ function queueSaveSearchables(
         .onConflictDoUpdate({
           target: geoCellsTable.id,
           set: { indexGen: excluded(geoCellsTable.indexGen) },
+        }),
+    ),
+    ...splitArray(ctxTextsUpserts, 33).map(values =>
+      db
+        .insert(ctxTextsTable)
+        .values(values)
+        .onConflictDoUpdate({
+          target: [ctxTextsTable.ctxTextId, ctxTextsTable.textId],
+          set: { indexGen: excluded(ctxTextsTable.indexGen) },
         }),
     ),
     ...splitArray(geoTextsUpserts, 33).map(values =>

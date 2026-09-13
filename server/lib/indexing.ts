@@ -1,23 +1,33 @@
 const GRID_SIZE = 0.002; // 222 meters
-const MAX_LON = 100_000;
+const SG_BOUNDING_BOX = Object.freeze({
+  MIN_LAT: 1.13,
+  MAX_LAT: 1.493,
+  MIN_LON: 103.557,
+  MAX_LON: 104.131,
+
+  MAX_LON_INDEX: 288, // ceil(floor(104.131/0.002)  - floor(103.557/0.002))
+  MAX_LAT_INDEX: 182, // ceil(floor(1.493/0.002)  - floor(1.13/0.002))
+});
 
 export type Coordinate = { latitude: number; longitude: number };
-export function getGeoCellId({ latitude, longitude }: Coordinate) {
-  const latCell = Math.floor(latitude / GRID_SIZE);
-  const lonCell = Math.floor(longitude / GRID_SIZE);
+export function getGeoCell({ latitude, longitude }: Coordinate) {
+  const latIndex = Math.floor((latitude - SG_BOUNDING_BOX.MIN_LAT) / GRID_SIZE);
+  const lonIndex = Math.floor((longitude - SG_BOUNDING_BOX.MIN_LON) / GRID_SIZE);
+  const id = latIndex * SG_BOUNDING_BOX.MAX_LON_INDEX + lonIndex;
 
-  return latCell * MAX_LON + lonCell;
+  return { id, latIndex, lonIndex };
 }
 
-export function getGeoCellBounds({ latitude, longitude }: Coordinate) {
-  const latCell = Math.floor(latitude / GRID_SIZE);
-  const lonCell = Math.floor(longitude / GRID_SIZE);
+export function getGeoCellBounds(coord: Coordinate) {
+  const geoCell = getGeoCell(coord);
+  const { latIndex, lonIndex } = geoCell;
 
   return {
-    minLat: latCell * GRID_SIZE,
-    maxLat: (latCell + 1) * GRID_SIZE,
-    minLng: lonCell * GRID_SIZE,
-    maxLng: (lonCell + 1) * GRID_SIZE,
+    ...geoCell,
+    minLat: latIndex * GRID_SIZE,
+    maxLat: (latIndex + 1) * GRID_SIZE,
+    minLng: lonIndex * GRID_SIZE,
+    maxLng: (lonIndex + 1) * GRID_SIZE,
   };
 }
 
@@ -41,6 +51,14 @@ export type TextIdParamter = {
 };
 
 const getTextParamKey = ({ userId, kind, text }: TextIdParamter) => [userId, kind, text].join(':');
+
+export async function getSingleTextId(param: TextIdParamter, encoder?: TextEncoder) {
+  encoder ??= new TextEncoder();
+  const key = getTextParamKey(param);
+  const valueBuff = encoder.encode(key);
+  const digestBuffer = await crypto.subtle.digest('SHA-256', valueBuff);
+  return digestBuffer.slice(0, 16);
+}
 
 export async function createGetTextId(...params: TextIdParamter[]) {
   const encoder = new TextEncoder();
