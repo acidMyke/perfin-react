@@ -251,7 +251,7 @@ function queueSaveSearchables(
         .insert(geoTextsTable)
         .values(values)
         .onConflictDoUpdate({
-          target: [geoTextsTable.geoCellId, geoTextsTable.textId],
+          target: [geoTextsTable.userId, geoTextsTable.geoCellId, geoTextsTable.textId],
           set: { indexGen: excluded(geoTextsTable.indexGen) },
         }),
     ),
