@@ -1,4 +1,4 @@
-import { caseWhen, excluded, excludedAll, sumAsNumber, type AppDatabase } from '#server/lib/db';
+import { caseWhen, excluded, excludedAll, max, sumAsNumber, type AppDatabase } from '#server/lib/db';
 import type BatchCollector from '#server/lib/BatchCollector';
 import { blacklistSearchableText } from '#server/lib/expenseHelper';
 import { splitArray } from '#server/lib/utils';
@@ -312,6 +312,31 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
     .where(
       and(eq(searchIndexGenerationsTable.userId, userId), eq(searchIndexGenerationsTable.currentGen, currentVersion)),
     );
+}
+
+export async function processReindexingFinalStage(db: AppDatabase, userId: string) {
+  const usersTextSq = db
+    .select({ textId: textsTable.id })
+    .from(textsTable)
+    .where(eq(textsTable.userId, userId))
+    .as('user_texts_sq');
+
+  const aggExpenseTxtTableSq = db
+    .select({
+      textId: expenseTextsTable.textId.as('text_id'),
+      lastUsedAt: max(expenseTextsTable.expenseBilledAt).as('last_used_at'),
+      usageCount: count(expenseTextsTable.sourceId).as('usage_count'),
+    })
+    .from(expenseTextsTable)
+    .where(inArray(expenseTextsTable.textId, usersTextSq))
+    .groupBy(expenseTextsTable.textId)
+    .as('agg_expense_txt_sq');
+
+  return db
+    .update(textsTable)
+    .set({ lastUsedAt: sql`${aggExpenseTxtTableSq.lastUsedAt}`, usageCount: sql`${aggExpenseTxtTableSq.usageCount}` })
+    .from(aggExpenseTxtTableSq)
+    .where(and(eq(textsTable.userId, userId), eq(textsTable.id, aggExpenseTxtTableSq.textId)));
 }
 
 export const getSuggestionInputSchema = z.object({
