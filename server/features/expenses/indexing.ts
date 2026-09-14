@@ -315,11 +315,7 @@ export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVe
 }
 
 export async function processReindexingFinalStage(db: AppDatabase, userId: string) {
-  const usersTextSq = db
-    .select({ textId: textsTable.id })
-    .from(textsTable)
-    .where(eq(textsTable.userId, userId))
-    .as('user_texts_sq');
+  const usersTextSq = db.select({ textId: textsTable.id }).from(textsTable).where(eq(textsTable.userId, userId));
 
   const aggExpenseTxtTableSq = db
     .select({
@@ -334,7 +330,10 @@ export async function processReindexingFinalStage(db: AppDatabase, userId: strin
 
   return db
     .update(textsTable)
-    .set({ lastUsedAt: sql`${aggExpenseTxtTableSq.lastUsedAt}`, usageCount: sql`${aggExpenseTxtTableSq.usageCount}` })
+    .set({
+      lastUsedAt: sql`agg_expense_txt_sq.last_used_at`,
+      usageCount: sql`agg_expense_txt_sq.usage_count`,
+    })
     .from(aggExpenseTxtTableSq)
     .where(and(eq(textsTable.userId, userId), eq(textsTable.id, aggExpenseTxtTableSq.textId)));
 }
