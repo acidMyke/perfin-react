@@ -1,3 +1,22 @@
+DROP INDEX IF EXISTS `idx_expense_refund_expense_id`;
+DROP INDEX IF EXISTS `idx_expense_refund_expense_item_id`;
+DROP INDEX IF EXISTS `idx_expense_refund_source`;
+DROP INDEX IF EXISTS `idx_expenses_texts_sourceId`;
+DROP INDEX IF EXISTS `idx_textHash_expenseId`;
+DROP INDEX IF EXISTS `idx_search_chunk`;
+DROP INDEX IF EXISTS `idx_search_context`;
+DROP INDEX IF EXISTS `idx_user_chunks`;
+DROP INDEX IF EXISTS `idx_texts_contexts_ctxTextHash_textHash`;
+DROP TABLE IF EXISTS `expense_refunds`;
+DROP TABLE IF EXISTS `expenses_texts`;
+DROP TABLE IF EXISTS `search_index_versions`;
+DROP TABLE IF EXISTS `search`;
+DROP TABLE IF EXISTS `texts_chunks`;
+DROP TABLE IF EXISTS `texts_contexts`;
+DROP TABLE IF EXISTS `texts`;
+ALTER TABLE `expense_items` DROP COLUMN `expense_refund_id`;
+
+-- Recreate indexing tables
 CREATE TABLE `search_index_generations` (
 	`id` text(21) PRIMARY KEY,
 	`user_id` text(21) NOT NULL,
