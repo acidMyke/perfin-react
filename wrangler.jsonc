@@ -53,11 +53,6 @@
   ],
   "workflows": [
     {
-      "name": "perfin-staging-v2-data-migrator",
-      "binding": "V2_MIGRATOR",
-      "class_name": "VersionTwoDataMigrator",
-    },
-    {
       "name": "perfin-staging-expense-reindexer",
       "binding": "EXPENSE_REINDEXER",
       "class_name": "UserExpenseReindexer",
@@ -110,11 +105,6 @@
       ],
       "workflows": [
         {
-          "name": "perfin-v2-data-migrator",
-          "binding": "V2_MIGRATOR",
-          "class_name": "VersionTwoDataMigrator",
-        },
-        {
           "name": "perfin-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
           "class_name": "UserExpenseReindexer",
@@ -165,11 +155,6 @@
         },
       ],
       "workflows": [
-        {
-          "name": "perfin-staging-v2-data-migrator",
-          "binding": "V2_MIGRATOR",
-          "class_name": "VersionTwoDataMigrator",
-        },
         {
           "name": "perfin-staging-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
