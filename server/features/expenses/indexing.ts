@@ -340,7 +340,7 @@ export async function processReindexingFinalStage(db: AppDatabase, userId: strin
 
 export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
-  search: z.string(),
+  search: z.string().optional(),
   context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
   coordinate: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
 });
@@ -350,9 +350,10 @@ type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
 export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
   const { db, userId } = ctx;
   const { kind, context, coordinate } = input;
-  const search = input.search.trim();
+  const search = input.search?.trim();
+  const contextText = context?.text?.trim();
 
-  if (!search && !context?.text && !coordinate) {
+  if (!search && !contextText && !coordinate) {
     return { suggestions: [] };
   }
 
@@ -415,7 +416,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
     const geoCell = getGeoCell(coordinate);
     searchQuery = searchQuery.unionAll(
       db
-        .select({
+        .selectDistinct({
           textId: geoTextsTable.textId.as(textIdCol),
           chunkCountScore: sql<0>`0`.as(chunkCountScoreCol),
           contextScore: sql<0>`0`.as(contextScoreCol),
@@ -445,8 +446,8 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       chunkCountScore: aggregatedSubquery.chunkCountScore,
       contextScore: aggregatedSubquery.contextScore,
       spatialScore: aggregatedSubquery.spatialScore,
-      frequencyScore: caseWhen(gte(textsTable.usageCount, 10), 2)
-        .whenThen(gte(textsTable.usageCount, 3), 1)
+      frequencyScore: caseWhen(gte(textsTable.usageCount, 20), 2)
+        .whenThen(gte(textsTable.usageCount, 5), 1)
         .else(0)
         .as(frequencyScoreCol),
       recencyScore: caseWhen(gte(textsTable.lastUsedAt, subDays(Date.now(), 4)), -1)
@@ -456,12 +457,14 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
         .as(recencyScoreCol),
     })
     .from(aggregatedSubquery)
-    .innerJoin(textsTable, eq(aggregatedSubquery.textId, textsTable.id))
+    .innerJoin(
+      textsTable,
+      and(eq(aggregatedSubquery.textId, textsTable.id), eq(textsTable.userId, userId), eq(textsTable.kind, kind)),
+    )
     .orderBy(
       desc(
-        sql.join(
-          [chunkCountScoreCol, frequencyScoreCol, recencyScoreCol, contextScoreCol, spatialScoreCol].map(sql.raw),
-          ' + ',
+        sql.raw(
+          `${chunkCountScoreCol} + ${frequencyScoreCol} + ${recencyScoreCol} + ${contextScoreCol} + ${spatialScoreCol}`,
         ),
       ),
     );
