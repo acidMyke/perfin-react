@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "37b3983c-c699-4119-97c7-ef436beb8299",
+  "id": "93ba7413-b245-481b-a5db-e12c8fcdecb3",
   "prevIds": [
     "b3c1a37e-99cd-4d24-bea2-86d5f492dbae"
   ],
@@ -1055,6 +1055,16 @@
       "table": "geo_texts"
     },
     {
+      "type": "text",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "kind",
+      "entityType": "columns",
+      "table": "geo_texts"
+    },
+    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -2017,6 +2027,7 @@
     {
       "columns": [
         "user_id",
+        "kind",
         "geo_cell_id",
         "text_id"
       ],

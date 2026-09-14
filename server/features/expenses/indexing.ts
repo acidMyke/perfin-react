@@ -171,7 +171,7 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
         const geoCellBounds = getGeoCellBounds(geoCellParam);
         geoCellsUpserts.push({ ...geoCellBounds, id: geoCellId, indexGen });
       }
-      geoTextsUpserts.push({ geoCellId, userId, textId, indexGen });
+      geoTextsUpserts.push({ textId, userId, kind, geoCellId, indexGen });
     }
 
     expenseTextsUpserts.push({ expenseId, expenseBilledAt: billedAt, sourceId, textId, indexGen });

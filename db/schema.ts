@@ -368,12 +368,16 @@ export const geoTextsTable = sqliteTable(
   {
     textId: textIdColumn(),
     userId: idColumn(),
+    kind: text().notNull(),
     geoCellId: integer()
       .notNull()
       .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
     indexGen: integer().notNull().default(0),
   },
-  t => [primaryKey({ columns: [t.userId, t.geoCellId, t.textId] }), index('idx_geo_texts').on(t.textId, t.geoCellId)],
+  t => [
+    primaryKey({ columns: [t.userId, t.kind, t.geoCellId, t.textId] }),
+    index('idx_geo_texts').on(t.textId, t.geoCellId),
+  ],
 );
 
 export const ctxTextsTable = sqliteTable(
