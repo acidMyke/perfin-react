@@ -205,8 +205,14 @@ function queueSaveSearchables(
           target: textsTable.id,
           set: {
             indexGen: excluded(textsTable.indexGen),
-            lastUsedAt: sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`,
-            usageCount: sql`${textsTable.usageCount} + 1`,
+            lastUsedAt: caseWhen(
+              gt(excluded(textsTable.indexGen), textsTable.indexGen),
+              excluded(textsTable.usageCount),
+            ).else(sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`),
+            usageCount: caseWhen(
+              gt(excluded(textsTable.indexGen), textsTable.indexGen),
+              excluded(textsTable.usageCount),
+            ).else(sql`${textsTable.usageCount} + 1`),
           },
         }),
     ),
