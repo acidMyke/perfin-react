@@ -81,6 +81,8 @@ CREATE TABLE `geo_texts` (
 	`user_id` text(21) NOT NULL,
 	`kind` text NOT NULL,
 	`geo_cell_id` integer NOT NULL,
+	`latitude` real NOT NULL,
+	`longitude` real NOT NULL,
 	`index_gen` integer DEFAULT 0 NOT NULL,
 	CONSTRAINT `geo_texts_pk` PRIMARY KEY(`user_id`, `kind`, `geo_cell_id`, `text_id`),
 	CONSTRAINT `fk_geo_texts_text_id_texts_id_fk` FOREIGN KEY (`text_id`) REFERENCES `texts`(`id`) ON UPDATE CASCADE ON DELETE CASCADE,

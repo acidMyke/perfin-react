@@ -372,6 +372,8 @@ export const geoTextsTable = sqliteTable(
     geoCellId: integer()
       .notNull()
       .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    latitude: real().notNull(),
+    longitude: real().notNull(),
     indexGen: integer().notNull().default(0),
   },
   t => [

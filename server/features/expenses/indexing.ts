@@ -246,13 +246,23 @@ function queueSaveSearchables(
           set: { indexGen: excluded(ctxTextsTable.indexGen) },
         }),
     ),
-    ...splitArray(geoTextsUpserts, 24).map(values =>
+    ...splitArray(geoTextsUpserts, 14).map(values =>
       db
         .insert(geoTextsTable)
         .values(values)
         .onConflictDoUpdate({
-          target: [geoTextsTable.userId, geoTextsTable.geoCellId, geoTextsTable.textId],
-          set: { indexGen: excluded(geoTextsTable.indexGen) },
+          target: [geoTextsTable.userId, geoTextsTable.kind, geoTextsTable.geoCellId, geoTextsTable.textId],
+          set: {
+            indexGen: excluded(geoTextsTable.indexGen),
+            latitude: caseWhen(
+              gt(excluded(geoTextsTable.indexGen), geoTextsTable.indexGen),
+              excluded(geoTextsTable.latitude),
+            ).else(sql`((${geoTextsTable.latitude} * 2 + ${excluded(geoTextsTable.latitude)}) / 3)`),
+            longitude: caseWhen(
+              gt(excluded(geoTextsTable.indexGen), geoTextsTable.indexGen),
+              excluded(geoTextsTable.longitude),
+            ).else(sql`((${geoTextsTable.longitude} * 2 + ${excluded(geoTextsTable.longitude)}) / 3)`),
+          },
         }),
     ),
   );
@@ -423,7 +433,9 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
           spatialScore: sql<2>`2`.as(spatialScoreCol),
         })
         .from(geoTextsTable)
-        .where(and(eq(geoTextsTable.userId, userId), eq(geoTextsTable.geoCellId, geoCell.id))),
+        .where(
+          and(eq(geoTextsTable.userId, userId), eq(geoTextsTable.kind, kind), eq(geoTextsTable.geoCellId, geoCell.id)),
+        ),
     );
   }
 
