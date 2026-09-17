@@ -8,7 +8,7 @@ import {
   searchIndexGenerationsTable,
 } from '../../db/schema';
 import { and, eq, gt, inArray, sql } from 'drizzle-orm';
-import { cleanupOldIndex, processReindexing, processReindexingFinalStage } from '#server/features/expenses/indexing';
+import { cleanupOldIndex, processReindexing } from '#server/features/expenses/indexCreation';
 
 export type UserExpenseReindexerParam = {
   userId: string;
@@ -60,7 +60,6 @@ export class UserExpenseReindexer extends WorkflowEntrypoint<Env, UserExpenseRei
     await step.do('cleanup-old-index', async () => {
       const db = createDatabase(this.env);
       await cleanupOldIndex(db, userId, version);
-      await processReindexingFinalStage(db, userId);
     });
   }
 

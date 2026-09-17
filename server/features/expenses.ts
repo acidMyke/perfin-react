@@ -13,16 +13,16 @@ import {
   textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
-import { and, asc, avg, countDistinct, desc, eq, gte } from 'drizzle-orm';
-import { inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, gte } from 'drizzle-orm';
+import { inArray, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
 import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
+import { getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
-import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
+import { getSuggestions, getSuggestionInputSchema, searchShopByLocation } from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
 export type Option = {
@@ -200,55 +200,9 @@ const getSuggestionsProcedure = protectedProcedure
   .input(getSuggestionInputSchema)
   .mutation(({ ctx, input }) => getSuggestions(ctx, input));
 
-const suggestShopByLocationProcedure = protectedProcedure
-  .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const queryBoxIds = getLocationBoxId(input);
-    const data = await db
-      .select({
-        shopName: sql<string>`${expensesTable.shopName}`,
-        shopMalls: jsonGroupArray(expensesTable.shopMall, { distinct: true }),
-      })
-      .from(expensesTable)
-      .where(
-        and(
-          isNotNull(expensesTable.shopName),
-          eq(expensesTable.userId, userId),
-          inArray(expensesTable.boxId, queryBoxIds),
-        ),
-      )
-      .groupBy(expensesTable.shopName);
-
-    return data;
-  });
-
 const searchShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .query(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const queryBoxIds = getLocationBoxId(input);
-    const result = await db
-      .select({
-        shopName: sql<string>`${expensesTable.shopName}`,
-        shopMall: expensesTable.shopMall,
-        latitude: avg(expensesTable.latitude).mapWith(expensesTable.latitude),
-        longitude: avg(expensesTable.longitude).mapWith(expensesTable.longitude),
-      })
-      .from(expensesTable)
-      .where(
-        and(
-          isNotNull(expensesTable.shopName),
-          eq(expensesTable.userId, userId),
-          inArray(expensesTable.boxId, queryBoxIds),
-        ),
-      )
-      .groupBy(expensesTable.shopName, expensesTable.shopMall);
-
-    return {
-      result,
-    };
-  });
+  .query(async ({ input, ctx }) => await searchShopByLocation(ctx, input));
 
 const getShopDetailProcedure = protectedProcedure
   .input(z.object({ shopName: z.string() }))
@@ -477,7 +431,6 @@ export const expenseProcedures = {
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
-  suggestShopByLocation: suggestShopByLocationProcedure,
   searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
   inferItemDetails: inferItemDetailsProcedure,

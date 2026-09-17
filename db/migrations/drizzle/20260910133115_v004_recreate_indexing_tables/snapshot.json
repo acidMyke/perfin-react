@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "beab93a0-39fa-4695-8c10-02c27f6003d2",
+  "id": "5235f053-9a48-4c60-b7ef-d3556691f38c",
   "prevIds": [
     "b3c1a37e-99cd-4d24-bea2-86d5f492dbae"
   ],
@@ -1091,16 +1091,6 @@
       "default": null,
       "generated": null,
       "name": "longitude",
-      "entityType": "columns",
-      "table": "geo_texts"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "0",
-      "generated": null,
-      "name": "count",
       "entityType": "columns",
       "table": "geo_texts"
     },
@@ -2505,6 +2495,32 @@
       "where": null,
       "origin": "manual",
       "name": "idx_geo_texts",
+      "entityType": "indexes",
+      "table": "geo_texts"
+    },
+    {
+      "columns": [
+        {
+          "value": "text_id",
+          "isExpression": false
+        },
+        {
+          "value": "user_id",
+          "isExpression": false
+        },
+        {
+          "value": "kind",
+          "isExpression": false
+        },
+        {
+          "value": "geo_cell_id",
+          "isExpression": false
+        }
+      ],
+      "isUnique": false,
+      "where": null,
+      "origin": "manual",
+      "name": "idx_geo_texts_text_id_user_kind_cell",
       "entityType": "indexes",
       "table": "geo_texts"
     },

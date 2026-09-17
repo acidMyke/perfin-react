@@ -379,6 +379,7 @@ export const geoTextsTable = sqliteTable(
   t => [
     primaryKey({ columns: [t.userId, t.kind, t.geoCellId, t.textId] }),
     index('idx_geo_texts').on(t.textId, t.geoCellId),
+    index('idx_geo_texts_text_id_user_kind_cell').on(t.textId, t.userId, t.kind, t.geoCellId),
   ],
 );
 
