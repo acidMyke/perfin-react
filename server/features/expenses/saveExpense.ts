@@ -22,7 +22,7 @@ import {
   calculateExpenseCategoryAllocations,
   type ExpenseCalculationResult,
 } from '#server/lib/expenseHelper';
-import { processSaveExpenseSearchIndexing } from './indexing';
+import { processSaveExpenseSearchIndexing } from './indexCreation';
 import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
 export const saveExpenseInputSchema = z.object({

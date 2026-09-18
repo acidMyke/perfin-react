@@ -18,11 +18,10 @@ import { inArray, isNull, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
+import { caseWhen, coalesce, concat, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
+import { getTextsHashes, getTrigrams } from '../lib/utils';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
-import { getSuggestions, getSuggestionInputSchema, searchShopByLocation } from './expenses/indexUsage';
+import { getSuggestions, getSuggestionInputSchema, searchShopByLocation, getShopDetail } from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
 export type Option = {
@@ -202,74 +201,11 @@ const getSuggestionsProcedure = protectedProcedure
 
 const searchShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .query(async ({ input, ctx }) => await searchShopByLocation(ctx, input));
+  .query(({ input, ctx }) => searchShopByLocation(ctx, input));
 
 const getShopDetailProcedure = protectedProcedure
   .input(z.object({ shopName: z.string() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const shopNameHash = await getTextHash(userId, input.shopName);
-    const expensesCte = db.$with('expense_id_cte').as(
-      db
-        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
-        .from(expenseTextsTable)
-        .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
-        .where(eq(expenseTextsTable.textId, shopNameHash))
-        .orderBy(desc(expensesTable.billedAt))
-        .limit(1),
-    );
-
-    const adjustmentsCte = db.$with('adjustments_cte').as(
-      db
-        .select({
-          isGstExcluded: max(
-            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
-          ).as('is_gst'),
-          serviceChargeBps: max(
-            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
-          ).as('service_charge'),
-        })
-        .from(expensesCte)
-        .leftJoin(
-          expenseAdjustmentsTable,
-          and(
-            eq(expenseAdjustmentsTable.isInferable, true),
-            eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
-          ),
-        )
-        .groupBy(expenseAdjustmentsTable.expenseId),
-    );
-
-    const accountsCte = db.$with('accounts_cte').as(
-      db
-        .select({ accountIds: jsonGroupArray(expenseAccountAllocationsTable.accountId).as('accountIds') })
-        .from(expensesCte)
-        .leftJoin(expenseAccountAllocationsTable, eq(expensesCte.expenseId, expenseAccountAllocationsTable.expenseId))
-        .groupBy(expenseAccountAllocationsTable.expenseId),
-    );
-
-    const categoriesCte = db.$with('categories_cte').as(
-      db
-        .select({ categoryIds: jsonGroupArray(expenseCategoryAllocationsTable.categoryId).as('categoryIds') })
-        .from(expensesCte)
-        .leftJoin(expenseCategoryAllocationsTable, eq(expensesCte.expenseId, expenseCategoryAllocationsTable.expenseId))
-        .groupBy(expenseCategoryAllocationsTable.expenseId),
-    );
-
-    const data = await db
-      .with(expensesCte, adjustmentsCte, accountsCte, categoriesCte)
-      .select({
-        accountIds: accountsCte.accountIds,
-        categoryIds: categoriesCte.categoryIds,
-        isGstExcluded: adjustmentsCte.isGstExcluded,
-        serviceChargeBps: adjustmentsCte.serviceChargeBps,
-      })
-      .from(adjustmentsCte)
-      .crossJoin(accountsCte)
-      .crossJoin(categoriesCte);
-
-    return data;
-  });
+  .mutation(({ input, ctx }) => getShopDetail(ctx, input));
 
 const inferItemDetailsProcedure = protectedProcedure
   .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))

@@ -1,11 +1,21 @@
-import { caseWhen, sumAsNumber } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
-import { textsTable, textChunksTable, geoTextsTable, ctxTextsTable } from '../../../db/schema';
+import {
+  textsTable,
+  textChunksTable,
+  geoTextsTable,
+  ctxTextsTable,
+  expenseTextsTable,
+  expenseAccountAllocationsTable,
+  expenseAdjustmentsTable,
+  expenseCategoryAllocationsTable,
+} from '../../../db/schema';
 import z from 'zod';
 import type { ProtectedContext } from '#server/lib/trpc';
 import { generateSearchChunks, getGeoCell, getSingleTextId, TEXT_KIND } from '#server/lib/indexing';
 import { subDays } from 'date-fns';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
 export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
@@ -190,4 +200,73 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
     );
 
   return { result };
+}
+
+export const getShopDetailInputSchema = z.object({ shopName: z.string() });
+type GetShopDetailInput = z.infer<typeof getShopDetailInputSchema>;
+
+export async function getShopDetail(ctx: ProtectedContext, input: GetShopDetailInput) {
+  const { shopName } = input;
+  const { db, userId } = ctx;
+  const shopNameTextId = await getSingleTextId({ userId, kind: TEXT_KIND.SHOP_NAME, text: shopName });
+
+  const expensesCte = db.$with('expense_id_cte').as(
+    db
+      .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
+      .from(expenseTextsTable)
+      .where(eq(expenseTextsTable.textId, Buffer.from(shopNameTextId)))
+      .orderBy(desc(expenseTextsTable.expenseBilledAt))
+      .limit(1),
+  );
+
+  const adjustmentsCte = db.$with('adjustments_cte').as(
+    db
+      .select({
+        isGstExcluded: max(
+          caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
+        ).as('is_gst'),
+        serviceChargeBps: max(
+          caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
+        ).as('service_charge'),
+      })
+      .from(expensesCte)
+      .leftJoin(
+        expenseAdjustmentsTable,
+        and(
+          eq(expenseAdjustmentsTable.isInferable, true),
+          eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
+        ),
+      )
+      .groupBy(expenseAdjustmentsTable.expenseId),
+  );
+
+  const accountsCte = db.$with('accounts_cte').as(
+    db
+      .select({ accountIds: jsonGroupArray(expenseAccountAllocationsTable.accountId).as('accountIds') })
+      .from(expensesCte)
+      .leftJoin(expenseAccountAllocationsTable, eq(expensesCte.expenseId, expenseAccountAllocationsTable.expenseId))
+      .groupBy(expenseAccountAllocationsTable.expenseId),
+  );
+
+  const categoriesCte = db.$with('categories_cte').as(
+    db
+      .select({ categoryIds: jsonGroupArray(expenseCategoryAllocationsTable.categoryId).as('categoryIds') })
+      .from(expensesCte)
+      .leftJoin(expenseCategoryAllocationsTable, eq(expensesCte.expenseId, expenseCategoryAllocationsTable.expenseId))
+      .groupBy(expenseCategoryAllocationsTable.expenseId),
+  );
+
+  const data = await db
+    .with(expensesCte, adjustmentsCte, accountsCte, categoriesCte)
+    .select({
+      accountIds: accountsCte.accountIds,
+      categoryIds: categoriesCte.categoryIds,
+      isGstExcluded: adjustmentsCte.isGstExcluded,
+      serviceChargeBps: adjustmentsCte.serviceChargeBps,
+    })
+    .from(adjustmentsCte)
+    .crossJoin(accountsCte)
+    .crossJoin(categoriesCte);
+
+  return data;
 }
