@@ -50,7 +50,7 @@ vi.mock(import('../../lib/expenseHelper'), () => ({
 }));
 vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
 vi.mock(import('../../lib/fileUpload'), () => ({ getFileIdsByRequestId: vi.fn() }));
-vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
+vi.mock(import('./indexCreation'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
 
 describe('helpers', async () => {
   const [schema] = await Promise.all([import('#schema')]);
@@ -931,7 +931,7 @@ describe('helpers', async () => {
 describe(processSaveExpense, async () => {
   let deps = createDynamicMock<SaveExpenseHelpers & SaveExpenseRepo>('deps');
   const expectDeps = () => expectDynamicMock('deps');
-  const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
+  const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexCreation')]);
   const netTotalCents = 60_00;
   const expectedCalculateExpenseResult: ExpenseCalculationResult = {
     netTotalCents,
