@@ -148,7 +148,7 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
 
     if (!processedTextIdArrayBuffer.has(textIdArrayBuffer)) {
       processedTextIdArrayBuffer.add(textIdArrayBuffer);
-      textsUpserts.push({ id: textId, userId, kind, text, indexGen, lastUsedAt: billedAt, usageCount: 1 });
+      textsUpserts.push({ id: textId, userId, kind, text, usageCount: 1, lastUsedAt: billedAt, indexGen });
       textChunkUpserts.push(...generateSearchChunks(text).map(chunk => ({ textId, userId, kind, chunk, indexGen })));
     }
 
@@ -156,7 +156,7 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
       const ctxTextIdArrayBuffer = getTextId({ ...context, userId });
       if (ctxTextIdArrayBuffer) {
         const ctxTextId = Buffer.from(ctxTextIdArrayBuffer);
-        ctxTextsUpserts.push({ ctxTextId, textId, indexGen });
+        ctxTextsUpserts.push({ ctxTextId, textId, usageCount: 1, lastUsedAt: billedAt, indexGen });
       }
     }
 
@@ -239,13 +239,23 @@ function queueSaveSearchables(
           set: { indexGen: excluded(geoCellsTable.indexGen) },
         }),
     ),
-    ...splitArray(ctxTextsUpserts, 33).map(values =>
+    ...splitArray(ctxTextsUpserts, 19).map(values =>
       db
         .insert(ctxTextsTable)
         .values(values)
         .onConflictDoUpdate({
           target: [ctxTextsTable.ctxTextId, ctxTextsTable.textId],
-          set: { indexGen: excluded(ctxTextsTable.indexGen) },
+          set: {
+            indexGen: excluded(ctxTextsTable.indexGen),
+            lastUsedAt: caseWhen(
+              gt(excluded(textsTable.indexGen), textsTable.indexGen),
+              excluded(textsTable.usageCount),
+            ).else(sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`),
+            usageCount: caseWhen(
+              gt(excluded(textsTable.indexGen), textsTable.indexGen),
+              excluded(textsTable.usageCount),
+            ).else(sql`${textsTable.usageCount} + 1`),
+          },
         }),
     ),
     ...splitArray(geoTextsUpserts, 14).map(values =>

@@ -1,7 +1,7 @@
 {
   "version": "7",
   "dialect": "sqlite",
-  "id": "5235f053-9a48-4c60-b7ef-d3556691f38c",
+  "id": "57e61642-8afa-4a9a-8676-0b4f3ddd7481",
   "prevIds": [
     "b3c1a37e-99cd-4d24-bea2-86d5f492dbae"
   ],
@@ -291,6 +291,26 @@
       "default": null,
       "generated": null,
       "name": "ctx_text_id",
+      "entityType": "columns",
+      "table": "ctx_texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "usage_count",
+      "entityType": "columns",
+      "table": "ctx_texts"
+    },
+    {
+      "type": "integer",
+      "notNull": true,
+      "autoincrement": false,
+      "default": null,
+      "generated": null,
+      "name": "last_used_at",
       "entityType": "columns",
       "table": "ctx_texts"
     },
@@ -1568,9 +1588,9 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
-      "default": "0",
+      "default": null,
       "generated": null,
-      "name": "index_gen",
+      "name": "usage_count",
       "entityType": "columns",
       "table": "texts"
     },
@@ -1588,9 +1608,9 @@
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
-      "default": null,
+      "default": "0",
       "generated": null,
-      "name": "usage_count",
+      "name": "index_gen",
       "entityType": "columns",
       "table": "texts"
     },

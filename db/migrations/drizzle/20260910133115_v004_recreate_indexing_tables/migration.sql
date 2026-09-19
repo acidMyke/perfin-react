@@ -15,9 +15,9 @@ CREATE TABLE `texts` (
 	`user_id` text(21) NOT NULL,
 	`kind` text NOT NULL,
 	`text` text NOT NULL,
-	`index_gen` integer DEFAULT 0 NOT NULL,
-	`last_used_at` integer NOT NULL,
 	`usage_count` integer NOT NULL,
+	`last_used_at` integer NOT NULL,
+	`index_gen` integer DEFAULT 0 NOT NULL,
 	CONSTRAINT `uq_texts_user_id_kind_text` UNIQUE(`user_id`,`kind`,`text`)
 ) WITHOUT ROWID;
 
@@ -51,6 +51,8 @@ CREATE TABLE `geo_cells` (
 CREATE TABLE `ctx_texts` (
 	`text_id` blob NOT NULL,
 	`ctx_text_id` blob NOT NULL,
+	`usage_count` integer NOT NULL,
+	`last_used_at` integer NOT NULL,
 	`index_gen` integer DEFAULT 0 NOT NULL,
 	CONSTRAINT `ctx_texts_pk` PRIMARY KEY(`ctx_text_id`, `text_id`),
 	CONSTRAINT `fk_ctx_texts_text_id_texts_id_fk` FOREIGN KEY (`text_id`) REFERENCES `texts`(`id`) ON UPDATE CASCADE ON DELETE CASCADE,

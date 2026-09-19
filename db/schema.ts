@@ -325,9 +325,9 @@ export const textsTable = sqliteTable(
     userId: idColumn(),
     kind: text().notNull(),
     text: text().notNull(),
-    indexGen: integer().notNull().default(0),
-    lastUsedAt: dateColumn().notNull(),
     usageCount: integer().notNull(),
+    lastUsedAt: dateColumn().notNull(),
+    indexGen: integer().notNull().default(0),
   },
   t => [unique('uq_texts_user_id_kind_text').on(t.userId, t.kind, t.text)],
 );
@@ -388,6 +388,8 @@ export const ctxTextsTable = sqliteTable(
   {
     textId: textIdColumn(),
     ctxTextId: textIdColumn(),
+    usageCount: integer().notNull(),
+    lastUsedAt: dateColumn().notNull(),
     indexGen: integer().notNull().default(0),
   },
   t => [primaryKey({ columns: [t.ctxTextId, t.textId] }), index('idx_ctx_texts').on(t.textId, t.ctxTextId)],
