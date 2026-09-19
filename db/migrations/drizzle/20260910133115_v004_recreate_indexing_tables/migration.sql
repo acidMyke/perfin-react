@@ -37,7 +37,7 @@ CREATE TABLE `expenses_texts` (
 	`text_id` blob NOT NULL,
 	`source_id` text(21) NOT NULL,
 	`index_gen` integer DEFAULT 0 NOT NULL,
-	CONSTRAINT `expenses_texts_pk` PRIMARY KEY(`text_id`, `source_id`),
+	CONSTRAINT `expenses_texts_pk` PRIMARY KEY(`text_id`, `expense_billed_at`, `expense_id`, `source_id`),
 	CONSTRAINT `fk_expenses_texts_text_id_texts_id_fk` FOREIGN KEY (`text_id`) REFERENCES `texts`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
 ) WITHOUT ROWID;
 
@@ -72,8 +72,7 @@ CREATE TABLE `geo_texts` (
 	CONSTRAINT `fk_geo_texts_geo_cell_id_geo_cells_id_fk` FOREIGN KEY (`geo_cell_id`) REFERENCES `geo_cells`(`id`) ON UPDATE CASCADE ON DELETE CASCADE
 ) WITHOUT ROWID;
 
-CREATE INDEX `idx_expenses_texts_sourceId` ON `expenses_texts` (`source_id`);
-CREATE INDEX `idx_textHash_expenseId` ON `expenses_texts` (`text_id`,`expense_id`);
+CREATE INDEX `idx_expenses_texts_expense_id_text_id` ON `expenses_texts` (`expense_id`,`text_id`);
 CREATE INDEX `idx_user_chunks` ON `texts_chunks` (`user_id`,`kind`,`chunk`,`text_id`);
 CREATE INDEX `idx_ctx_texts` ON `ctx_texts` (`text_id`,`ctx_text_id`);
 CREATE INDEX `idx_geo_texts` ON `geo_texts` (`text_id`,`geo_cell_id`);

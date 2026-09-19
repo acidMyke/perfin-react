@@ -14,14 +14,22 @@ import {
   uploadedFilesTable,
 } from '../../db/schema';
 import { and, asc, countDistinct, desc, eq, gte } from 'drizzle-orm';
-import { inArray, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { inArray, lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
 import { caseWhen, coalesce, concat, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getTextsHashes, getTrigrams } from '../lib/utils';
+import { getTrigrams } from '../lib/utils';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
-import { getSuggestions, getSuggestionInputSchema, searchShopByLocation, getShopDetail } from './expenses/indexUsage';
+import {
+  getSuggestions,
+  getSuggestionInputSchema,
+  searchShopByLocation,
+  getShopDetail,
+  getItemDetail,
+  getItemDetailInputSchema,
+  getShopDetailInputSchema,
+} from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
 export type Option = {
@@ -204,35 +212,12 @@ const searchShopByLocationProcedure = protectedProcedure
   .query(({ input, ctx }) => searchShopByLocation(ctx, input));
 
 const getShopDetailProcedure = protectedProcedure
-  .input(z.object({ shopName: z.string() }))
+  .input(getShopDetailInputSchema)
   .mutation(({ input, ctx }) => getShopDetail(ctx, input));
 
-const inferItemDetailsProcedure = protectedProcedure
-  .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-
-    const texts = [input.itemName];
-    if (input.shopName) {
-      texts.push(input.shopName);
-    }
-
-    const hashes = await getTextsHashes(userId, texts);
-    const where: SQL[] = [eq(expenseTextsTable.textId, hashes.get(input.itemName)!)];
-    if (input.shopName) {
-      where.push(eq(expenseTextsTable.ctxTextId, hashes.get(input.shopName)!));
-    } else {
-      where.push(isNull(expenseTextsTable.ctxTextId));
-    }
-    return db
-      .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
-      .from(expenseTextsTable)
-      .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
-      .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .where(and(...where))
-      .orderBy(desc(expensesTable.billedAt))
-      .limit(1);
-  });
+const getItemDetailProcedure = protectedProcedure
+  .input(getItemDetailInputSchema)
+  .mutation(({ input, ctx }) => getItemDetail(ctx, input));
 
 const setIsDeletedExpenseProcedure = protectedProcedure
   .input(z.object({ expenseId: z.string(), isDeleted: z.boolean(), version: z.number() }))
@@ -369,7 +354,7 @@ export const expenseProcedures = {
   getSuggestions: getSuggestionsProcedure,
   searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
-  inferItemDetails: inferItemDetailsProcedure,
+  getItemDetail: getItemDetailProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,

@@ -1,5 +1,5 @@
 import { caseWhen, jsonGroupArray, sumAsNumber, max } from '#server/lib/db';
-import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull } from 'drizzle-orm';
+import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   textsTable,
@@ -10,10 +10,18 @@ import {
   expenseAccountAllocationsTable,
   expenseAdjustmentsTable,
   expenseCategoryAllocationsTable,
+  expenseItemsTable,
 } from '../../../db/schema';
 import z from 'zod';
 import type { ProtectedContext } from '#server/lib/trpc';
-import { generateSearchChunks, getGeoCell, getSingleTextId, TEXT_KIND } from '#server/lib/indexing';
+import {
+  createGetTextId,
+  generateSearchChunks,
+  getGeoCell,
+  getSingleTextId,
+  TEXT_KIND,
+  type TextIdParamter,
+} from '#server/lib/indexing';
 import { subDays } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
@@ -269,4 +277,87 @@ export async function getShopDetail(ctx: ProtectedContext, input: GetShopDetailI
     .crossJoin(categoriesCte);
 
   return data;
+}
+
+export const getItemDetailInputSchema = z.object({
+  itemName: z.string(),
+  shopName: z.string().nullish(),
+  mallName: z.string().nullish(),
+});
+type GetItemDetailInput = z.infer<typeof getItemDetailInputSchema>;
+
+export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailInput) {
+  const { db, userId } = ctx;
+  const { itemName, shopName, mallName } = input;
+
+  const itemTextIdParam = { userId, kind: TEXT_KIND.ITEM_NAME, text: itemName };
+  const shopTextIdParam = shopName ? { userId, kind: TEXT_KIND.SHOP_NAME, text: shopName } : undefined;
+  const mallTextIdParam = mallName ? { userId, kind: TEXT_KIND.MALL_NAME, text: mallName } : undefined;
+
+  const textIdParams: TextIdParamter[] = [itemTextIdParam];
+
+  if (shopTextIdParam) {
+    textIdParams.push(shopTextIdParam);
+    if (mallTextIdParam) {
+      textIdParams.push(mallTextIdParam);
+    }
+  }
+
+  const getTextId = await createGetTextId(...textIdParams);
+  const itemTextId = getTextId(itemTextIdParam)!;
+  const shopTextId = shopTextIdParam && getTextId(shopTextIdParam);
+  const mallTextId = mallTextIdParam && getTextId(mallTextIdParam);
+
+  const itemExpense = alias(expenseTextsTable, 'item_expense');
+  const itemShopCtx = alias(ctxTextsTable, 'item_shop_ctx');
+  const shopExpense = alias(expenseTextsTable, 'shop_expense');
+  const shopMallCtx = alias(ctxTextsTable, 'shop_mall_ctx');
+  const mallExpense = alias(expenseTextsTable, 'mall_expense');
+
+  let query = db
+    .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
+    .from(itemExpense)
+    .innerJoin(expenseItemsTable, eq(expenseItemsTable.id, itemExpense.sourceId))
+    .where(eq(expenseTextsTable.textId, Buffer.from(itemTextId)))
+    .$dynamic();
+
+  const orderByConds: SQL[] = [];
+
+  if (shopTextId) {
+    query = query
+      .innerJoin(
+        itemShopCtx,
+        and(eq(itemShopCtx.textId, itemExpense.textId), eq(itemShopCtx.ctxTextId, Buffer.from(shopTextId))),
+      )
+      .innerJoin(
+        shopExpense,
+        and(eq(shopExpense.expenseId, itemExpense.expenseId), eq(shopExpense.textId, itemShopCtx.ctxTextId)),
+      );
+
+    if (mallTextId) {
+      query = query
+        .leftJoin(
+          shopMallCtx,
+          and(eq(shopMallCtx.textId, itemShopCtx.ctxTextId), eq(shopMallCtx.ctxTextId, Buffer.from(mallTextId))),
+        )
+        .leftJoin(
+          mallExpense,
+          and(eq(mallExpense.expenseId, itemExpense.expenseId), eq(mallExpense.textId, shopMallCtx.ctxTextId)),
+        );
+      orderByConds.push(desc(caseWhen(isNotNull(shopMallCtx.ctxTextId), sql`1`).else(sql`0`)));
+    }
+  } else {
+    const itemShopCtxSq = db
+      .select()
+      .from(itemShopCtx)
+      .where(eq(itemShopCtx.textId, Buffer.from(itemTextId)));
+    query = query.where(notExists(itemShopCtxSq));
+  }
+
+  const result = await query
+    .where(eq(itemExpense.textId, Buffer.from(itemTextId)))
+    .orderBy(...orderByConds)
+    .limit(1);
+
+  return { result };
 }

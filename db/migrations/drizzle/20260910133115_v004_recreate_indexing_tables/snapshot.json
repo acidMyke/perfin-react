@@ -2057,6 +2057,8 @@
     {
       "columns": [
         "text_id",
+        "expense_billed_at",
+        "expense_id",
         "source_id"
       ],
       "nameExplicit": false,
@@ -2405,32 +2407,18 @@
     {
       "columns": [
         {
-          "value": "source_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_texts_sourceId",
-      "entityType": "indexes",
-      "table": "expenses_texts"
-    },
-    {
-      "columns": [
-        {
-          "value": "text_id",
+          "value": "expense_id",
           "isExpression": false
         },
         {
-          "value": "expense_id",
+          "value": "text_id",
           "isExpression": false
         }
       ],
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "idx_textHash_expenseId",
+      "name": "idx_expenses_texts_expense_id_text_id",
       "entityType": "indexes",
       "table": "expenses_texts"
     },

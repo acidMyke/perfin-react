@@ -226,7 +226,12 @@ function queueSaveSearchables(
         .insert(expenseTextsTable)
         .values(values)
         .onConflictDoUpdate({
-          target: [expenseTextsTable.textId, expenseTextsTable.sourceId],
+          target: [
+            expenseTextsTable.textId,
+            expenseTextsTable.expenseBilledAt,
+            expenseTextsTable.expenseId,
+            expenseTextsTable.sourceId,
+          ],
           set: excludedAll(expenseTextsTable, ['textId', 'sourceId']),
         }),
     ),

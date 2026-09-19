@@ -408,8 +408,7 @@ export const expenseTextsTable = sqliteTable(
     indexGen: integer().notNull().default(0),
   },
   t => [
-    primaryKey({ columns: [t.textId, t.sourceId] }),
-    index('idx_expenses_texts_sourceId').on(t.sourceId),
-    index('idx_textHash_expenseId').on(t.textId, t.expenseId),
+    primaryKey({ columns: [t.textId, t.expenseBilledAt, t.expenseId, t.sourceId] }),
+    index('idx_expenses_texts_expense_id_text_id').on(t.expenseId, t.textId),
   ],
 );
