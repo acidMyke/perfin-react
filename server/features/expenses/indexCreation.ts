@@ -203,7 +203,7 @@ function queueSaveSearchables(
             indexGen: excluded(textsTable.indexGen),
             lastUsedAt: caseWhen(
               gt(excluded(textsTable.indexGen), textsTable.indexGen),
-              excluded(textsTable.usageCount),
+              excluded(textsTable.lastUsedAt),
             ).else(sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`),
             usageCount: caseWhen(
               gt(excluded(textsTable.indexGen), textsTable.indexGen),
@@ -248,13 +248,13 @@ function queueSaveSearchables(
           set: {
             indexGen: excluded(ctxTextsTable.indexGen),
             lastUsedAt: caseWhen(
-              gt(excluded(textsTable.indexGen), textsTable.indexGen),
-              excluded(textsTable.usageCount),
-            ).else(sql`max(${textsTable.lastUsedAt}, ${excluded(textsTable.lastUsedAt)})`),
+              gt(excluded(ctxTextsTable.indexGen), ctxTextsTable.indexGen),
+              excluded(ctxTextsTable.lastUsedAt),
+            ).else(sql`max(${ctxTextsTable.lastUsedAt}, ${excluded(ctxTextsTable.lastUsedAt)})`),
             usageCount: caseWhen(
-              gt(excluded(textsTable.indexGen), textsTable.indexGen),
-              excluded(textsTable.usageCount),
-            ).else(sql`${textsTable.usageCount} + 1`),
+              gt(excluded(ctxTextsTable.indexGen), ctxTextsTable.indexGen),
+              excluded(ctxTextsTable.usageCount),
+            ).else(sql`${ctxTextsTable.usageCount} + 1`),
           },
         }),
     ),
