@@ -3,18 +3,19 @@ import { queryClient, trpc, type RouterInputs } from '#client/trpc';
 import { useMutation } from '@tanstack/react-query';
 
 type SuggestionInput = RouterInputs['expense']['getSuggestions'];
-type SuggestionScope = SuggestionInput['scope'];
+type SuggestionKind = SuggestionInput['kind'];
+type SuggestionContext = SuggestionInput['context'];
 
 type SuggestionFieldProps = {
-  scope: SuggestionScope;
-  getContext?: () => string | null;
+  kind: SuggestionKind;
+  getContext?: () => SuggestionContext | null;
   fetchDebouncing?: number;
 } & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
 
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, scope, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+  render({ group, kind, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
     const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -25,13 +26,9 @@ export const ExpenseSuggestableField = withFieldGroup({
           onChangeAsync: ({ value, signal, fieldApi }) => {
             if (fieldApi.form.state.isSubmitting) return;
             signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-            const context = getContext?.()?.trim();
+            const context = getContext?.() ?? undefined;
             if (value || context) {
-              mutate({
-                scope,
-                search: value ?? '',
-                context: context && context.length > 0 ? context : undefined,
-              });
+              mutate({ kind, search: value ?? '', context });
             }
           },
         }}
@@ -40,7 +37,7 @@ export const ExpenseSuggestableField = withFieldGroup({
           <field.ComboBox
             suggestionMode
             {...rest}
-            options={data?.suggestions ?? []}
+            options={(data?.suggestions ?? []).map(({ text }) => text)}
             onSuggestionSelected={suggestion => {
               group.setFieldValue('text', suggestion, { dontValidate: true });
               onSuggestionSelected?.(suggestion);

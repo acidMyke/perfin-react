@@ -39,15 +39,18 @@ export const ItemDetailFieldGroup = withFieldGroup({
   render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
     const { pushIntoOptions } = usePushIntoOptions();
     const itemId = useSelector(group.store, state => state.values.id);
-    const inferItemPriceMutation = useMutation(trpc.expense.inferItemDetails.mutationOptions());
+    const inferItemPriceMutation = useMutation(trpc.expense.getItemDetail.mutationOptions());
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
         <ExpenseSuggestableField
           form={group}
           fields={{ text: 'name' }}
-          scope='itemName'
-          getContext={() => getFormField('shopName')}
+          kind='itemName'
+          getContext={() => {
+            const text = getFormField('shopName');
+            return text ? { kind: 'shopName', text } : undefined;
+          }}
           label={`Item ${itemIndex + 1} name`}
           containerCn='col-span-4 w-full'
           triggerChangeOnFocus
@@ -57,17 +60,19 @@ export const ItemDetailFieldGroup = withFieldGroup({
             if (!isPriceCentsDirty) {
               const shopName = getFormField('shopName');
               if (!suggestion?.trim() || !shopName?.trim()) return;
-              inferItemPriceMutation.mutateAsync({ itemName: suggestion, shopName }).then(([itemDetail]) => {
-                if (itemDetail) {
-                  group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
-                  if (itemDetail.categoryId) {
-                    const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
-                    if (category) {
-                      group.setFieldValue('category', category, { dontUpdateMeta: true });
+              inferItemPriceMutation
+                .mutateAsync({ itemName: suggestion, shopName })
+                .then(({ result: [itemDetail] }) => {
+                  if (itemDetail) {
+                    group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+                    if (itemDetail.categoryId) {
+                      const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
+                      if (category) {
+                        group.setFieldValue('category', category, { dontUpdateMeta: true });
+                      }
                     }
                   }
-                }
-              });
+                });
             }
           }}
         />

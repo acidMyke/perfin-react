@@ -257,8 +257,11 @@ const ShopDetailSubForm = withForm({
           <ExpenseSuggestableField
             form={form}
             fields={{ text: 'shopName' }}
-            scope='shopName'
-            getContext={() => form.getFieldValue('shopMall')}
+            kind='shopName'
+            getContext={() => {
+              const text = form.getFieldValue('shopMall');
+              return text ? { kind: 'mallName', text } : undefined;
+            }}
             label='Shop name'
             containerCn='col-span-8 mt-4'
             triggerChangeOnFocus
@@ -305,8 +308,11 @@ const ShopDetailSubForm = withForm({
         <ExpenseSuggestableField
           form={form}
           fields={{ text: 'shopName' }}
-          scope='shopName'
-          getContext={() => form.getFieldValue('shopMall')}
+          kind='shopName'
+          getContext={() => {
+            const text = form.getFieldValue('shopMall');
+            return text ? { kind: 'mallName', text } : undefined;
+          }}
           label='Shop name'
           containerCn='col-span-4 mt-2'
           triggerChangeOnFocus
@@ -316,7 +322,7 @@ const ShopDetailSubForm = withForm({
         <ExpenseSuggestableField
           form={form}
           fields={{ text: 'shopMall' }}
-          scope='shopMall'
+          kind='mallName'
           label='Mall'
           containerCn='col-span-4 mt-2'
           triggerChangeOnFocus

@@ -92,10 +92,10 @@ function RouteComponent() {
       const distance = distanceBetween(userLat, userLng, shop.latitude, shop.longitude);
       shops.push({ ...shop, distance });
 
-      if (!shop.shopMall) continue;
+      if (!shop.mallName) continue;
 
-      const mall = mallMap.get(shop.shopMall) ?? { latSum: 0, lngSum: 0, count: 0 };
-      if (!mallMap.has(shop.shopMall)) mallMap.set(shop.shopMall, mall);
+      const mall = mallMap.get(shop.mallName) ?? { latSum: 0, lngSum: 0, count: 0 };
+      if (!mallMap.has(shop.mallName)) mallMap.set(shop.mallName, mall);
       mall.latSum += shop.latitude;
       mall.lngSum += shop.longitude;
       mall.count++;
@@ -174,8 +174,11 @@ function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions)
       <ExpenseSuggestableField
         form={form}
         fields={{ text: 'shopName' }}
-        scope='shopName'
-        getContext={() => form.getFieldValue('shopMall')}
+        kind='shopName'
+        getContext={() => {
+          const text = form.getFieldValue('shopMall');
+          return text ? { kind: 'mallName', text } : undefined;
+        }}
         label='Shop name'
         triggerChangeOnFocus
         hideError
@@ -184,7 +187,7 @@ function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions)
       <ExpenseSuggestableField
         form={form}
         fields={{ text: 'shopMall' }}
-        scope='shopMall'
+        kind='mallName'
         label='Mall'
         triggerChangeOnFocus
         hideError
@@ -211,11 +214,11 @@ function NearbyResultList({ normalizedResult, continueToMainForm }: NearbyResult
 
         <ul className='menu rounded-box w-full p-0'>
           {normalizedResult?.shops.map(shop => (
-            <li key={`${shop.shopMall}-${shop.shopName}`}>
+            <li key={`${shop.mallName}-${shop.shopName}`}>
               <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
                 <div className='text-left'>
                   <div className='max-w-full font-medium text-ellipsis'>{shop.shopName}</div>
-                  <div className='text-xs opacity-60'>🏬 {shop.shopMall ?? '<Unspecified>'}</div>
+                  <div className='text-xs opacity-60'>🏬 {shop.mallName ?? '<Unspecified>'}</div>
                 </div>
 
                 <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>

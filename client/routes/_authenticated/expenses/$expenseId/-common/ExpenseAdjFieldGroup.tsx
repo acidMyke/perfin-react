@@ -45,8 +45,11 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
           <ExpenseSuggestableField
             form={group}
             fields={{ text: 'name' }}
-            scope='adjName'
-            getContext={() => getFormField('shopName')}
+            kind='adjName'
+            getContext={() => {
+              const text = getFormField('shopName');
+              return text ? { kind: 'shopName', text } : undefined;
+            }}
             containerCn='w-40 grow'
             inputCn='input-sm text-sm'
             triggerChangeOnFocus
