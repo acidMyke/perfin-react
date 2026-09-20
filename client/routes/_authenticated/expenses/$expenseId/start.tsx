@@ -153,6 +153,7 @@ function RouteComponent() {
       <p>Manual entry</p>
       <ManualEntryFields
         form={form}
+        coordinate={coordinateOrSkip != skipToken ? coordinateOrSkip : undefined}
         onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
       />
 
@@ -168,18 +169,20 @@ function RouteComponent() {
 
 type ManualEntryFieldsOptions = {
   form: ExpenseFormApi;
+  coordinate?: Coordinate | undefined;
   onShopNameSelect: (shopName: string) => {};
 };
 
-function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions) {
+function ManualEntryFields({ form, coordinate, onShopNameSelect }: ManualEntryFieldsOptions) {
   return (
     <div className='mt-2 mb-2 flex gap-x-4'>
       <ExpenseSuggestableField
         form={form}
         fields={{ text: 'shopName' }}
         kind='shopName'
+        coordinate={coordinate}
         getContext={() => {
-          const text = form.getFieldValue('shopMall');
+          const text = form.getFieldValue('shopMall')?.trim();
           return text ? { kind: 'mallName', text } : undefined;
         }}
         label='Shop name'
@@ -191,6 +194,7 @@ function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions)
         form={form}
         fields={{ text: 'shopMall' }}
         kind='mallName'
+        coordinate={coordinate}
         label='Mall'
         triggerChangeOnFocus
         hideError

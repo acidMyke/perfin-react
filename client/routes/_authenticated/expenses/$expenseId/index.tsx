@@ -15,7 +15,7 @@ import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
 import { withForm } from '#components/Form';
-import { useStore } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { BillTotal } from './-common/BillTotal';
@@ -238,8 +238,9 @@ const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
   props: { onShopNameSelect: (_shopName: string) => {} },
   render({ form, onShopNameSelect }) {
-    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
-    const isCreate = useStore(form.store, state => state.values.ui.isCreate);
+    const isPhysical = useSelector(form.store, state => state.values.type === 'physical');
+    const isCreate = useSelector(form.store, state => state.values.ui.isCreate);
+    const { latitude, longitude } = useSelector(form.store, state => state.values.geolocation);
     const { expenseId } = Route.useParams();
 
     if (!isPhysical) {
@@ -258,6 +259,7 @@ const ShopDetailSubForm = withForm({
             form={form}
             fields={{ text: 'shopName' }}
             kind='shopName'
+            coordinate={latitude && longitude ? { latitude, longitude } : undefined}
             getContext={() => {
               const text = form.getFieldValue('shopMall');
               return text ? { kind: 'mallName', text } : undefined;
@@ -309,6 +311,7 @@ const ShopDetailSubForm = withForm({
           form={form}
           fields={{ text: 'shopName' }}
           kind='shopName'
+          coordinate={latitude && longitude ? { latitude, longitude } : undefined}
           getContext={() => {
             const text = form.getFieldValue('shopMall');
             return text ? { kind: 'mallName', text } : undefined;
@@ -323,6 +326,7 @@ const ShopDetailSubForm = withForm({
           form={form}
           fields={{ text: 'shopMall' }}
           kind='mallName'
+          coordinate={latitude && longitude ? { latitude, longitude } : undefined}
           label='Mall'
           containerCn='col-span-4 mt-2'
           triggerChangeOnFocus

@@ -5,9 +5,11 @@ import { useMutation } from '@tanstack/react-query';
 type SuggestionInput = RouterInputs['expense']['getSuggestions'];
 type SuggestionKind = SuggestionInput['kind'];
 type SuggestionContext = SuggestionInput['context'];
+type SuggestionCoordinate = SuggestionInput['coordinate'];
 
 type SuggestionFieldProps = {
   kind: SuggestionKind;
+  coordinate?: SuggestionCoordinate;
   getContext?: () => SuggestionContext | null;
   fetchDebouncing?: number;
 } & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
@@ -15,7 +17,7 @@ type SuggestionFieldProps = {
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, kind, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+  render({ group, kind, coordinate, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
     const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
 
     return (
@@ -27,8 +29,8 @@ export const ExpenseSuggestableField = withFieldGroup({
             if (fieldApi.form.state.isSubmitting) return;
             signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
             const context = getContext?.() ?? undefined;
-            if (value || context) {
-              mutate({ kind, search: value ?? '', context });
+            if (value || context || coordinate) {
+              mutate({ kind, search: value ?? '', context, coordinate });
             }
           },
         }}
