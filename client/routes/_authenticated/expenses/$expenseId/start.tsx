@@ -12,8 +12,9 @@ import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance, SG_CENTER, toLatLng, type Coordinate } from '#client/utils';
 import { ArrowRight, Building, Store } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
-import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
+import { ShopNameSubForm } from './-subform/ExpenseShopName';
+import { MallNameSubForm } from './-subform/ExpenseMallName';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -48,6 +49,21 @@ function RouteComponent() {
   const coordinateOrSkip = customCoordinate ?? currentLocationQuery.data ?? skipToken;
   const shopSuggestionsMutation = useQuery(trpc.expense.searchShopByLocation.queryOptions(coordinateOrSkip));
   const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
+
+  useEffect(() => {
+    if (customCoordinate) {
+      form.setFieldValue('geolocation', { isError: false, accuracy: null, ...customCoordinate });
+      return;
+    }
+    if (currentLocationQuery.data) {
+      form.setFieldValue(
+        'geolocation',
+        { isError: false, ...currentLocationQuery.data },
+        { dontValidate: true, dontRunListeners: true },
+      );
+      return;
+    }
+  }, [currentLocationQuery, customCoordinate, coordinateOrSkip]);
 
   const continueToMainForm = useCallback(
     (args?: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => {
@@ -169,36 +185,15 @@ function RouteComponent() {
 
 type ManualEntryFieldsOptions = {
   form: ExpenseFormApi;
-  coordinate?: Coordinate | undefined;
+  coordinate: Coordinate | undefined;
   onShopNameSelect: (shopName: string) => {};
 };
 
 function ManualEntryFields({ form, coordinate, onShopNameSelect }: ManualEntryFieldsOptions) {
   return (
     <div className='mt-2 mb-2 flex gap-x-4'>
-      <ExpenseSuggestableField
-        form={form}
-        fields={{ text: 'shopName' }}
-        kind='shopName'
-        coordinate={coordinate}
-        getContext={() => {
-          const text = form.getFieldValue('shopMall')?.trim();
-          return text ? { kind: 'mallName', text } : undefined;
-        }}
-        label='Shop name'
-        triggerChangeOnFocus
-        hideError
-        onSuggestionSelected={onShopNameSelect}
-      />
-      <ExpenseSuggestableField
-        form={form}
-        fields={{ text: 'shopMall' }}
-        kind='mallName'
-        coordinate={coordinate}
-        label='Mall'
-        triggerChangeOnFocus
-        hideError
-      />
+      <ShopNameSubForm form={form} coordinate={coordinate} onShopNameSelect={onShopNameSelect} />
+      <MallNameSubForm form={form} coordinate={coordinate} />
       <Link className='btn btn-primary' to='/expenses/$expenseId' params={{ expenseId: 'create' }}>
         <ArrowRight />
       </Link>

@@ -1,5 +1,5 @@
 import { withFieldGroup, type Option } from '#components/Form';
-import { defaultExpenseItem, useExpenseForm, usePushIntoOptions, type TGetExpenseFormField } from '.';
+import { defaultExpenseItem, useExpenseForm, usePushIntoOptions } from '.';
 import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useSelector } from '@tanstack/react-form';
@@ -30,13 +30,13 @@ export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
   props: {
     itemIndex: 0,
+    shopName: '' as string | null,
     categoryOptions: [] as Option[],
     onRemoveClick: () => {},
-    getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
     createAdjustment: (_: string) => {},
   },
-  render({ group, itemIndex, categoryOptions, onRemoveClick, getFormField, onPricingChange, createAdjustment }) {
+  render({ group, itemIndex, shopName, categoryOptions, onRemoveClick, onPricingChange, createAdjustment }) {
     const { pushIntoOptions } = usePushIntoOptions();
     const itemId = useSelector(group.store, state => state.values.id);
     const inferItemPriceMutation = useMutation(trpc.expense.getItemDetail.mutationOptions());
@@ -47,10 +47,8 @@ export const ItemDetailFieldGroup = withFieldGroup({
           form={group}
           fields={{ text: 'name' }}
           kind='itemName'
-          getContext={() => {
-            const text = getFormField('shopName');
-            return text ? { kind: 'shopName', text } : undefined;
-          }}
+          context={shopName ? { kind: 'shopName', text: shopName } : undefined}
+
           label={`Item ${itemIndex + 1} name`}
           containerCn='col-span-4 w-full'
           triggerChangeOnFocus
@@ -58,7 +56,6 @@ export const ItemDetailFieldGroup = withFieldGroup({
           onSuggestionSelected={suggestion => {
             const isPriceCentsDirty = group.getFieldMeta('priceCents')?.isDirty;
             if (!isPriceCentsDirty) {
-              const shopName = getFormField('shopName');
               if (!suggestion?.trim() || !shopName?.trim()) return;
               inferItemPriceMutation
                 .mutateAsync({ itemName: suggestion, shopName })

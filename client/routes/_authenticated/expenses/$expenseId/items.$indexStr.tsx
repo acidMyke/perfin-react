@@ -4,6 +4,7 @@ import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 import { trpc } from '#client/trpc';
 import { useSuspenseQuery } from '@tanstack/react-query';
+import { useSelector } from '@tanstack/react-form';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/items/$indexStr')({
   component: RouteComponent,
@@ -18,6 +19,7 @@ function RouteComponent() {
   } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
   const { createAdjustment } = useAdjustmentCallbacks(form);
+  const shopName = useSelector(form.store, state => state.values.shopName);
 
   const itemIndex = parseInt(indexStr);
 
@@ -33,9 +35,9 @@ function RouteComponent() {
             <ItemDetailFieldGroup
               form={form}
               fields={`items[${itemIndex}]`}
-              onRemoveClick={() => removeItem(itemIndex, field.state.value.length, true)}
               itemIndex={itemIndex}
-              getFormField={form.getFieldValue.bind(form)}
+              shopName={shopName}
+              onRemoveClick={() => removeItem(itemIndex, field.state.value.length, true)}
               onPricingChange={() => calculateExpenseForm(form)}
               createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
               categoryOptions={categoryOptions}

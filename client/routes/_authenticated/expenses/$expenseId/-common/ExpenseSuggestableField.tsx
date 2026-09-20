@@ -1,37 +1,39 @@
 import { withFieldGroup, type ComboBoxProps } from '#client/components/Form';
-import { queryClient, trpc, type RouterInputs } from '#client/trpc';
-import { useMutation } from '@tanstack/react-query';
+import { trpc, type RouterInputs } from '#client/trpc';
+import { skipToken, useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
 
 type SuggestionInput = RouterInputs['expense']['getSuggestions'];
 type SuggestionKind = SuggestionInput['kind'];
 type SuggestionContext = SuggestionInput['context'];
 type SuggestionCoordinate = SuggestionInput['coordinate'];
 
-type SuggestionFieldProps = {
+export type SuggestionFieldProps = {
   kind: SuggestionKind;
+  context?: SuggestionContext;
   coordinate?: SuggestionCoordinate;
-  getContext?: () => SuggestionContext | null;
   fetchDebouncing?: number;
 } & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
 
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, kind, coordinate, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
-    const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
+  render({ group, kind, context, coordinate, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+    const [search, setSearch] = useState('' as null | undefined | string);
+    let queryInput: SuggestionInput | typeof skipToken = skipToken;
+    if (search || context || coordinate) {
+      queryInput = { kind, search: search ?? '', context, coordinate };
+    }
+    const { data } = useQuery(trpc.expense.getSuggestions.queryOptions(queryInput));
 
     return (
       <group.AppField
         name='text'
         validators={{
-          onChangeAsyncDebounceMs: 500,
-          onChangeAsync: ({ value, signal, fieldApi }) => {
+          onChangeAsyncDebounceMs: fetchDebouncing,
+          onChangeAsync: ({ value, fieldApi }) => {
             if (fieldApi.form.state.isSubmitting) return;
-            signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-            const context = getContext?.() ?? undefined;
-            if (value || context || coordinate) {
-              mutate({ kind, search: value ?? '', context, coordinate });
-            }
+            setSearch(value);
           },
         }}
       >

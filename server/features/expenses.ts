@@ -205,7 +205,7 @@ const listExpenseProcedure = protectedProcedure
 
 const getSuggestionsProcedure = protectedProcedure
   .input(getSuggestionInputSchema)
-  .mutation(({ ctx, input }) => getSuggestions(ctx, input));
+  .query(({ ctx, input }) => getSuggestions(ctx, input));
 
 const searchShopByLocationProcedure = protectedProcedure
   .input(z.object({ latitude: z.number(), longitude: z.number() }))

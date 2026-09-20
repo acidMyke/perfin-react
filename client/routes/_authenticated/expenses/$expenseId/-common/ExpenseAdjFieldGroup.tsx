@@ -1,5 +1,5 @@
 import { withFieldGroup } from '#components/Form';
-import { defaultExpenseAdjustment, useExpenseForm, type TGetExpenseFormField } from '.';
+import { defaultExpenseAdjustment, useExpenseForm } from '.';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ChevronDown, ChevronUp, Unlink, X } from 'lucide-react';
 import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
@@ -21,13 +21,13 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseAdjustment(),
   props: {
     adjIndex: 0,
+    shopName: '' as string | null,
     onRemoveClick: (_: number) => {},
-    getFormField: (() => {}) as unknown as TGetExpenseFormField,
     onPricingChange: () => {},
     toggleAdjustmentType: (_: number, _itemId?: string | null) => {},
     onSwapClick: (_: number) => {},
   },
-  render({ group, adjIndex, onRemoveClick, getFormField, onPricingChange, toggleAdjustmentType, onSwapClick }) {
+  render({ group, adjIndex, shopName, onRemoveClick, onPricingChange, toggleAdjustmentType, onSwapClick }) {
     const [isGst, isServiceCharge, isRateAdjustment, expenseItemId] = useStore(group.store, state => [
       state.values?.name === GST_NAME,
       state.values?.name === SERVICE_CHARGE_NAME,
@@ -46,10 +46,7 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
             form={group}
             fields={{ text: 'name' }}
             kind='adjName'
-            getContext={() => {
-              const text = getFormField('shopName');
-              return text ? { kind: 'shopName', text } : undefined;
-            }}
+            context={shopName ? { kind: 'shopName', text: shopName } : undefined}
             containerCn='w-40 grow'
             inputCn='input-sm text-sm'
             triggerChangeOnFocus
