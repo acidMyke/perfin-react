@@ -30,13 +30,14 @@ export const getSuggestionInputSchema = z.object({
   search: z.string().optional(),
   context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
   coordinate: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
+  isOnline: z.boolean().default(false),
 });
 
 type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
 
 export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
   const { db, userId } = ctx;
-  const { kind, context, coordinate } = input;
+  const { kind, context, coordinate, isOnline } = input;
   const search = input.search?.trim();
   const contextText = context?.text?.trim();
 
@@ -99,8 +100,8 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
     );
   }
 
-  if (coordinate) {
-    const geoCell = getGeoCell(coordinate);
+  if (coordinate ?? isOnline) {
+    const geoCell = getGeoCell(coordinate ?? { isOnline: true });
     searchQuery = searchQuery.unionAll(
       db
         .selectDistinct({
@@ -158,11 +159,21 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       ),
     );
 
-  console.log('Suggestion:', { input, result });
   return { suggestions: result };
 }
 
-const searchShopByLocationInputSchema = z.object({
+const searchShopByLocationInputSchema = z.union([
+  z.object({ isOnline: z.literal(true) }),
+  z.object({
+    isOnline: z.literal(false).optional(),
+    latitude: z.number(),
+    longitude: z.number(),
+    range: z.number().optional(),
+  }),
+]);
+
+z.object({
+  isOnline: z.boolean(),
   latitude: z.number(),
   longitude: z.number(),
   range: z.number().optional(),

@@ -9,8 +9,13 @@ const SG_BOUNDING_BOX = Object.freeze({
   MAX_LAT_INDEX: 182, // ceil(floor(1.493/0.002)  - floor(1.13/0.002))
 });
 
-export type Coordinate = { latitude: number; longitude: number };
-export function getGeoCell({ latitude, longitude }: Coordinate) {
+export const NON_SPATIAL_GEO_CELL_ID = -1;
+export type GeoCellParam = { isOnline?: false; latitude: number; longitude: number } | { isOnline: true };
+export function getGeoCell(param: GeoCellParam) {
+  if (param.isOnline) {
+    return { id: NON_SPATIAL_GEO_CELL_ID, latIndex: NON_SPATIAL_GEO_CELL_ID, lonIndex: NON_SPATIAL_GEO_CELL_ID };
+  }
+  const { latitude, longitude } = param;
   const latIndex = Math.floor((latitude - SG_BOUNDING_BOX.MIN_LAT) / GRID_SIZE);
   const lonIndex = Math.floor((longitude - SG_BOUNDING_BOX.MIN_LON) / GRID_SIZE);
   const id = latIndex * SG_BOUNDING_BOX.MAX_LON_INDEX + lonIndex;
@@ -18,7 +23,7 @@ export function getGeoCell({ latitude, longitude }: Coordinate) {
   return { id, latIndex, lonIndex };
 }
 
-export function getGeoCellBounds(coord: Coordinate) {
+export function getGeoCellBounds(coord: GeoCellParam) {
   const geoCell = getGeoCell(coord);
   const { latIndex, lonIndex } = geoCell;
 

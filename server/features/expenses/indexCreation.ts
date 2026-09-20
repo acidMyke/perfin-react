@@ -15,10 +15,10 @@ import {
 import {
   createGetTextId,
   generateSearchChunks,
-  getGeoCellBounds,
   getGeoCell,
   TEXT_KIND,
   type TextIdParamter,
+  NON_SPATIAL_GEO_CELL_ID,
 } from '#server/lib/indexing';
 
 type ExpenseInfoChildrenForIndexing = {
@@ -30,6 +30,7 @@ type ExpenseInfoChildrenForIndexing = {
 export type ExpenseInfoForIndexing = {
   id: string;
   userId: string;
+  type: 'online' | 'physical';
   latitude?: number | undefined | null;
   longitude?: number | undefined | null;
   billedAt: Date;
@@ -43,6 +44,7 @@ type Searchable = TextIdParamter & {
   expenseId: string;
   billedAt: Date;
   coordinate?: Pick<ExpenseInfoForIndexing, 'latitude' | 'longitude'>;
+  isOnline?: boolean;
   sourceId: string;
   context?: Omit<TextIdParamter, 'userId'> | null | undefined | '';
 };
@@ -51,6 +53,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
   const searchables: Searchable[] = [];
 
   for (const expense of expenses) {
+    const isOnline = expense.type === 'online';
     if (expense.shopName) {
       searchables.push({
         userId: expense.userId,
@@ -67,6 +70,7 @@ function gatherExpenseSearchables(...expenses: ExpenseInfoForIndexing[]) {
           latitude: expense.latitude,
           longitude: expense.longitude,
         },
+        isOnline,
       });
     }
 
@@ -139,7 +143,7 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
   const processedGeoCellId = new Set<number>();
 
   for (const searchable of searchables) {
-    const { userId, expenseId, sourceId, kind, text, context, coordinate, billedAt } = searchable;
+    const { userId, expenseId, sourceId, kind, text, context, coordinate, billedAt, isOnline } = searchable;
     if (blacklistSearchableText.has(text)) continue;
 
     const textIdArrayBuffer = getTextId(searchable);
@@ -160,14 +164,18 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
       }
     }
 
-    if (coordinate?.latitude && coordinate.longitude) {
-      const geoCellParam = { latitude: coordinate?.latitude, longitude: coordinate.longitude };
-      const { id: geoCellId } = getGeoCell(geoCellParam);
-      if (!processedGeoCellId.has(geoCellId)) {
-        const geoCellBounds = getGeoCellBounds(geoCellParam);
-        geoCellsUpserts.push({ ...geoCellBounds, id: geoCellId, indexGen });
+    if ((coordinate?.latitude && coordinate.longitude) || isOnline) {
+      const geoCellParam =
+        coordinate?.latitude && coordinate.longitude
+          ? { latitude: coordinate?.latitude, longitude: coordinate.longitude }
+          : { isOnline: true as const, latitude: 0, longitude: 0 };
+
+      const geoCell = getGeoCell(geoCellParam);
+      if (!processedGeoCellId.has(geoCell.id)) {
+        geoCellsUpserts.push({ ...geoCell, id: geoCell.id, indexGen });
       }
-      geoTextsUpserts.push({ textId, userId, kind, geoCellId, ...geoCellParam, indexGen });
+
+      geoTextsUpserts.push({ textId, userId, kind, geoCellId: geoCell.id, ...geoCellParam, indexGen });
     }
 
     expenseTextsUpserts.push({ expenseId, expenseBilledAt: billedAt, sourceId, textId, indexGen });
@@ -219,6 +227,7 @@ function queueSaveSearchables(
         .onConflictDoUpdate({
           target: [textChunksTable.textId, textChunksTable.chunk],
           set: { indexGen: excluded(textChunksTable.indexGen) },
+          setWhere: gt(excluded(textChunksTable.indexGen), textChunksTable.indexGen),
         }),
     ),
     ...splitArray(expenseTextsUpserts, 19).map(values =>

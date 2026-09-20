@@ -31,6 +31,13 @@ describe(getGeoCell, () => {
         "lonIndex": 34,
       }
     `);
+    expect.soft(getGeoCell({ isOnline: true })).toMatchInlineSnapshot(`
+      {
+        "id": -1,
+        "latIndex": -1,
+        "lonIndex": -1,
+      }
+    `);
   });
 });
 
