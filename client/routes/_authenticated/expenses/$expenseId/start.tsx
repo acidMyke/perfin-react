@@ -138,7 +138,7 @@ function RouteComponent() {
   }, []);
 
   return (
-    <div className='mb-20'>
+    <div>
       {customCoordinate ? (
         <p className='mb-2'>Custom coordinate: {formatCoordinate(customCoordinate)}</p>
       ) : (

@@ -40,7 +40,7 @@ function RouteComponent() {
   const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
-    <div className='mb-20 grid grid-cols-8 gap-x-2'>
+    <div className='grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
       <ShopDetailSubForm
         form={form}

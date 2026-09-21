@@ -113,7 +113,7 @@ function ExpenseSearchResults() {
   }
 
   return (
-    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col pb-20'>
+    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col'>
       {data.searchResult.map(expense => {
         const { expenseId, shopName, shopMall, sourceMatches, amountCents, billedAt } = expense;
 

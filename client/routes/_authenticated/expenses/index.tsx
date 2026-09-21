@@ -278,7 +278,7 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
   }
 
   return (
-    <div className='mt-2 flex w-full flex-col gap-1 pb-20'>
+    <div className='mt-2 flex w-full flex-col gap-1'>
       <h3 className='mb-2 flex justify-between text-center text-2xl font-bold'>
         <p>Month Total</p>
         <p>{currencyNumberFormat.format(monthTotal)}</p>

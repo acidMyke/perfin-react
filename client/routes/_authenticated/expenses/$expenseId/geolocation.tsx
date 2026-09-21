@@ -21,7 +21,7 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   return (
-    <div className='mb-20 grid grid-cols-2 gap-x-2'>
+    <div className='grid grid-cols-2 gap-x-2'>
       <form.AppField name='geolocation.latitude'>
         {({ NumericInput }) => (
           <NumericInput label='Latitude' containerCn='mt-2' numberFormat={coordinateFormat} readOnly={readOnly} />
