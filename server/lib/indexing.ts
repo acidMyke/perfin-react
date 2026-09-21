@@ -11,6 +11,7 @@ const SG_BOUNDING_BOX = Object.freeze({
 
 export const NON_SPATIAL_GEO_CELL_ID = -1;
 export type GeoCellParam = { isOnline?: false; latitude: number; longitude: number } | { isOnline: true };
+
 export function getGeoCell(param: GeoCellParam) {
   if (param.isOnline) {
     return { id: NON_SPATIAL_GEO_CELL_ID, latIndex: NON_SPATIAL_GEO_CELL_ID, lonIndex: NON_SPATIAL_GEO_CELL_ID };
@@ -23,17 +24,27 @@ export function getGeoCell(param: GeoCellParam) {
   return { id, latIndex, lonIndex };
 }
 
-export function getGeoCellBounds(coord: GeoCellParam) {
-  const geoCell = getGeoCell(coord);
-  const { latIndex, lonIndex } = geoCell;
+export function getNearbyGeoCellId(param: GeoCellParam) {
+  if (param.isOnline) {
+    return [NON_SPATIAL_GEO_CELL_ID];
+  }
 
-  return {
-    ...geoCell,
-    minLat: latIndex * GRID_SIZE,
-    maxLat: (latIndex + 1) * GRID_SIZE,
-    minLng: lonIndex * GRID_SIZE,
-    maxLng: (lonIndex + 1) * GRID_SIZE,
-  };
+  const { latitude, longitude } = param;
+  const latIndex = Math.floor((latitude - SG_BOUNDING_BOX.MIN_LAT) / GRID_SIZE);
+  const lonIndex = Math.floor((longitude - SG_BOUNDING_BOX.MIN_LON) / GRID_SIZE);
+
+  // prettier-ignore
+  const nearbyOffsets = [
+    [0, 0],
+    [1, 0], [-1, 0], [0, 1], [0, -1],
+    [1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2],
+    [1, 2], [1, -2], [-1, 2], [-1, -2], [2, 1], [2, -1], [-2, 1], [-2, -1],
+    [2, 2], [2, -2], [-2, 2], [-2, -2],
+  ] as const;
+
+  return nearbyOffsets.map(
+    ([latOffset, lonOffset]) => (latIndex + latOffset) * SG_BOUNDING_BOX.MAX_LON_INDEX + (lonIndex + lonOffset),
+  );
 }
 
 export const SHOP_NAME_TEXT_KIND = 'shopName' as const;
