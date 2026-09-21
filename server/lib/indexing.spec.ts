@@ -54,7 +54,26 @@ describe(getNearbyGeoCellId, () => {
   });
 
   it('should be determinstic', () => {
-    expect(getNearbyGeoCellId({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+    expect.soft(getNearbyGeoCellId({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+      [
+        37599,
+        37887,
+        37311,
+        37600,
+        37598,
+        37888,
+        37886,
+        37312,
+        37310,
+        38175,
+        37023,
+        37601,
+        37597,
+      ]
+    `);
+
+    expect.soft(getNearbyGeoCellId({ latitude: 1.391389, longitude: 103.8769 }, { expanded: true }))
+      .toMatchInlineSnapshot(`
       [
         37599,
         37887,
