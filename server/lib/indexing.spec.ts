@@ -1,5 +1,12 @@
 import { nanoid } from 'nanoid';
-import { generateSearchChunks, createGetTextId, getGeoCell, type TextIdParamter, getNearbyGeoCellId } from './indexing';
+import {
+  generateSearchChunks,
+  createGetTextId,
+  getGeoCell,
+  type TextIdParamter,
+  getNearbyGeoCellId,
+  getSingleTextId,
+} from './indexing';
 
 describe(getGeoCell, () => {
   it('should create an determinstic id based on the input', () => {
@@ -102,6 +109,21 @@ describe(getNearbyGeoCellId, () => {
         37021,
       ]
     `);
+  });
+});
+
+describe(getSingleTextId, () => {
+  it('should create an determinstic id based on the input', async () => {
+    const result = await getSingleTextId({ userId: 'user000', kind: 'shopName', text: 'text000' });
+    expect(result && new Uint8Array(result).toString()).toMatchInlineSnapshot(
+      `"116,144,116,184,76,171,216,135,141,60,105,10,68,41,43,197"`,
+    );
+  });
+
+  it('should be consitent with createGetTextId', async () => {
+    const param: TextIdParamter = { userId: 'user001', kind: 'shopName', text: 'text000' };
+    const [result, getTextId] = await Promise.all([getSingleTextId(param), createGetTextId(param)]);
+    expect(result).toEqual(getTextId(param));
   });
 });
 
