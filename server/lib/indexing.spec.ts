@@ -195,4 +195,8 @@ describe(generateSearchChunks, () => {
       .soft(generateSearchChunks('Worcestershire', { unlimited: true }))
       .toEqual(['w', 'wo', 'wor', 'orc', 'rce', 'ces', 'est', 'ste', 'ter', 'ers', 'rsh', 'shi', 'hir', 'ire']);
   });
+
+  it('should skip the the empty phrase', () => {
+    expect.soft(generateSearchChunks('*foo')).toEqual(['f', 'fo', 'foo']);
+  });
 });
