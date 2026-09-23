@@ -15,6 +15,7 @@ import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 import { ShopNameSubForm } from './-subform/ExpenseShopName';
 import { MallNameSubForm } from './-subform/ExpenseMallName';
+import { differenceInCalendarDays } from 'date-fns';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -27,8 +28,12 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start'
 
 type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 
-type ShopResult = Shop & { distance: number };
-type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
+type ResultScoreFactors = { distance: number; since: number };
+type ShopResult = Shop & ResultScoreFactors;
+type MallResult = { mallName: string; shopCount: number } & Coordinate & ResultScoreFactors;
+
+const recencyNudge = (since: number) =>
+  since <= 14 ? 30 : since <= 30 ? -30 : since <= 60 ? -15 : since <= 120 ? 0 : since <= 240 ? 15 : 30;
 
 function formatCoordinate(coord: { latitude: number; longitude: number; accuracy?: number }) {
   const { latitude, longitude, accuracy } = coord;
@@ -105,30 +110,33 @@ function RouteComponent() {
     if (coordinateOrSkip === skipToken || !shopSuggestionsMutation.data) return;
     const { latitude: userLat, longitude: userLng } = coordinateOrSkip;
     const shops: ShopResult[] = [];
-    const mallMap = new Map<string, { latSum: number; lngSum: number; count: number }>();
+    const mallMap = new Map<string, { latSum: number; lngSum: number; count: number; maxSince: number }>();
     for (const shop of shopSuggestionsMutation.data.result) {
       if (!shop.shopName) continue;
       const distance = distanceBetween(userLat, userLng, shop.latitude, shop.longitude);
-      shops.push({ ...shop, distance });
+      const since = differenceInCalendarDays(new Date(), shop.lastUsageAt);
+      shops.push({ ...shop, distance, since });
 
       if (!shop.mallName) continue;
 
-      const mall = mallMap.get(shop.mallName) ?? { latSum: 0, lngSum: 0, count: 0 };
+      const mall = mallMap.get(shop.mallName) ?? { latSum: 0, lngSum: 0, count: 0, maxSince: 480 };
       if (!mallMap.has(shop.mallName)) mallMap.set(shop.mallName, mall);
       mall.latSum += shop.latitude;
       mall.lngSum += shop.longitude;
       mall.count++;
+      mall.maxSince = Math.max(mall.maxSince, since);
     }
 
     const malls = Array.from(mallMap, ([mallName, m]) => {
       const latitude = m.latSum / m.count;
       const longitude = m.lngSum / m.count;
+
       const distance = distanceBetween(userLat, userLng, latitude, longitude);
-      return { mallName, latitude, longitude, shopCount: m.count, distance } satisfies MallResult;
+      return { mallName, latitude, longitude, shopCount: m.count, distance, since: m.maxSince } satisfies MallResult;
     });
 
-    shops.sort((a, b) => a.distance - b.distance);
-    malls.sort((a, b) => a.distance - b.distance);
+    shops.sort((a, b) => a.distance + recencyNudge(a.since) - (b.distance + recencyNudge(a.since)));
+    malls.sort((a, b) => a.distance + recencyNudge(a.since) - (b.distance + recencyNudge(a.since)));
 
     return { shops, malls };
   }, [shopSuggestionsMutation.data, currentLocationQuery.data]);

@@ -1,4 +1,4 @@
-import { caseWhen, jsonGroupArray, sumAsNumber, max } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max, coalesce } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
@@ -190,6 +190,7 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
       mallName: mallTexts.text,
       latitude: shopGeoTexts.latitude,
       longitude: shopGeoTexts.longitude,
+      lastUsageAt: coalesce(ctxTextsTable.lastUsedAt, shopTexts.lastUsedAt),
     })
     .from(shopGeoTexts)
     .leftJoin(shopTexts, eq(shopGeoTexts.textId, shopTexts.id))
