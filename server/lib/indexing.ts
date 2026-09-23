@@ -24,7 +24,7 @@ export function getGeoCell(param: GeoCellParam) {
   return { id, latIndex, lonIndex };
 }
 
-export function getNearbyGeoCellId(param: GeoCellParam, { expanded = false } = {}) {
+export function getNearbyGeoCellIds(param: GeoCellParam, { expanded = false } = {}) {
   if (param.isOnline) {
     return [NON_SPATIAL_GEO_CELL_ID];
   }
@@ -37,15 +37,15 @@ export function getNearbyGeoCellId(param: GeoCellParam, { expanded = false } = {
   let nearbyOffsets: [number, number][] = [
     [0, 0],
     [1, 0], [-1, 0], [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1], [2, 0], [-2, 0], [0, 2], [0, -2],
+    [1, 1], [1, -1], [-1, 1], [-1, -1], 
   ];
 
   if (expanded) {
     // prettier-ignore
     const expandedNearbyOffsets: [number, number][] = [
-      
+      [2, 0], [-2, 0], [0, 2], [0, -2],
       [1, 2], [1, -2], [-1, 2], [-1, -2], [2, 1], [2, -1], [-2, 1], [-2, -1],
-      [2, 2], [2, -2], [-2, 2], [-2, -2],
+      // [2, 2], [2, -2], [-2, 2], [-2, -2],
     ];
 
     nearbyOffsets.push(...expandedNearbyOffsets);

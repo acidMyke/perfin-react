@@ -4,7 +4,7 @@ import {
   createGetTextId,
   getGeoCell,
   type TextIdParamter,
-  getNearbyGeoCellId,
+  getNearbyGeoCellIds,
   getSingleTextId,
 } from './indexing';
 
@@ -48,20 +48,20 @@ describe(getGeoCell, () => {
   });
 });
 
-describe(getNearbyGeoCellId, () => {
+describe(getNearbyGeoCellIds, () => {
   it('should return non spatial geo cell id when online', () => {
-    expect(getNearbyGeoCellId({ isOnline: true })).toEqual([-1]);
+    expect(getNearbyGeoCellIds({ isOnline: true })).toEqual([-1]);
   });
 
   // latitude: 1.391389, longitude: 103.8769, gives "id": 37599, "latIndex": 130, "lonIndex": 159
   it('should return the current location geoCellId as first index', () => {
     const param = { latitude: 1.391389, longitude: 103.8769 };
     const expectedGeoCellId = getGeoCell(param).id;
-    expect(getNearbyGeoCellId(param)[0]).toBe(expectedGeoCellId);
+    expect(getNearbyGeoCellIds(param)[0]).toBe(expectedGeoCellId);
   });
 
   it('should be determinstic', () => {
-    expect.soft(getNearbyGeoCellId({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+    expect.soft(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
       [
         37599,
         37887,
@@ -72,43 +72,35 @@ describe(getNearbyGeoCellId, () => {
         37886,
         37312,
         37310,
-        38175,
-        37023,
-        37601,
-        37597,
       ]
     `);
 
-    expect.soft(getNearbyGeoCellId({ latitude: 1.391389, longitude: 103.8769 }, { expanded: true }))
+    expect.soft(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 }, { expanded: true }))
       .toMatchInlineSnapshot(`
-      [
-        37599,
-        37887,
-        37311,
-        37600,
-        37598,
-        37888,
-        37886,
-        37312,
-        37310,
-        38175,
-        37023,
-        37601,
-        37597,
-        37889,
-        37885,
-        37313,
-        37309,
-        38176,
-        38174,
-        37024,
-        37022,
-        38177,
-        38173,
-        37025,
-        37021,
-      ]
-    `);
+        [
+          37599,
+          37887,
+          37311,
+          37600,
+          37598,
+          37888,
+          37886,
+          37312,
+          37310,
+          38175,
+          37023,
+          37601,
+          37597,
+          37889,
+          37885,
+          37313,
+          37309,
+          38176,
+          38174,
+          37024,
+          37022,
+        ]
+      `);
   });
 });
 

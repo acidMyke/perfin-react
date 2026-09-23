@@ -18,6 +18,7 @@ import {
   createGetTextId,
   generateSearchChunks,
   getGeoCell,
+  getNearbyGeoCellIds,
   getSingleTextId,
   TEXT_KIND,
   type TextIdParamter,
@@ -163,26 +164,20 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
 }
 
 const searchShopByLocationInputSchema = z.union([
-  z.object({ isOnline: z.literal(true) }),
+  z.object({ isOnline: z.literal(true), isExpanded: z.literal(false).optional() }),
   z.object({
     isOnline: z.literal(false).optional(),
     latitude: z.number(),
     longitude: z.number(),
-    range: z.number().optional(),
+    isExpanded: z.boolean().default(false),
   }),
 ]);
 
-z.object({
-  isOnline: z.boolean(),
-  latitude: z.number(),
-  longitude: z.number(),
-  range: z.number().optional(),
-});
 type SearchShopByLocationInput = z.infer<typeof searchShopByLocationInputSchema>;
 export async function searchShopByLocation(ctx: ProtectedContext, input: SearchShopByLocationInput) {
   const { db, userId } = ctx;
 
-  const geoCellIds: number[] = [getGeoCell(input).id];
+  const geoCellIds: number[] = getNearbyGeoCellIds(input, { expanded: input.isExpanded });
 
   const shopGeoTexts = alias(geoTextsTable, 'shop_geo_texts');
   const mallGeoTexts = alias(geoTextsTable, 'mall_geo_texts');
@@ -205,7 +200,7 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
         eq(ctxTextsTable.ctxTextId, mallGeoTexts.textId),
         eq(mallGeoTexts.userId, userId),
         eq(mallGeoTexts.kind, TEXT_KIND.MALL_NAME),
-        inArray(mallGeoTexts.geoCellId, geoCellIds),
+        eq(shopGeoTexts.geoCellId, mallGeoTexts.geoCellId),
       ),
     )
     .leftJoin(mallTexts, and(eq(ctxTextsTable.ctxTextId, mallTexts.id)))
