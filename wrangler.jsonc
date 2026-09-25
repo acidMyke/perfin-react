@@ -11,6 +11,7 @@
   },
   "main": "./server/index.ts",
   "vars": {
+    "DB_PROXY_LOGGING": true,
     "TOKEN_EXPIRE_DAYS": 30,
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Perfin",

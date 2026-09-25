@@ -133,8 +133,106 @@ export function sumAsNumber<T extends ExtractableData>(data: T) {
   return sql<ExtractType<T>>`sum(${data})`.mapWith(Number);
 }
 
+export function extractQueryKeyInfo(sql: string) {
+  try {
+    const normalizedSql = sql
+      .replace(/--.*?(?:\r?\n|$)/g, ' ')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const operation = normalizedSql.match(/^(select|insert|update|delete)\b/i)?.[1];
+
+    if (!operation) return undefined;
+
+    const cteNames = new Set<string>();
+
+    const withMatch = normalizedSql.match(
+      /^with\s+(?:recursive\s+)?([\s\S]*?)(?=\b(?:select|insert|update|delete)\b)/i,
+    );
+
+    if (withMatch) {
+      const cteRegex = /(?:^|,)\s*(["`]?[\w$]+["`]?)\s+as\s*\(/gi;
+
+      for (const match of withMatch[1].matchAll(cteRegex)) {
+        cteNames.add(unquote(match[1]).toLowerCase());
+      }
+    }
+
+    const tables = new Set<string>();
+
+    const tableRegex =
+      /\b(?:from|join|update|into)\s+(?:"([^"]+)"|`([^`]+)`|([a-zA-Z_][\w$]*(?:\.[a-zA-Z_][\w$]*)?))/gi;
+
+    for (const match of normalizedSql.matchAll(tableRegex)) {
+      const table = (match[1] ?? match[2] ?? match[3]).trim();
+
+      const name = table.split('.').at(-1)!;
+
+      if (!cteNames.has(name.toLowerCase())) {
+        tables.add(name);
+      }
+    }
+
+    if (tables.size === 0) return undefined;
+
+    return `${operation.toUpperCase()}-${[...tables].join('+')}`;
+  } catch {
+    return undefined;
+  }
+}
+
+function unquote(value: string) {
+  return value.replace(/^["`]|["`]$/g, '');
+}
+
+function createLoggedD1(baseDb: D1Database): D1Database {
+  return new Proxy(baseDb, {
+    get(target, prop, receiver) {
+      if (prop === 'batch') {
+        return async function (statements: D1PreparedStatement[]) {
+          const results = await target.batch(statements);
+
+          let totalRead = 0;
+          let totalWrite = 0;
+
+          results.forEach(({ meta }, idx) => {
+            totalRead += meta?.rows_read || 0;
+            totalWrite += meta?.rows_written || 0;
+            const query = (statements[idx] as any)['__prepare_query'];
+            console.log(`d1,${meta?.rows_read},${meta?.rows_written},${extractQueryKeyInfo(query)}`);
+          });
+
+          console.log(`d1,${totalRead},${totalWrite},batch-${statements.length}-end`);
+          return results;
+        };
+      }
+
+      if (prop === 'prepare') {
+        return function (query: string) {
+          const stmt = target.prepare(query);
+          return new Proxy(stmt, {
+            get(stmtTarget, stmtProp) {
+              const original = Reflect.get(stmtTarget, stmtProp);
+              if (stmtProp !== 'bind') return original;
+              return function bind(...args: any[]) {
+                const bindStmt = stmtTarget.bind(...args);
+                (bindStmt as any)['__prepare_query'] = query;
+                return bindStmt;
+              };
+            },
+          });
+        };
+      }
+
+      return Reflect.get(target, prop, receiver);
+    },
+  });
+}
+
 export function createDatabase(env: Env) {
-  return drizzle(env.db, {
+  const d1Db = import.meta.env.DEV && env.DB_PROXY_LOGGING ? createLoggedD1(env.db) : env.db;
+  return drizzle(d1Db, {
     logger: import.meta.env.DEV,
     casing: 'snake_case',
     relations: defineRelations(schema),
