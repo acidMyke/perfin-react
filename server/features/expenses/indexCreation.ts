@@ -166,7 +166,7 @@ async function prepareSearchables(searchables: Searchable[], indexGen: number) {
 
     if ((coordinate?.latitude && coordinate.longitude) || isOnline) {
       const geoCellParam =
-        coordinate?.latitude && coordinate.longitude
+        !isOnline && coordinate?.latitude && coordinate.longitude
           ? { latitude: coordinate?.latitude, longitude: coordinate.longitude }
           : { isOnline: true as const, latitude: 0, longitude: 0 };
 
