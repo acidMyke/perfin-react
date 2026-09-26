@@ -1,6 +1,6 @@
 import { caseWhen, jsonGroupArray, sumAsNumber, max, coalesce } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
-import { avg } from 'drizzle-orm';
+import { avg, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   textsTable,
@@ -24,8 +24,25 @@ import {
   TEXT_KIND,
   type TextIdParamter,
 } from '#server/lib/indexing';
-import { subDays } from 'date-fns';
+import { subDays, subWeeks } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+
+function getFrequencyScore<T>(countValue: SQLWrapper<T>) {
+  return caseWhen(gte(countValue, 20), 2).whenThen(gte(countValue, 5), 1).else(0);
+}
+
+const RECENCY_STALE_THRESHOLD_WEEKS = 28 as const;
+const recencyStaleDate = () => subWeeks(Date.now(), RECENCY_STALE_THRESHOLD_WEEKS);
+
+function getRecencyScore<T>(dateValue: SQLWrapper<T>) {
+  return caseWhen(gte(dateValue, subDays(Date.now(), 4)), -1) // minor penalty if too recent
+    .whenThen(gte(dateValue, subWeeks(Date.now(), 4)), 3)
+    .whenThen(gte(dateValue, subWeeks(Date.now(), 8)), 2)
+    .whenThen(gte(dateValue, subWeeks(Date.now(), 12)), 1)
+    .whenThen(gte(dateValue, subWeeks(Date.now(), 16)), -3)
+    .whenThen(gte(dateValue, recencyStaleDate()), -6)
+    .else(-9);
+}
 
 export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
@@ -138,15 +155,8 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       chunkCountScore: aggregatedSubquery.chunkCountScore,
       contextScore: aggregatedSubquery.contextScore,
       spatialScore: aggregatedSubquery.spatialScore,
-      frequencyScore: caseWhen(gte(textsTable.usageCount, 20), 2)
-        .whenThen(gte(textsTable.usageCount, 5), 1)
-        .else(0)
-        .as(frequencyScoreCol),
-      recencyScore: caseWhen(gte(textsTable.lastUsedAt, subDays(Date.now(), 4)), -1)
-        .whenThen(gte(textsTable.lastUsedAt, subDays(Date.now(), 28)), 2)
-        .whenThen(gte(textsTable.lastUsedAt, subDays(Date.now(), 63)), 1)
-        .else(0)
-        .as(recencyScoreCol),
+      frequencyScore: getFrequencyScore(textsTable.usageCount).as(frequencyScoreCol),
+      recencyScore: getRecencyScore(textsTable.lastUsedAt).as(recencyScoreCol),
     })
     .from(aggregatedSubquery)
     .innerJoin(
@@ -165,20 +175,15 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
 }
 
 const searchShopByLocationInputSchema = z.union([
-  z.object({ isOnline: z.literal(true), isExpanded: z.literal(false).optional() }),
-  z.object({
-    isOnline: z.literal(false).optional(),
-    latitude: z.number(),
-    longitude: z.number(),
-    isExpanded: z.boolean().default(false),
-  }),
+  z.object({ isOnline: z.literal(true) }),
+  z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
 ]);
 
 type SearchShopByLocationInput = z.infer<typeof searchShopByLocationInputSchema>;
 export async function searchShopByLocation(ctx: ProtectedContext, input: SearchShopByLocationInput) {
   const { db, userId } = ctx;
 
-  const geoCellIds: number[] = getNearbyGeoCellIds(input, { expanded: input.isExpanded });
+  const geoCellIds: number[] = getNearbyGeoCellIds(input);
 
   const shopGeoTexts = alias(geoTextsTable, 'shop_geo_texts');
   const mallGeoTexts = alias(geoTextsTable, 'mall_geo_texts');
@@ -192,6 +197,7 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
       latitude: avg(shopGeoTexts.latitude).mapWith(shopGeoTexts.latitude),
       longitude: avg(shopGeoTexts.longitude).mapWith(shopGeoTexts.longitude),
       lastUsageAt: max(coalesce(ctxTextsTable.lastUsedAt, shopTexts.lastUsedAt)).mapWith(shopTexts.lastUsedAt),
+      recencyScore: getRecencyScore(shopTexts.lastUsedAt),
     })
     .from(shopGeoTexts)
     .leftJoin(shopTexts, eq(shopGeoTexts.textId, shopTexts.id))
