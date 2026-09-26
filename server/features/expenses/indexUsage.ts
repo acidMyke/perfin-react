@@ -1,5 +1,6 @@
 import { caseWhen, jsonGroupArray, sumAsNumber, max, coalesce } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
+import { avg } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   textsTable,
@@ -188,9 +189,9 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
     .select({
       shopName: shopTexts.text,
       mallName: mallTexts.text,
-      latitude: shopGeoTexts.latitude,
-      longitude: shopGeoTexts.longitude,
-      lastUsageAt: coalesce(ctxTextsTable.lastUsedAt, shopTexts.lastUsedAt),
+      latitude: avg(shopGeoTexts.latitude).mapWith(shopGeoTexts.latitude),
+      longitude: avg(shopGeoTexts.longitude).mapWith(shopGeoTexts.longitude),
+      lastUsageAt: max(coalesce(ctxTextsTable.lastUsedAt, shopTexts.lastUsedAt)).mapWith(shopTexts.lastUsedAt),
     })
     .from(shopGeoTexts)
     .leftJoin(shopTexts, eq(shopGeoTexts.textId, shopTexts.id))
@@ -212,7 +213,8 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
         inArray(shopGeoTexts.geoCellId, geoCellIds),
         or(isNull(ctxTextsTable.ctxTextId), isNotNull(mallGeoTexts.textId)),
       ),
-    );
+    )
+    .groupBy(shopGeoTexts.textId, ctxTextsTable.textId);
 
   return { result };
 }
