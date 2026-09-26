@@ -18,7 +18,6 @@ import {
   getGeoCell,
   TEXT_KIND,
   type TextIdParamter,
-  NON_SPATIAL_GEO_CELL_ID,
 } from '#server/lib/indexing';
 
 type ExpenseInfoChildrenForIndexing = {

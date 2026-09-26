@@ -183,7 +183,7 @@ type SearchShopByLocationInput = z.infer<typeof searchShopByLocationInputSchema>
 export async function searchShopByLocation(ctx: ProtectedContext, input: SearchShopByLocationInput) {
   const { db, userId } = ctx;
 
-  const geoCellIds: number[] = getNearbyGeoCellIds(input);
+  const geoCellIds = [getGeoCell(input).id];
 
   const shopGeoTexts = alias(geoTextsTable, 'shop_geo_texts');
   const mallGeoTexts = alias(geoTextsTable, 'mall_geo_texts');

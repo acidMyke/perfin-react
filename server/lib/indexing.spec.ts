@@ -41,7 +41,7 @@ describe(getGeoCell, () => {
     expect.soft(getGeoCell({ isOnline: true })).toMatchInlineSnapshot(`
       {
         "id": -1,
-        "latIndex": -1,
+        "latIndex": 0,
         "lonIndex": -1,
       }
     `);
@@ -61,46 +61,12 @@ describe(getNearbyGeoCellIds, () => {
   });
 
   it('should be determinstic', () => {
-    expect.soft(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+    expect(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
       [
         37599,
         37887,
-        37311,
-        37600,
-        37598,
-        37888,
-        37886,
-        37312,
-        37310,
       ]
     `);
-
-    expect.soft(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 }, { expanded: true }))
-      .toMatchInlineSnapshot(`
-        [
-          37599,
-          37887,
-          37311,
-          37600,
-          37598,
-          37888,
-          37886,
-          37312,
-          37310,
-          38175,
-          37023,
-          37601,
-          37597,
-          37889,
-          37885,
-          37313,
-          37309,
-          38176,
-          38174,
-          37024,
-          37022,
-        ]
-      `);
   });
 });
 

@@ -1,57 +1,60 @@
 const GRID_SIZE = 0.002; // 222 meters
+const NEARBY_THRESHOLD = 0.0007; // 77.7 meters
 const SG_BOUNDING_BOX = Object.freeze({
-  MIN_LAT: 1.13,
-  MAX_LAT: 1.493,
-  MIN_LON: 103.557,
-  MAX_LON: 104.131,
+  MIN_LAT: 1.13, // SOUTH
+  MAX_LAT: 1.493, // NORTH
+  MIN_LON: 103.557, // WEST
+  MAX_LON: 104.131, // EAST
 
   MAX_LON_INDEX: 288, // ceil(floor(104.131/0.002)  - floor(103.557/0.002))
   MAX_LAT_INDEX: 182, // ceil(floor(1.493/0.002)  - floor(1.13/0.002))
 });
 
-export const NON_SPATIAL_GEO_CELL_ID = -1;
+const NON_SPATIAL_GEO_CELL_ID = -1;
 export type GeoCellParam = { isOnline?: false; latitude: number; longitude: number } | { isOnline: true };
 
-export function getGeoCell(param: GeoCellParam) {
-  if (param.isOnline) {
-    return { id: NON_SPATIAL_GEO_CELL_ID, latIndex: NON_SPATIAL_GEO_CELL_ID, lonIndex: NON_SPATIAL_GEO_CELL_ID };
-  }
+function geoCellParamToGeoIdx(param: GeoCellParam) {
+  if (param.isOnline) return { latIndex: 0, lonIndex: NON_SPATIAL_GEO_CELL_ID };
+
   const { latitude, longitude } = param;
   const latIndex = Math.floor((latitude - SG_BOUNDING_BOX.MIN_LAT) / GRID_SIZE);
   const lonIndex = Math.floor((longitude - SG_BOUNDING_BOX.MIN_LON) / GRID_SIZE);
-  const id = latIndex * SG_BOUNDING_BOX.MAX_LON_INDEX + lonIndex;
-
-  return { id, latIndex, lonIndex };
+  return { latIndex, lonIndex };
 }
 
-export function getNearbyGeoCellIds(param: GeoCellParam, { expanded = false } = {}) {
-  if (param.isOnline) {
-    return [NON_SPATIAL_GEO_CELL_ID];
-  }
+type GeoIdx = ReturnType<typeof geoCellParamToGeoIdx>;
+
+const geoIdxToGeoCellId = ({ latIndex, lonIndex }: GeoIdx) => latIndex * SG_BOUNDING_BOX.MAX_LON_INDEX + lonIndex;
+
+export function getGeoCell(param: GeoCellParam) {
+  const geoIndex = geoCellParamToGeoIdx(param);
+  const id = geoIdxToGeoCellId(geoIndex);
+  return { id, ...geoIndex };
+}
+
+export function getNearbyGeoCellIds(param: GeoCellParam) {
+  const { latIndex, lonIndex } = geoCellParamToGeoIdx(param);
+  if (param.isOnline) return [NON_SPATIAL_GEO_CELL_ID];
 
   const { latitude, longitude } = param;
-  const latIndex = Math.floor((latitude - SG_BOUNDING_BOX.MIN_LAT) / GRID_SIZE);
-  const lonIndex = Math.floor((longitude - SG_BOUNDING_BOX.MIN_LON) / GRID_SIZE);
+  const latInGrid = latitude % GRID_SIZE;
+  const lngInGrid = longitude % GRID_SIZE;
+  const latOffsets = [0];
+  const lonOffsets = [0];
 
-  // prettier-ignore
-  let nearbyOffsets: [number, number][] = [
-    [0, 0],
-    [1, 0], [-1, 0], [0, 1], [0, -1],
-    [1, 1], [1, -1], [-1, 1], [-1, -1], 
-  ];
+  if (latInGrid < NEARBY_THRESHOLD) latOffsets.push(-1);
+  else if (latInGrid > GRID_SIZE - NEARBY_THRESHOLD) latOffsets.push(1);
 
-  if (expanded) {
-    // prettier-ignore
-    const expandedNearbyOffsets: [number, number][] = [
-      [2, 0], [-2, 0], [0, 2], [0, -2],
-      [1, 2], [1, -2], [-1, 2], [-1, -2], [2, 1], [2, -1], [-2, 1], [-2, -1],
-      // [2, 2], [2, -2], [-2, 2], [-2, -2],
-    ];
+  if (lngInGrid < NEARBY_THRESHOLD) lonOffsets.push(-1);
+  else if (lngInGrid > GRID_SIZE - NEARBY_THRESHOLD) lonOffsets.push(1);
 
-    nearbyOffsets.push(...expandedNearbyOffsets);
-  }
-  return nearbyOffsets.map(
-    ([latOffset, lonOffset]) => (latIndex + latOffset) * SG_BOUNDING_BOX.MAX_LON_INDEX + (lonIndex + lonOffset),
+  return latOffsets.flatMap(oLat =>
+    lonOffsets.map(oLon =>
+      geoIdxToGeoCellId({
+        latIndex: latIndex + oLat,
+        lonIndex: lonIndex + oLon,
+      }),
+    ),
   );
 }
 
