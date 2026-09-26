@@ -19,6 +19,7 @@ import {
   createGetTextId,
   generateSearchChunks,
   getGeoCell,
+  getGeoCellBounds,
   getNearbyGeoCellIds,
   getSingleTextId,
   TEXT_KIND,
@@ -59,9 +60,10 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   const { kind, context, coordinate, isOnline } = input;
   const search = input.search?.trim();
   const contextText = context?.text?.trim();
+  let coordinateBounds: ReturnType<typeof getGeoCellBounds> | undefined = undefined;
 
   if (!search && !contextText && !coordinate) {
-    return { suggestions: [] };
+    return { suggestions: [], coordinateBounds };
   }
 
   const textIdCol = 'text_id' as const;
@@ -120,18 +122,26 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   }
 
   if (coordinate ?? isOnline) {
-    const geoCell = getGeoCell(coordinate ?? { isOnline: true });
+    const nearbyGeoCells = getNearbyGeoCellIds(coordinate ?? { isOnline: true });
+    coordinateBounds = getGeoCellBounds(coordinate ?? { isOnline: true });
+
     searchQuery = searchQuery.unionAll(
       db
         .selectDistinct({
           textId: geoTextsTable.textId.as(textIdCol),
-          chunkCountScore: sql<0>`0`.as(chunkCountScoreCol),
-          contextScore: sql<0>`0`.as(contextScoreCol),
-          spatialScore: sql<2>`2`.as(spatialScoreCol),
+          chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
+          contextScore: sql<number>`0`.as(contextScoreCol),
+          spatialScore: caseWhen(eq(geoTextsTable.geoCellId, nearbyGeoCells[0]), sql<number>`4`)
+            .else(sql<number>`2`)
+            .as(spatialScoreCol),
         })
         .from(geoTextsTable)
         .where(
-          and(eq(geoTextsTable.userId, userId), eq(geoTextsTable.kind, kind), eq(geoTextsTable.geoCellId, geoCell.id)),
+          and(
+            eq(geoTextsTable.userId, userId),
+            eq(geoTextsTable.kind, kind),
+            inArray(geoTextsTable.geoCellId, nearbyGeoCells),
+          ),
         ),
     );
   }
@@ -171,7 +181,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       ),
     );
 
-  return { suggestions: result };
+  return { suggestions: result, coordinateBounds };
 }
 
 const searchShopByLocationInputSchema = z.union([

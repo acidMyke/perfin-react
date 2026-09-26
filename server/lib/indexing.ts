@@ -58,6 +58,17 @@ export function getNearbyGeoCellIds(param: GeoCellParam) {
   );
 }
 
+export function getGeoCellBounds(param: GeoCellParam) {
+  const { latIndex, lonIndex } = geoCellParamToGeoIdx(param);
+
+  return {
+    minLat: latIndex * GRID_SIZE,
+    maxLat: (latIndex + 1) * GRID_SIZE,
+    minLng: lonIndex * GRID_SIZE,
+    maxLng: (lonIndex + 1) * GRID_SIZE,
+  };
+}
+
 export const SHOP_NAME_TEXT_KIND = 'shopName' as const;
 export const MALL_NAME_TEXT_KIND = 'mallName' as const;
 export const ITEM_NAME_TEXT_KIND = 'itemName' as const;
