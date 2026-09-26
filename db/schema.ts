@@ -217,13 +217,7 @@ export const expensesTable = sqliteTable(
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [
-    index('idx_expenses_partial_user_box_shop')
-      .on(t.userId, t.boxId, t.shopName, t.shopMall)
-      .where(isNotNull(t.shopName)), // Used by getShopDetailByLocationProcedure
-    index('idx_expenses_id_account_category').on(t.id, t.accountId, t.categoryId),
-    index('idx_expenses_user_billedAt').on(t.userId, t.billedAt),
-  ],
+  t => [index('idx_expenses_user_billedAt').on(t.userId, t.billedAt)],
 );
 
 export const expenseItemsTable = sqliteTable(

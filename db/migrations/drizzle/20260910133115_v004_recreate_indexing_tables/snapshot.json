@@ -2429,54 +2429,6 @@
           "isExpression": false
         },
         {
-          "value": "box_id",
-          "isExpression": false
-        },
-        {
-          "value": "shop_name",
-          "isExpression": false
-        },
-        {
-          "value": "shop_mall",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": "(\"expenses\".\"shop_name\" is not null)",
-      "origin": "manual",
-      "name": "idx_expenses_partial_user_box_shop",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "id",
-          "isExpression": false
-        },
-        {
-          "value": "account_id",
-          "isExpression": false
-        },
-        {
-          "value": "category_id",
-          "isExpression": false
-        }
-      ],
-      "isUnique": false,
-      "where": null,
-      "origin": "manual",
-      "name": "idx_expenses_id_account_category",
-      "entityType": "indexes",
-      "table": "expenses"
-    },
-    {
-      "columns": [
-        {
-          "value": "user_id",
-          "isExpression": false
-        },
-        {
           "value": "billed_at",
           "isExpression": false
         }
