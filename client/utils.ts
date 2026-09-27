@@ -78,8 +78,8 @@ export function isLocationExceedBoundaries(
   location: CurrentLocation | undefined,
   boundaries: LocationBoundaries | undefined,
 ) {
-  if ((location === undefined) !== (boundaries === undefined)) return true;
-  if (location === undefined || boundaries === undefined) return false;
+  if (!location !== !boundaries) return true;
+  if (!location || !boundaries) return false;
 
   const { isOnline, latitude, longitude } = location;
   const { wasOnline, minLat, maxLat, minLng, maxLng } = boundaries;

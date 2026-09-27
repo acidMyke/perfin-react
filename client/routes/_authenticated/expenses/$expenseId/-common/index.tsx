@@ -100,7 +100,7 @@ function createNewExpenseForm() {
     version: 0,
     amountCents: 0,
     billedAt: new Date(),
-    type: 'online',
+    type: 'physical',
     geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
     shopName: null,
     shopMall: null,

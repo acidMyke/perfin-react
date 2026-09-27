@@ -193,7 +193,7 @@ type SearchShopByLocationInput = z.infer<typeof searchShopByLocationInputSchema>
 export async function searchShopByLocation(ctx: ProtectedContext, input: SearchShopByLocationInput) {
   const { db, userId } = ctx;
 
-  const geoCellIds = [getGeoCell(input).id];
+  const { geoCellIds, bounds: locationBounds } = getNearbyGeoCellIdsAndBounds(input);
 
   const shopGeoTexts = alias(geoTextsTable, 'shop_geo_texts');
   const mallGeoTexts = alias(geoTextsTable, 'mall_geo_texts');
@@ -206,7 +206,6 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
       mallName: mallTexts.text,
       latitude: avg(shopGeoTexts.latitude).mapWith(shopGeoTexts.latitude),
       longitude: avg(shopGeoTexts.longitude).mapWith(shopGeoTexts.longitude),
-      lastUsageAt: max(coalesce(ctxTextsTable.lastUsedAt, shopTexts.lastUsedAt)).mapWith(shopTexts.lastUsedAt),
       recencyScore: getRecencyScore(shopTexts.lastUsedAt),
     })
     .from(shopGeoTexts)
@@ -232,7 +231,7 @@ export async function searchShopByLocation(ctx: ProtectedContext, input: SearchS
     )
     .groupBy(shopGeoTexts.textId, ctxTextsTable.textId);
 
-  return { result };
+  return { result, locationBounds };
 }
 
 export const getShopDetailInputSchema = z.object({ shopName: z.string() });
