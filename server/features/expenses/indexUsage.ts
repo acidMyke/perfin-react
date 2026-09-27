@@ -44,16 +44,16 @@ function getRecencyScore<T>(dateValue: SQLWrapper<T>) {
     .else(-9);
 }
 
+const locationSchema = z.union([
+  z.object({ isOnline: z.literal(true), latitude: z.number().optional(), longitude: z.number().optional() }),
+  z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
+]);
+
 export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
   search: z.string().optional(),
   context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
-  location: z
-    .union([
-      z.object({ isOnline: z.literal(true), latitude: z.number().optional(), longitude: z.number().optional() }),
-      z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
-    ])
-    .optional(),
+  location: locationSchema.optional(),
 });
 
 type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
@@ -187,10 +187,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   return { suggestions: result, locationBounds };
 }
 
-const searchShopByLocationInputSchema = z.union([
-  z.object({ isOnline: z.literal(true) }),
-  z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
-]);
+export const searchShopByLocationInputSchema = locationSchema.clone();
 
 type SearchShopByLocationInput = z.infer<typeof searchShopByLocationInputSchema>;
 export async function searchShopByLocation(ctx: ProtectedContext, input: SearchShopByLocationInput) {

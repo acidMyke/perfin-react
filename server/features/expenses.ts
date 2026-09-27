@@ -29,6 +29,7 @@ import {
   getItemDetail,
   getItemDetailInputSchema,
   getShopDetailInputSchema,
+  searchShopByLocationInputSchema,
 } from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
@@ -208,7 +209,7 @@ const getSuggestionsProcedure = protectedProcedure
   .query(({ ctx, input }) => getSuggestions(ctx, input));
 
 const searchShopByLocationProcedure = protectedProcedure
-  .input(z.object({ latitude: z.number(), longitude: z.number() }))
+  .input(searchShopByLocationInputSchema)
   .query(({ input, ctx }) => searchShopByLocation(ctx, input));
 
 const getShopDetailProcedure = protectedProcedure
