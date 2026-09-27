@@ -1,8 +1,8 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { useExpenseForm } from './-common';
+import { useCompleteShopDetailMutation, useExpenseForm } from './-common';
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
-import { skipToken, useQuery } from '@tanstack/react-query';
+import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import {
   distanceBetween,
   formatDistance,
@@ -43,6 +43,8 @@ function RouteComponent() {
   const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
   const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 40, timeThreshold: 5000 });
   const coordinate = customCoordinate ?? currentLocationQuery.data ?? undefined;
+  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
     <div className='px-2'>
@@ -115,6 +117,7 @@ function RouteComponent() {
               onShopClick={({ shopName, mallName }) => {
                 form.setFieldValue('shopName', shopName);
                 form.setFieldValue('shopMall', mallName);
+                if (shopName) completeShopDetailMutation.mutateAsync({ shopName });
               }}
             />
 
@@ -124,7 +127,7 @@ function RouteComponent() {
               <ShopNameSubForm
                 form={form}
                 coordinate={coordinate}
-                onShopNameSelect={shopName => {}}
+                onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
                 containerCn='grow w-1/3'
               />
             </div>
