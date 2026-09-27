@@ -10,7 +10,7 @@ import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetState
 import { trpc, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
 import { distanceBetween, formatDistance, SG_CENTER, toLatLng, type Coordinate } from '#client/utils';
-import { ArrowRight, Building, Store } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 import { ShopNameSubForm } from './-subform/ExpenseShopName';
@@ -30,7 +30,6 @@ type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 
 type ResultScoreFactors = { distance: number; since: number };
 type ShopResult = Shop & ResultScoreFactors;
-type MallResult = { mallName: string; shopCount: number } & Coordinate & ResultScoreFactors;
 
 const recencyNudge = (since: number) =>
   since <= 14 ? 30 : since <= 30 ? -30 : since <= 60 ? -15 : since <= 120 ? 0 : since <= 240 ? 15 : 30;
@@ -127,18 +126,9 @@ function RouteComponent() {
       mall.maxSince = Math.max(mall.maxSince, since);
     }
 
-    const malls = Array.from(mallMap, ([mallName, m]) => {
-      const latitude = m.latSum / m.count;
-      const longitude = m.lngSum / m.count;
-
-      const distance = distanceBetween(userLat, userLng, latitude, longitude);
-      return { mallName, latitude, longitude, shopCount: m.count, distance, since: m.maxSince } satisfies MallResult;
-    });
-
     shops.sort((a, b) => a.distance + recencyNudge(a.since) - (b.distance + recencyNudge(a.since)));
-    malls.sort((a, b) => a.distance + recencyNudge(a.since) - (b.distance + recencyNudge(a.since)));
 
-    return { shops, malls };
+    return { shops };
   }, [shopSuggestionsMutation.data, currentLocationQuery.data]);
 
   useEffect(() => {
@@ -148,23 +138,23 @@ function RouteComponent() {
   return (
     <div>
       {customCoordinate ? (
-        <p className='mb-2'>Custom coordinate: {formatCoordinate(customCoordinate)}</p>
+        <p className='mb-2'>
+          Custom coordinate: {formatCoordinate(customCoordinate)}
+          <button className='btn btn-link btn-sm inline' onClick={() => {}}>
+            {showMap ? 'Hide map' : 'Change'}
+          </button>
+        </p>
       ) : (
         <p className='mb-2'>
           Current coordinate:{' '}
           {currentLocationQuery.isPending && <span className='skeleton skeleton-text'>Retriving location...</span>}
           {currentLocationQuery.isError && <span>Error: {currentLocationQuery.error?.getFormmatedError()}</span>}
           {currentLocationQuery.data && <span className=''>{formatCoordinate(currentLocationQuery.data)}</span>}
+          <button className='btn btn-link btn-sm inline' onClick={() => {}}>
+            {showMap ? 'Hide map' : 'Change'}
+          </button>
         </p>
       )}
-      <div className='mb-6 flex gap-x-4'>
-        <button className='btn btn-primary w-5/12 grow' onClick={() => setShowMap(v => !v)}>
-          {showMap ? 'Hide map' : 'Change coordinate'}
-        </button>
-        <button className='btn btn-secondary w-5/12 grow' onClick={() => continueToMainForm({ isOnline: true })}>
-          Online
-        </button>
-      </div>
 
       {showMap && (
         <CoordinatePicker
@@ -210,74 +200,38 @@ function ManualEntryFields({ form, coordinate, onShopNameSelect }: ManualEntryFi
 }
 
 type NearbyResultListProps = {
-  normalizedResult: { shops: ShopResult[]; malls: MallResult[] } | undefined;
+  normalizedResult: { shops: ShopResult[] } | undefined;
   continueToMainForm: (args: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => any;
 };
 
 function NearbyResultList({ normalizedResult, continueToMainForm }: NearbyResultListProps) {
   return (
-    <div className='flex w-full flex-row gap-x-1'>
-      <div className='w-lg border-r pr-1'>
-        <h3 className='menu-title text-primary text-center text-2xl'>
-          <Store size={30} className='inline' /> Shops
-        </h3>
+    <ul className='menu rounded-box w-full p-0'>
+      {normalizedResult?.shops.map(shop => (
+        <li key={`${shop.mallName}-${shop.shopName}`}>
+          <button onClick={() => continueToMainForm(shop)} className='flex justify-between pl-4'>
+            <div className='text-left'>
+              <div className='max-w-full font-medium text-ellipsis'>{shop.shopName}</div>
+              <div className='text-xs opacity-60'>🏬 {shop.mallName ?? '<Unspecified>'}</div>
+            </div>
 
-        <ul className='menu rounded-box w-full p-0'>
-          {normalizedResult?.shops.map(shop => (
-            <li key={`${shop.mallName}-${shop.shopName}`}>
-              <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
-                <div className='text-left'>
-                  <div className='max-w-full font-medium text-ellipsis'>{shop.shopName}</div>
-                  <div className='text-xs opacity-60'>🏬 {shop.mallName ?? '<Unspecified>'}</div>
-                </div>
+            <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>
+          </button>
+        </li>
+      )) ??
+        [...Array(4)].map((_, i) => (
+          <li key={i}>
+            <div className='flex justify-between'>
+              <div className='space-y-2'>
+                <div className='skeleton h-4 w-32' />
+                <div className='skeleton h-3 w-24' />
+              </div>
 
-                <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>
-              </button>
-            </li>
-          )) ??
-            [...Array(4)].map((_, i) => (
-              <li key={i}>
-                <div className='flex justify-between'>
-                  <div className='space-y-2'>
-                    <div className='skeleton h-4 w-32' />
-                    <div className='skeleton h-3 w-24' />
-                  </div>
-
-                  <div className='skeleton h-5 w-12' />
-                </div>
-              </li>
-            ))}
-        </ul>
-
-        <div className='space-y-2'>{}</div>
-      </div>
-
-      <div className='min-w-32'>
-        <h3 className='menu-title text-secondary text-center text-2xl'>
-          <Building size={30} className='inline' /> Malls
-        </h3>
-
-        <ul className='menu rounded-box w-full p-0'>
-          {normalizedResult?.malls.map(mall => (
-            <li key={mall.mallName}>
-              <button
-                onClick={() => continueToMainForm({ shopMall: mall.mallName })}
-                className='flex h-12 justify-between'
-              >
-                <div className='font-medium'>{mall.mallName}</div>
-              </button>
-            </li>
-          )) ??
-            [...Array(3)].map((_, i) => (
-              <li key={i}>
-                <div className='flex h-12 justify-between'>
-                  <div className='skeleton h-4 w-36' />
-                </div>
-              </li>
-            ))}
-        </ul>
-      </div>
-    </div>
+              <div className='skeleton h-5 w-12' />
+            </div>
+          </li>
+        ))}
+    </ul>
   );
 }
 
