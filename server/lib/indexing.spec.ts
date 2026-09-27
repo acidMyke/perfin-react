@@ -6,6 +6,7 @@ import {
   type TextIdParamter,
   getNearbyGeoCellIds,
   getSingleTextId,
+  getGeoCellBounds,
 } from './indexing';
 
 describe(getGeoCell, () => {
@@ -64,8 +65,37 @@ describe(getNearbyGeoCellIds, () => {
     expect(getNearbyGeoCellIds({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
       [
         37599,
-        37887,
+        37600,
       ]
+    `);
+  });
+});
+
+describe(getGeoCellBounds, () => {
+  it('should return bounds of the input latitude and longitude in which the input are within it', () => {
+    const coordinate = { latitude: 1.391389, longitude: 103.8769 };
+    const { minLat, minLng, maxLat, maxLng, wasOnline } = getGeoCellBounds(coordinate);
+
+    expect.soft(minLat).toBeLessThan(coordinate.latitude);
+    expect.soft(minLng).toBeLessThan(coordinate.longitude);
+    expect.soft(maxLat).toBeGreaterThan(coordinate.latitude);
+    expect.soft(maxLng).toBeGreaterThan(coordinate.longitude);
+    expect.soft(wasOnline).toBe(false);
+  });
+
+  it('should match input isOnline', () => {
+    expect.soft(getGeoCellBounds({ isOnline: true }).wasOnline).toBe(true);
+  });
+
+  it('should be determinstic', () => {
+    expect(getGeoCellBounds({ latitude: 1.391389, longitude: 103.8769 })).toMatchInlineSnapshot(`
+      {
+        "maxLat": 1.392,
+        "maxLng": 103.877,
+        "minLat": 1.39,
+        "minLng": 103.875,
+        "wasOnline": false,
+      }
     `);
   });
 });

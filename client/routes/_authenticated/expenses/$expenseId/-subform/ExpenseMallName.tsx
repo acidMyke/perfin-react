@@ -19,7 +19,7 @@ export const MallNameSubForm = withForm({
             form={form}
             fields={{ text: 'shopMall' }}
             kind='mallName'
-            coordinate={latitude && longitude ? { latitude, longitude } : undefined}
+            location={latitude && longitude ? { latitude, longitude } : undefined}
             label='Mall name'
             triggerChangeOnFocus
             hideError

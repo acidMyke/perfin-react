@@ -19,8 +19,7 @@ import {
   createGetTextId,
   generateSearchChunks,
   getGeoCell,
-  getGeoCellBounds,
-  getNearbyGeoCellIds,
+  getNearbyGeoCellIdsAndBounds,
   getSingleTextId,
   TEXT_KIND,
   type TextIdParamter,
@@ -49,21 +48,26 @@ export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
   search: z.string().optional(),
   context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
-  coordinate: z.object({ latitude: z.number(), longitude: z.number() }).optional(),
-  isOnline: z.boolean().default(false),
+  location: z
+    .union([
+      z.object({ isOnline: z.literal(true), latitude: z.number().optional(), longitude: z.number().optional() }),
+      z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
+    ])
+    .optional(),
 });
 
 type GetSuggestionInput = z.infer<typeof getSuggestionInputSchema>;
 
 export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestionInput) {
   const { db, userId } = ctx;
-  const { kind, context, coordinate, isOnline } = input;
+  const { kind, context, location } = input;
   const search = input.search?.trim();
   const contextText = context?.text?.trim();
-  let coordinateBounds: ReturnType<typeof getGeoCellBounds> | undefined = undefined;
+  let locationBounds: ReturnType<typeof getNearbyGeoCellIdsAndBounds>['bounds'] | undefined = undefined;
+  let withNearby: boolean | undefined = undefined;
 
-  if (!search && !contextText && !coordinate) {
-    return { suggestions: [], coordinateBounds };
+  if (!search && !contextText && !location) {
+    return { suggestions: [], locationBounds };
   }
 
   const textIdCol = 'text_id' as const;
@@ -71,14 +75,14 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   const frequencyScoreCol = 'frequency_score' as const;
   const recencyScoreCol = 'recency_score' as const;
   const contextScoreCol = 'context_score' as const;
-  const spatialScoreCol = 'spatial_score' as const;
+  const locationScoreCol = 'location_score' as const;
 
   let searchQuery = db
     .select({
       textId: sql<null | Buffer<ArrayBufferLike>>`NULL`.as(textIdCol),
       chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
       contextScore: sql<number>`0`.as(contextScoreCol),
-      spatialScore: sql<number>`0`.as(spatialScoreCol),
+      locationScore: sql<number>`0`.as(locationScoreCol),
     })
     .from(textChunksTable)
     .where(sql`false`)
@@ -92,7 +96,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
           textId: textChunksTable.textId.as(textIdCol),
           chunkCountScore: countDistinct(textChunksTable.chunk).as(chunkCountScoreCol),
           contextScore: sql<number>`0`.as(contextScoreCol),
-          spatialScore: sql<number>`0`.as(spatialScoreCol),
+          locationScore: sql<number>`0`.as(locationScoreCol),
         })
         .from(textChunksTable)
         .where(
@@ -114,16 +118,17 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
           textId: ctxTextsTable.textId.as(textIdCol),
           chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
           contextScore: sql<number>`2`.as(contextScoreCol),
-          spatialScore: sql<number>`0`.as(spatialScoreCol),
+          locationScore: sql<number>`0`.as(locationScoreCol),
         })
         .from(ctxTextsTable)
         .where(eq(ctxTextsTable.ctxTextId, Buffer.from(ctxTextId))),
     );
   }
 
-  if (coordinate ?? isOnline) {
-    const nearbyGeoCells = getNearbyGeoCellIds(coordinate ?? { isOnline: true });
-    coordinateBounds = getGeoCellBounds(coordinate ?? { isOnline: true });
+  if (location) {
+    const { geoCellIds, bounds } = getNearbyGeoCellIdsAndBounds(location);
+    locationBounds = bounds;
+    withNearby = geoCellIds.length > 1;
 
     searchQuery = searchQuery.unionAll(
       db
@@ -131,16 +136,16 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
           textId: geoTextsTable.textId.as(textIdCol),
           chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
           contextScore: sql<number>`0`.as(contextScoreCol),
-          spatialScore: caseWhen(eq(geoTextsTable.geoCellId, nearbyGeoCells[0]), sql<number>`4`)
+          locationScore: caseWhen(eq(geoTextsTable.geoCellId, geoCellIds[0]), sql<number>`4`)
             .else(sql<number>`2`)
-            .as(spatialScoreCol),
+            .as(locationScoreCol),
         })
         .from(geoTextsTable)
         .where(
           and(
             eq(geoTextsTable.userId, userId),
             eq(geoTextsTable.kind, kind),
-            inArray(geoTextsTable.geoCellId, nearbyGeoCells),
+            inArray(geoTextsTable.geoCellId, geoCellIds),
           ),
         ),
     );
@@ -153,7 +158,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       textId: searchSubquery.textId,
       chunkCountScore: sumAsNumber(searchSubquery.chunkCountScore).as(chunkCountScoreCol),
       contextScore: sumAsNumber(searchSubquery.contextScore).as(contextScoreCol),
-      spatialScore: sumAsNumber(searchSubquery.spatialScore).as(spatialScoreCol),
+      locationScore: sumAsNumber(searchSubquery.locationScore).as(locationScoreCol),
     })
     .from(searchSubquery)
     .groupBy(sql.raw(textIdCol))
@@ -164,7 +169,7 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
       text: textsTable.text,
       chunkCountScore: aggregatedSubquery.chunkCountScore,
       contextScore: aggregatedSubquery.contextScore,
-      spatialScore: aggregatedSubquery.spatialScore,
+      locationScore: aggregatedSubquery.locationScore,
       frequencyScore: getFrequencyScore(textsTable.usageCount).as(frequencyScoreCol),
       recencyScore: getRecencyScore(textsTable.lastUsedAt).as(recencyScoreCol),
     })
@@ -176,12 +181,12 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
     .orderBy(
       desc(
         sql.raw(
-          `${chunkCountScoreCol} + ${frequencyScoreCol} + ${recencyScoreCol} + ${contextScoreCol} + ${spatialScoreCol}`,
+          `${chunkCountScoreCol} + ${frequencyScoreCol} + ${recencyScoreCol} + ${contextScoreCol} + ${locationScoreCol}`,
         ),
       ),
     );
 
-  return { suggestions: result, coordinateBounds };
+  return { suggestions: result, locationBounds };
 }
 
 const searchShopByLocationInputSchema = z.union([

@@ -1,30 +1,53 @@
 import { withFieldGroup, type ComboBoxProps } from '#client/components/Form';
-import { trpc, type RouterInputs } from '#client/trpc';
+import { trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 type SuggestionInput = RouterInputs['expense']['getSuggestions'];
 type SuggestionKind = SuggestionInput['kind'];
 type SuggestionContext = SuggestionInput['context'];
-type SuggestionCoordinate = SuggestionInput['coordinate'];
+type SuggestionLocation = SuggestionInput['location'];
 
 export type SuggestionFieldProps = {
   kind: SuggestionKind;
   context?: SuggestionContext;
-  coordinate?: SuggestionCoordinate;
+  location?: SuggestionLocation;
   fetchDebouncing?: number;
 } & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
+
+type SuggestionOutput = RouterOutputs['expense']['getSuggestions'];
+type SuggestionBoundaries = SuggestionOutput['locationBounds'];
+
+function isExceedBoundaries(currentLocation: SuggestionLocation, boundaries: SuggestionBoundaries) {
+  if ((currentLocation === undefined) !== (boundaries === undefined)) return true;
+  if (currentLocation === undefined || boundaries === undefined) return false;
+
+  const { isOnline, latitude, longitude } = currentLocation;
+  const { wasOnline, minLat, maxLat, minLng, maxLng } = boundaries;
+
+  if ((isOnline ?? false) !== boundaries.wasOnline) return true;
+  if (isOnline || wasOnline) return false;
+
+  return latitude < minLat || latitude > maxLat || longitude < minLng || longitude > maxLng;
+}
 
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, kind, context, coordinate, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+  render({ group, kind, context, location, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
     const [search, setSearch] = useState('' as null | undefined | string);
+    const [cachedLocation, setCachedLocation] = useState(() => location);
     let queryInput: SuggestionInput | typeof skipToken = skipToken;
-    if (search || context || coordinate) {
-      queryInput = { kind, search: search ?? '', context, coordinate };
+    if (search || context || location) {
+      queryInput = { kind, search: search ?? '', context, location: cachedLocation };
     }
     const { data } = useQuery(trpc.expense.getSuggestions.queryOptions(queryInput));
+
+    useEffect(() => {
+      if (isExceedBoundaries(location, data?.locationBounds)) {
+        setCachedLocation(location);
+      }
+    }, [data?.locationBounds, location?.isOnline, location?.latitude, location?.longitude]);
 
     return (
       <group.AppField

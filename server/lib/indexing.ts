@@ -1,13 +1,13 @@
 const GRID_SIZE = 0.002; // 222 meters
-const NEARBY_THRESHOLD = 0.0007; // 77.7 meters
+const NEARBY_THRESHOLD = 0.0005; // 77.7 meters
 const SG_BOUNDING_BOX = Object.freeze({
   MIN_LAT: 1.13, // SOUTH
   MAX_LAT: 1.493, // NORTH
   MIN_LON: 103.557, // WEST
   MAX_LON: 104.131, // EAST
 
-  MAX_LON_INDEX: 288, // ceil(floor(104.131/0.002)  - floor(103.557/0.002))
-  MAX_LAT_INDEX: 182, // ceil(floor(1.493/0.002)  - floor(1.13/0.002))
+  LON_CELL_COUNT: 288, // ceil(floor(104.131/0.002)  - floor(103.557/0.002))
+  LAT_CELL_COUNT: 182, // ceil(floor(1.493/0.002)  - floor(1.13/0.002))
 });
 
 const NON_SPATIAL_GEO_CELL_ID = -1;
@@ -24,7 +24,14 @@ function geoCellParamToGeoIdx(param: GeoCellParam) {
 
 type GeoIdx = ReturnType<typeof geoCellParamToGeoIdx>;
 
-const geoIdxToGeoCellId = ({ latIndex, lonIndex }: GeoIdx) => latIndex * SG_BOUNDING_BOX.MAX_LON_INDEX + lonIndex;
+const geoIdxToGeoCellId = ({ latIndex, lonIndex }: GeoIdx) => latIndex * SG_BOUNDING_BOX.LON_CELL_COUNT + lonIndex;
+
+function geoIndicesBounds({ latIndex, lonIndex }: GeoIdx) {
+  const minLat = latIndex * GRID_SIZE + SG_BOUNDING_BOX.MIN_LAT;
+  const minLng = lonIndex * GRID_SIZE + SG_BOUNDING_BOX.MIN_LON;
+
+  return { minLat, minLng, maxLat: minLat + GRID_SIZE, maxLng: minLng + GRID_SIZE };
+}
 
 export function getGeoCell(param: GeoCellParam) {
   const geoIndex = geoCellParamToGeoIdx(param);
@@ -32,13 +39,15 @@ export function getGeoCell(param: GeoCellParam) {
   return { id, ...geoIndex };
 }
 
-export function getNearbyGeoCellIds(param: GeoCellParam) {
+function getNearbyGeoIndices(param: GeoCellParam) {
   const { latIndex, lonIndex } = geoCellParamToGeoIdx(param);
-  if (param.isOnline) return [NON_SPATIAL_GEO_CELL_ID];
+  if (param.isOnline) return [{ latIndex, lonIndex }];
 
   const { latitude, longitude } = param;
-  const latInGrid = latitude % GRID_SIZE;
-  const lngInGrid = longitude % GRID_SIZE;
+  const cellMinLat = SG_BOUNDING_BOX.MIN_LAT + latIndex * GRID_SIZE;
+  const cellMinLng = SG_BOUNDING_BOX.MIN_LON + lonIndex * GRID_SIZE;
+  const latInGrid = latitude - cellMinLat;
+  const lngInGrid = longitude - cellMinLng;
   const latOffsets = [0];
   const lonOffsets = [0];
 
@@ -47,26 +56,46 @@ export function getNearbyGeoCellIds(param: GeoCellParam) {
 
   if (lngInGrid < NEARBY_THRESHOLD) lonOffsets.push(-1);
   else if (lngInGrid > GRID_SIZE - NEARBY_THRESHOLD) lonOffsets.push(1);
+  return latOffsets.flatMap(oLat => lonOffsets.map(oLon => ({ latIndex: latIndex + oLat, lonIndex: lonIndex + oLon })));
+}
 
-  return latOffsets.flatMap(oLat =>
-    lonOffsets.map(oLon =>
-      geoIdxToGeoCellId({
-        latIndex: latIndex + oLat,
-        lonIndex: lonIndex + oLon,
-      }),
-    ),
-  );
+export function getNearbyGeoCellIds(param: GeoCellParam) {
+  const nearbyGeoIndices = getNearbyGeoIndices(param);
+  if (param.isOnline) return [NON_SPATIAL_GEO_CELL_ID];
+
+  return nearbyGeoIndices.map(geoIdxToGeoCellId);
+}
+
+export function getNearbyGeoCellIdsAndBounds(param: GeoCellParam) {
+  if (param.isOnline) {
+    return {
+      geoCellIds: [NON_SPATIAL_GEO_CELL_ID],
+      bounds: { wasOnline: true, minLat: 0, minLng: 0, maxLat: 0, maxLng: 0 },
+    };
+  }
+
+  const nearbyGeoIndices = getNearbyGeoIndices(param);
+  const geoCellIds: number[] = [];
+  let accBounds: (ReturnType<typeof geoIndicesBounds> & { wasOnline: boolean }) | undefined = undefined;
+
+  for (const indices of nearbyGeoIndices) {
+    geoCellIds.push(geoIdxToGeoCellId(indices));
+    const bound = geoIndicesBounds(indices);
+    if (accBounds) {
+      accBounds.minLat = Math.min(accBounds.minLat, bound.minLat);
+      accBounds.minLng = Math.min(accBounds.minLng, bound.minLng);
+      accBounds.maxLat = Math.max(accBounds.maxLat, bound.maxLat);
+      accBounds.maxLng = Math.max(accBounds.maxLng, bound.maxLng);
+    } else {
+      accBounds = { wasOnline: false, ...bound };
+    }
+  }
+  return { geoCellIds, bounds: accBounds };
 }
 
 export function getGeoCellBounds(param: GeoCellParam) {
-  const { latIndex, lonIndex } = geoCellParamToGeoIdx(param);
-
-  return {
-    minLat: latIndex * GRID_SIZE,
-    maxLat: (latIndex + 1) * GRID_SIZE,
-    minLng: lonIndex * GRID_SIZE,
-    maxLng: (lonIndex + 1) * GRID_SIZE,
-  };
+  const indices = geoCellParamToGeoIdx(param);
+  return { wasOnline: param.isOnline ?? false, ...geoIndicesBounds(indices) };
 }
 
 export const SHOP_NAME_TEXT_KIND = 'shopName' as const;
