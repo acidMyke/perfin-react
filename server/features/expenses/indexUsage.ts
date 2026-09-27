@@ -64,7 +64,6 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   const search = input.search?.trim();
   const contextText = context?.text?.trim();
   let locationBounds: ReturnType<typeof getNearbyGeoCellIdsAndBounds>['bounds'] | undefined = undefined;
-  let withNearby: boolean | undefined = undefined;
 
   if (!search && !contextText && !location) {
     return { suggestions: [], locationBounds };
@@ -128,7 +127,6 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   if (location) {
     const { geoCellIds, bounds } = getNearbyGeoCellIdsAndBounds(location);
     locationBounds = bounds;
-    withNearby = geoCellIds.length > 1;
 
     searchQuery = searchQuery.unionAll(
       db
