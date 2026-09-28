@@ -1,4 +1,5 @@
 import { withFieldGroup, type ComboBoxProps } from '#client/components/Form';
+import { useDebounced } from '#client/hooks/useDebounced';
 import { trpc, type RouterInputs } from '#client/trpc';
 import { isLocationExceedBoundaries } from '#client/utils';
 import { skipToken, useQuery } from '@tanstack/react-query';
@@ -14,17 +15,19 @@ export type SuggestionFieldProps = {
   context?: SuggestionContext;
   location?: SuggestionLocation;
   fetchDebouncing?: number;
-} & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
+} & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly' | 'onBlur' | 'onFocus'>;
 
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
   render({ group, kind, context, location, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+    const [isFocused, setIsFocused] = useState(false);
     const [search, setSearch] = useState('' as null | undefined | string);
     const [cachedLocation, setCachedLocation] = useState(() => location);
+    const cachedContext = useDebounced(context, fetchDebouncing);
     let queryInput: SuggestionInput | typeof skipToken = skipToken;
-    if (search || context || location) {
-      queryInput = { kind, search: search ?? '', context, location: cachedLocation };
+    if (isFocused && (search || cachedContext || cachedLocation)) {
+      queryInput = { kind, search: search ?? '', context: cachedContext, location: cachedLocation };
     }
     const { data } = useQuery(trpc.expense.getSuggestions.queryOptions(queryInput));
 
@@ -54,6 +57,9 @@ export const ExpenseSuggestableField = withFieldGroup({
               group.setFieldValue('text', suggestion, { dontValidate: true });
               onSuggestionSelected?.(suggestion);
             }}
+
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         )}
       </group.AppField>
