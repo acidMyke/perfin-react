@@ -110,6 +110,7 @@ const ItemsDetailsSubForm = withForm({
     const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
     const { createAdjustment } = useAdjustmentCallbacks(form);
     const shopName = useSelector(form.store, state => state.values.shopName);
+    const mallName = useSelector(form.store, state => state.values.shopMall);
 
     return (
       <form.Field name='items' mode='array'>
@@ -207,6 +208,7 @@ const ItemsDetailsSubForm = withForm({
                     fields={`items[${itemIndex}]`}
                     itemIndex={itemIndex}
                     shopName={shopName}
+                    mallName={mallName}
                     onRemoveClick={() => removeItem(itemIndex, field.state.value.length)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
@@ -276,7 +278,7 @@ const ShopDetailSubForm = withForm({
           className='btn btn-link btn-secondary mt-4 mb-2'
           onClick={() => {
             form.setFieldValue('type', 'online');
-            form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false });
+            form.setFieldValue('geolocation', { latitude: null, longitude: null, isError: false });
           }}
         >
           Online

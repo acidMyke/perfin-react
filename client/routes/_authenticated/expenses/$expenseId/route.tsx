@@ -93,7 +93,7 @@ function RouteComponent() {
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
-            geoAccuracy: geolocation?.accuracy ?? null,
+            geoAccuracy: null,
             billedAt: billedAt.toISOString(),
             attachmentFileIds: attachments.filter(isServerAttachment).map(({ fileId }) => fileId),
             fileUploadRequestId,

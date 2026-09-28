@@ -20,6 +20,7 @@ function RouteComponent() {
   const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
   const { createAdjustment } = useAdjustmentCallbacks(form);
   const shopName = useSelector(form.store, state => state.values.shopName);
+  const mallName = useSelector(form.store, state => state.values.shopMall);
 
   const itemIndex = parseInt(indexStr);
 
@@ -37,6 +38,7 @@ function RouteComponent() {
               fields={`items[${itemIndex}]`}
               itemIndex={itemIndex}
               shopName={shopName}
+              mallName={mallName}
               onRemoveClick={() => removeItem(itemIndex, field.state.value.length, true)}
               onPricingChange={() => calculateExpenseForm(form)}
               createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
