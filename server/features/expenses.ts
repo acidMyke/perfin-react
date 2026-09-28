@@ -218,7 +218,7 @@ const getShopDetailProcedure = protectedProcedure
 
 const getItemDetailProcedure = protectedProcedure
   .input(getItemDetailInputSchema)
-  .mutation(({ input, ctx }) => getItemDetail(ctx, input));
+  .query(({ input, ctx }) => getItemDetail(ctx, input));
 
 const setIsDeletedExpenseProcedure = protectedProcedure
   .input(z.object({ expenseId: z.string(), isDeleted: z.boolean(), version: z.number() }))

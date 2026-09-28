@@ -4,9 +4,9 @@ import { X } from 'lucide-react';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { useSelector } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
-import { useMutation } from '@tanstack/react-query';
-import { trpc } from '#client/trpc';
-import { useState } from 'react';
+import { skipToken, useQuery } from '@tanstack/react-query';
+import { trpc, type RouterInputs } from '#client/trpc';
+import { useEffect, useState } from 'react';
 
 const ItemResult = ({ itemId }: { itemId: string }) => {
   const form = useExpenseForm();
@@ -26,20 +26,36 @@ const ItemResult = ({ itemId }: { itemId: string }) => {
   );
 };
 
+type GetItemDetailInput = RouterInputs['expense']['getItemDetail'];
+
 export const ItemDetailFieldGroup = withFieldGroup({
   defaultValues: defaultExpenseItem(),
   props: {
     itemIndex: 0,
     shopName: '' as string | null,
+    mallName: '' as string | null,
     categoryOptions: [] as Option[],
     onRemoveClick: () => {},
     onPricingChange: () => {},
     createAdjustment: (_: string) => {},
   },
-  render({ group, itemIndex, shopName, categoryOptions, onRemoveClick, onPricingChange, createAdjustment }) {
+  render({ group, itemIndex, shopName, mallName, categoryOptions, onRemoveClick, onPricingChange, createAdjustment }) {
     const { pushIntoOptions } = usePushIntoOptions();
     const itemId = useSelector(group.store, state => state.values.id);
-    const inferItemPriceMutation = useMutation(trpc.expense.getItemDetail.mutationOptions());
+    const [itemDetailInput, setItemDetailInput] = useState<GetItemDetailInput>();
+    const getItemDetailQuery = useQuery(trpc.expense.getItemDetail.queryOptions(itemDetailInput ?? skipToken));
+
+    useEffect(() => {
+      if (!getItemDetailQuery.data || !getItemDetailQuery.data[0]) return;
+      const [itemDetail] = getItemDetailQuery.data;
+      group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
+      if (itemDetail.categoryId) {
+        const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
+        if (category) {
+          group.setFieldValue('category', category, { dontUpdateMeta: true });
+        }
+      }
+    }, [group, getItemDetailQuery.data]);
 
     return (
       <li className='grid grid-flow-row grid-cols-8 place-items-center gap-x-2 gap-y-1 shadow-lg'>
@@ -53,23 +69,11 @@ export const ItemDetailFieldGroup = withFieldGroup({
           containerCn='col-span-4 w-full'
           triggerChangeOnFocus
           hideError
-          onSuggestionSelected={suggestion => {
+          onSuggestionSelected={itemName => {
             const isPriceCentsDirty = group.getFieldMeta('priceCents')?.isDirty;
             if (!isPriceCentsDirty) {
-              if (!suggestion?.trim() || !shopName?.trim()) return;
-              inferItemPriceMutation
-                .mutateAsync({ itemName: suggestion, shopName })
-                .then(({ result: [itemDetail] }) => {
-                  if (itemDetail) {
-                    group.setFieldValue('priceCents', itemDetail.priceCents, { dontUpdateMeta: true });
-                    if (itemDetail.categoryId) {
-                      const category = categoryOptions.find(({ value }) => value == itemDetail.categoryId);
-                      if (category) {
-                        group.setFieldValue('category', category, { dontUpdateMeta: true });
-                      }
-                    }
-                  }
-                });
+              if (!itemName?.trim()) return;
+              setItemDetailInput({ itemName, shopName, mallName });
             }
           }}
         />

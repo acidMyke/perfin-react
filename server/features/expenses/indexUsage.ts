@@ -387,10 +387,8 @@ export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailI
     query = query.where(notExists(itemShopCtxSq));
   }
 
-  const result = await query
+  return await query
     .where(eq(itemExpense.textId, Buffer.from(itemTextId)))
     .orderBy(...orderByConds)
     .limit(1);
-
-  return { result };
 }
