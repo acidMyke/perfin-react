@@ -55,7 +55,7 @@ export const MAX_ITEMS_IN_MAIN = 2;
 
 function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
   const { accountOptions, categoryOptions } = options;
-  const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
+  const { billedAt, latitude, longitude, attachmentDetails, ...rest } = detail;
   const idOptionMapping = new Map([
     ...accountOptions.map(option => [option.value, option] as [string, Option]),
     ...categoryOptions.map(option => [option.value, option] as [string, Option]),
@@ -77,7 +77,7 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
 
   return {
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
-    geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
+    geolocation: { latitude, longitude, isError: false },
     attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
     items: rest.items.map(({ categoryId, ...item }) => ({
@@ -101,7 +101,7 @@ function createNewExpenseForm() {
     amountCents: 0,
     billedAt: new Date(),
     type: 'physical',
-    geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
+    geolocation: { latitude: null, longitude: null, isError: false },
     shopName: null,
     shopMall: null,
     isDeleted: false,

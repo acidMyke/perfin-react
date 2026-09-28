@@ -72,7 +72,6 @@ const loadExpenseDetailProcedure = protectedProcedure
           type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
-          geoAccuracy: expensesTable.geoAccuracy,
           shopName: expensesTable.shopName,
           shopMall: expensesTable.shopMall,
           version: expensesTable.version,

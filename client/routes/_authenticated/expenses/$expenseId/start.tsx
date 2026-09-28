@@ -1,6 +1,6 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
 import { pushHistory, SET_VAL_NO_TRACK, useExpenseForm } from './-common';
-import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
 import { trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
 import { skipToken, useQuery } from '@tanstack/react-query';
 import {
@@ -16,6 +16,7 @@ import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 import { ShopNameSubForm } from './-subform/ExpenseShopName';
 import { MallNameSubForm } from './-subform/ExpenseMallName';
+import { useDebounced } from '#client/hooks/useDebounced';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -39,9 +40,35 @@ function formatCoordinate(coord: { latitude: number; longitude: number }) {
 function RouteComponent() {
   const form = useExpenseForm();
   const [showMap, setShowMap] = useState(false);
-  const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
   const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 40, timeThreshold: 5000 });
-  const coordinate = customCoordinate ?? currentLocationQuery.data ?? undefined;
+  const [customCoordinate, setCustomCoordinate] = useState(() => {
+    const { latitude, longitude } = form.getFieldValue('geolocation');
+    if (latitude && longitude) return { latitude, longitude };
+    return undefined;
+  });
+  const coordinate =
+    customCoordinate ??
+    (currentLocationQuery.data
+      ? { latitude: currentLocationQuery.data.latitude, longitude: currentLocationQuery.data.longitude }
+      : undefined);
+
+  const coordinateRef = useRef(coordinate);
+  coordinateRef.current = coordinate;
+
+  useEffect(() => {
+    return () => {
+      const coordinate = coordinateRef.current;
+      if (coordinate) {
+        form.setFieldValue('geolocation', { ...coordinate!, isError: false });
+      } else {
+        form.setFieldValue('geolocation', {
+          latitude: null,
+          longitude: null,
+          isError: currentLocationQuery.error !== null,
+        });
+      }
+    };
+  }, []);
 
   return (
     <div className='px-2'>
