@@ -9,7 +9,6 @@ import {
   useAdjustmentCallbacks,
   useExpenseForm,
   setCurrentLocation,
-  useCompleteShopDetailMutation,
 } from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
@@ -37,15 +36,11 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
-  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
     <div className='grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
-      <ShopDetailSubForm
-        form={form}
-        onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
-      />
+      <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
           <label htmlFor={field.name} className='floating-label col-span-8 mt-4'>
@@ -238,8 +233,7 @@ const ItemsDetailsSubForm = withForm({
 
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
-  props: { onShopNameSelect: (_shopName: string) => {} },
-  render({ form, onShopNameSelect }) {
+  render({ form }) {
     const isPhysical = useSelector(form.store, state => state.values.type === 'physical');
     const isCreate = useSelector(form.store, state => state.values.ui.isCreate);
     const { expenseId } = Route.useParams();
@@ -256,7 +250,7 @@ const ShopDetailSubForm = withForm({
           >
             Convert to physical
           </button>
-          <ShopNameSubForm form={form} containerCn='col-span-8 mt-4' onShopNameSelect={onShopNameSelect} />
+          <ShopNameSubForm form={form} containerCn='col-span-8 mt-4' />
         </>
       );
     }
@@ -294,7 +288,7 @@ const ShopDetailSubForm = withForm({
         >
           View / Edit
         </Link>
-        <ShopNameSubForm form={form} containerCn='col-span-4 mt-2' onShopNameSelect={onShopNameSelect} />
+        <ShopNameSubForm form={form} containerCn='col-span-4 mt-2' />
         <MallNameSubForm form={form} containerCn='col-span-4 mt-2' />
       </>
     );

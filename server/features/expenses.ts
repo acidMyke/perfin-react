@@ -214,7 +214,7 @@ const searchShopByLocationProcedure = protectedProcedure
 
 const getShopDetailProcedure = protectedProcedure
   .input(getShopDetailInputSchema)
-  .mutation(({ input, ctx }) => getShopDetail(ctx, input));
+  .query(({ input, ctx }) => getShopDetail(ctx, input));
 
 const getItemDetailProcedure = protectedProcedure
   .input(getItemDetailInputSchema)

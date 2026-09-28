@@ -1,8 +1,8 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { useCompleteShopDetailMutation, useExpenseForm } from './-common';
+import { pushHistory, SET_VAL_NO_TRACK, useExpenseForm } from './-common';
 import { useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
 import { trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
-import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import {
   distanceBetween,
   formatDistance,
@@ -38,13 +38,10 @@ function formatCoordinate(coord: { latitude: number; longitude: number }) {
 
 function RouteComponent() {
   const form = useExpenseForm();
-
   const [showMap, setShowMap] = useState(false);
   const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
   const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 40, timeThreshold: 5000 });
   const coordinate = customCoordinate ?? currentLocationQuery.data ?? undefined;
-  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
-  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
     <div className='px-2'>
@@ -115,21 +112,15 @@ function RouteComponent() {
               isOnline={!isPhysical}
               coordinate={coordinate}
               onShopClick={({ shopName, mallName }) => {
-                form.setFieldValue('shopName', shopName);
-                form.setFieldValue('shopMall', mallName);
-                if (shopName) completeShopDetailMutation.mutateAsync({ shopName });
+                form.setFieldValue('shopName', shopName, SET_VAL_NO_TRACK);
+                form.setFieldValue('shopMall', mallName, SET_VAL_NO_TRACK);
+                pushHistory(form, ['shopName', 'shopMall']);
               }}
             />
 
             <div className='my-2 flex gap-4'>
               {isPhysical && <MallNameSubForm form={form} coordinate={coordinate} containerCn='grow w-1/3' />}
-
-              <ShopNameSubForm
-                form={form}
-                coordinate={coordinate}
-                onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
-                containerCn='grow w-1/3'
-              />
+              <ShopNameSubForm form={form} coordinate={coordinate} containerCn='grow w-1/3' />
             </div>
           </>
         )}

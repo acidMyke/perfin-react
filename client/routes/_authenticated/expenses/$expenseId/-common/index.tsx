@@ -404,7 +404,8 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
     [form],
   );
 
-export const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
+export const SET_VAL_NO_TRACK: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
+export const SET_VAL_ONLY: UpdateMetaOptions = { ...SET_VAL_NO_TRACK, dontValidate: true };
 export type TrackableFieldName = Exclude<
   DeepKeys<ExpenseFormData>,
   'ui' | 'history' | `ui${string}` | `history${string}`
@@ -426,50 +427,6 @@ export function pushHistory(form: ExpenseFormApi, fieldNames: TrackableFieldName
   if (actions.length > 0) {
     form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
   }
-}
-
-export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData: ExpenseOptions) {
-  const { createAdjustment } = useAdjustmentCallbacks(form);
-  const shopDetailMutation = useMutation(
-    trpc.expense.getShopDetail.mutationOptions({
-      onSuccess([shopDetail]) {
-        if (!shopDetail) return;
-        const { accountOptions, categoryOptions } = optionsData;
-        const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
-        const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
-        if (accountIds.length > 0) {
-          form.setFieldValue(
-            'accountAllocs',
-            accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
-            updateMetaOpts,
-          );
-        }
-        if (categoryIds.length > 0) {
-          form.setFieldValue(
-            'categoryAllocs',
-            categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
-            updateMetaOpts,
-          );
-        }
-        if (serviceChargeBps) {
-          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
-        }
-        if (isGstExcluded) {
-          createAdjustment({ special: GST_NAME, ...updateMetaOpts });
-        }
-        form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-        pushHistory(form, ['accountAllocs', 'categoryAllocs', 'adjustments']);
-      },
-    }),
-  );
-
-  return {
-    async mutateAsync(args?: { shopName: string }) {
-      const shopName = args?.shopName ?? form.getFieldValue('shopName');
-      if (!shopName) return;
-      await shopDetailMutation.mutateAsync({ shopName });
-    },
-  };
 }
 
 type PushIntoOptionsValueArg = {

@@ -6,13 +6,12 @@ import { ExpenseSuggestableField, type SuggestionFieldProps } from '../-common/E
 
 type ShopNameSubFormProps = {
   coordinate?: Coordinate;
-  onShopNameSelect: (_shopName: string) => any;
 } & Partial<Pick<SuggestionFieldProps, Extract<keyof SuggestionFieldProps, `${string}Cn`> | 'label' | 'hideError'>>;
 
 export const ShopNameSubForm = withForm({
   ...createEditExpenseFormOptions,
   props: { onShopNameSelect: (_shopName: string) => {} } as ShopNameSubFormProps,
-  render({ form, coordinate, onShopNameSelect, ...cnProps }) {
+  render({ form, coordinate, ...cnProps }) {
     const [shopMall, geolocation, isOnline] = useSelector(form.store, state => [
       state.values.shopMall,
       state.values.geolocation,
@@ -38,7 +37,6 @@ export const ShopNameSubForm = withForm({
         label='Shop name'
         triggerChangeOnFocus
         hideError
-        onSuggestionSelected={onShopNameSelect}
         {...cnProps}
       />
     );
