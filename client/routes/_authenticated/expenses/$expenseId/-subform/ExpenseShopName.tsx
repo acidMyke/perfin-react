@@ -12,14 +12,21 @@ type ShopNameSubFormProps = {
 export const ShopNameSubForm = withForm({
   ...createEditExpenseFormOptions,
   props: { onShopNameSelect: (_shopName: string) => {} } as ShopNameSubFormProps,
-  render({ form, coordinate: coordinateProp, onShopNameSelect, ...cnProps }) {
-    const [shopMall, geolocation] = useSelector(
-      form.store,
-      state => [state.values.shopMall, state.values.geolocation] as const,
-    );
+  render({ form, coordinate, onShopNameSelect, ...cnProps }) {
+    const [shopMall, geolocation, isOnline] = useSelector(form.store, state => [
+      state.values.shopMall,
+      state.values.geolocation,
+      state.values.type === 'online',
+    ]);
 
-    const latitude = coordinateProp?.latitude ?? geolocation.latitude;
-    const longitude = coordinateProp?.longitude ?? geolocation.longitude;
+    const latitude = coordinate?.latitude ?? geolocation.latitude;
+    const longitude = coordinate?.longitude ?? geolocation.longitude;
+
+    const location = isOnline
+      ? { isOnline: true as const }
+      : latitude && longitude
+        ? { latitude, longitude }
+        : undefined;
 
     return (
       <ExpenseSuggestableField
@@ -27,7 +34,7 @@ export const ShopNameSubForm = withForm({
         fields={{ text: 'shopName' }}
         kind='shopName'
         context={shopMall ? { kind: 'mallName', text: shopMall } : undefined}
-        location={latitude && longitude ? { latitude, longitude } : undefined}
+        location={location}
         label='Shop name'
         triggerChangeOnFocus
         hideError

@@ -1,4 +1,4 @@
-import { caseWhen, jsonGroupArray, sumAsNumber, max, coalesce } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
 import { avg, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -18,7 +18,6 @@ import type { ProtectedContext } from '#server/lib/trpc';
 import {
   createGetTextId,
   generateSearchChunks,
-  getGeoCell,
   getNearbyGeoCellIdsAndBounds,
   getSingleTextId,
   TEXT_KIND,
@@ -52,7 +51,13 @@ const locationSchema = z.union([
 export const getSuggestionInputSchema = z.object({
   kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
   search: z.string().optional(),
-  context: z.object({ kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]), text: z.string() }).optional(),
+  context: z
+    .object({
+      kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME]),
+      text: z.string(),
+      reversed: z.boolean().default(false),
+    })
+    .optional(),
   location: locationSchema.optional(),
 });
 
@@ -110,17 +115,21 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
   }
 
   if (context) {
-    const ctxTextId = await getSingleTextId({ userId, ...context });
+    const condTextIdValue = await getSingleTextId({ userId, ...context });
+    const [selTextId, condTextId] = context.reversed
+      ? [ctxTextsTable.ctxTextId, ctxTextsTable.textId]
+      : [ctxTextsTable.textId, ctxTextsTable.ctxTextId];
+
     searchQuery = searchQuery.unionAll(
       db
         .select({
-          textId: ctxTextsTable.textId.as(textIdCol),
+          textId: selTextId.as(textIdCol),
           chunkCountScore: sql<number>`0`.as(chunkCountScoreCol),
           contextScore: sql<number>`2`.as(contextScoreCol),
           locationScore: sql<number>`0`.as(locationScoreCol),
         })
         .from(ctxTextsTable)
-        .where(eq(ctxTextsTable.ctxTextId, Buffer.from(ctxTextId))),
+        .where(eq(condTextId, Buffer.from(condTextIdValue))),
     );
   }
 
