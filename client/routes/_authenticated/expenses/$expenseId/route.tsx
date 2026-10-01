@@ -210,11 +210,13 @@ function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
 const CompleteShopDetailFormSubscribe = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const shopDetailSource = useSelector(form.store, ({ values }) => values.ui.shopDetailSource);
     const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
     const { createAdjustment } = useAdjustmentCallbacks(form);
     const undebouncedShopName = useSelector(form.store, ({ values }) => values.shopName);
     const shopName = useDebounced(undebouncedShopName, 800);
-    const getShopDetailQuery = useQuery(trpc.expense.getShopDetail.queryOptions(shopName ? { shopName } : skipToken));
+    const queryInput = shopDetailSource != 'user' && shopName ? { shopName } : skipToken;
+    const getShopDetailQuery = useQuery(trpc.expense.getShopDetail.queryOptions(queryInput));
 
     useEffect(() => {
       if (!getShopDetailQuery.data || !getShopDetailQuery.data[0]) return;

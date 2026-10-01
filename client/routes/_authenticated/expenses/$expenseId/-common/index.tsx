@@ -141,8 +141,6 @@ export function mapExpenseDetailToForm(
     ui: {
       // copying is also creating
       isCreate: isEmptyCreate || param?.isCopy,
-      shouldInferShopDetail: isEmptyCreate,
-      shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult,
       categoryAllocation,
