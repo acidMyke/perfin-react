@@ -146,7 +146,7 @@ export async function createGetTextId(...params: TextIdParamter[]) {
   return (param: TextIdParamter) => textIdMap.get(getTextParamKey(param));
 }
 
-export function generateSearchChunks(text: string, { unlimited = false } = {}) {
+export function generateSearchChunks(text: string, { unlimited = false, skipShortChunks = false } = {}) {
   const phrases = text
     .trim()
     .toLowerCase()
@@ -156,7 +156,7 @@ export function generateSearchChunks(text: string, { unlimited = false } = {}) {
   for (const phrase of phrases) {
     if (!phrase) continue;
     const numChunk = unlimited ? phrase.length : Math.min(phrase.length, 10);
-    let idx = 0;
+    let idx = skipShortChunks ? Math.min(phrase.length - 1, 2) : 0;
     for (; idx < numChunk; idx++) {
       chunks.push(phrase.slice(Math.max(idx - 2, 0), idx + 1));
     }

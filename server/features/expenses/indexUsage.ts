@@ -93,25 +93,28 @@ export async function getSuggestions(ctx: ProtectedContext, input: GetSuggestion
     .$dynamic();
 
   if (search) {
-    const searchChunks = generateSearchChunks(search);
-    searchQuery = searchQuery.unionAll(
-      db
-        .select({
-          textId: textChunksTable.textId.as(textIdCol),
-          chunkCountScore: countDistinct(textChunksTable.chunk).as(chunkCountScoreCol),
-          contextScore: sql<number>`0`.as(contextScoreCol),
-          locationScore: sql<number>`0`.as(locationScoreCol),
-        })
-        .from(textChunksTable)
-        .where(
-          and(
-            eq(textChunksTable.userId, userId),
-            eq(textChunksTable.kind, kind),
-            inArray(textChunksTable.chunk, searchChunks),
-          ),
-        )
-        .groupBy(textChunksTable.textId),
-    );
+    const searchChunks = generateSearchChunks(search, { skipShortChunks: true });
+    let searchChunkQuery = db
+      .select({
+        textId: textChunksTable.textId.as(textIdCol),
+        chunkCountScore: countDistinct(textChunksTable.chunk).as(chunkCountScoreCol),
+        contextScore: sql<number>`0`.as(contextScoreCol),
+        locationScore: sql<number>`0`.as(locationScoreCol),
+      })
+      .from(textChunksTable)
+      .where(
+        and(
+          eq(textChunksTable.userId, userId),
+          eq(textChunksTable.kind, kind),
+          inArray(textChunksTable.chunk, searchChunks),
+        ),
+      )
+      .groupBy(textChunksTable.textId)
+      .$dynamic();
+    if (searchChunks.length > 4) {
+      searchChunkQuery = searchChunkQuery.having(gte(countDistinct(textChunksTable.chunk), searchChunks.length - 4));
+    }
+    searchQuery = searchQuery.unionAll(searchChunkQuery);
   }
 
   if (context) {
