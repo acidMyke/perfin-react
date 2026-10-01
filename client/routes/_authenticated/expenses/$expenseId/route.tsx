@@ -74,6 +74,7 @@ function RouteComponent() {
   const attachmentUploadMutation = useAttachmentUploadMutation();
   const form = useAppForm({
     ...createEditExpenseFormOptions,
+    defaultValues: { ...createEditExpenseFormOptions.defaultValues, billedAt: new Date() },
     listeners: {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi }) => {
