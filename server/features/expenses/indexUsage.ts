@@ -1,6 +1,6 @@
-import { caseWhen, jsonGroupArray, sumAsNumber, max } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
-import { avg, type SQLWrapper } from 'drizzle-orm';
+import { avg, count, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   textsTable,
@@ -12,6 +12,7 @@ import {
   expenseAdjustmentsTable,
   expenseCategoryAllocationsTable,
   expenseItemsTable,
+  expensesTable,
 } from '../../../db/schema';
 import z from 'zod';
 import type { ProtectedContext } from '#server/lib/trpc';
@@ -394,4 +395,42 @@ export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailI
     .where(eq(itemExpense.textId, Buffer.from(itemTextId)))
     .orderBy(...orderByConds)
     .limit(1);
+}
+
+export const searchExpenseInputSchema = z.object({ query: z.string(), cursor: z.string().nullish() });
+type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
+
+export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
+  const { db, userId } = ctx;
+  const query = input.query.trim();
+  if (query.length < 3) return { result: [] };
+
+  const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
+
+  const result = await db
+    .select({
+      expenseId: expenseTextsTable.expenseId,
+      shopName: expensesTable.shopName,
+      shopMall: expensesTable.shopMall,
+      childrens: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }),
+      amountCents: expensesTable.amountCents,
+      billedAt: expensesTable.billedAt,
+      chunkCount: countDistinct(textChunksTable.chunk).as('chunk_count'),
+      recencyScore: max(getRecencyScore(expenseTextsTable.expenseBilledAt)).as('recency_score'),
+    })
+    .from(textChunksTable)
+    .leftJoin(
+      textsTable,
+      and(
+        inArray(textChunksTable.kind, [TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
+        eq(textChunksTable.textId, textsTable.id),
+      ),
+    )
+    .innerJoin(expenseTextsTable, and(eq(textChunksTable.textId, expenseTextsTable.textId)))
+    .innerJoin(expensesTable, and(eq(expensesTable.userId, userId), eq(expenseTextsTable.expenseId, expensesTable.id)))
+    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
+    .groupBy(expenseTextsTable.expenseId)
+    .orderBy(desc(sql`recency_score + chunk_count`));
+
+  return result;
 }

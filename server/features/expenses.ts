@@ -30,6 +30,8 @@ import {
   getItemDetailInputSchema,
   getShopDetailInputSchema,
   searchShopByLocationInputSchema,
+  searchExpenseInputSchema,
+  searchExpense,
 } from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
@@ -359,4 +361,7 @@ export const expenseProcedures = {
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,
   reindexList: listReindexHistoryProcedure,
+  testSearch: protectedProcedure
+    .input(searchExpenseInputSchema)
+    .query(async ({ ctx, input }) => searchExpense(ctx, input)),
 };
