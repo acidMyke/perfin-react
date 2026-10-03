@@ -15,6 +15,8 @@ import {
   sql,
   SQL,
   type SQLWrapper,
+  lt,
+  gt,
 } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
@@ -417,11 +419,13 @@ export const searchExpenseInputSchema = z.object({
   cursor: z.object({ chunkCount: z.number(), billedAt: z.iso.datetime(), expenseId: z.string() }).nullish(),
 });
 type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
-const SEARCH_EXPENSE_CHUNK_SIZE = 23;
+const SEARCH_EXPENSE_PAGE_SIZE = 15;
 export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
   const { db, userId } = ctx;
   const query = input.query.trim();
-  if (query.length < 3) return { result: [] };
+
+  let nextCursor: SearchExpenseInput['cursor'] = undefined;
+  if (query.length < 3) return { result: [], nextCursor };
 
   const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
   let matchCteQuery = db
@@ -449,17 +453,26 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
   if (input.cursor) {
     const { chunkCount, billedAt, expenseId } = input.cursor;
     matchCteQuery = matchCteQuery.having(
-      and(
-        lte(sql.identifier('chunk_count'), chunkCount),
-        lte(sql.identifier('billed_at'), expenseTextsTable.expenseBilledAt.mapToDriverValue(new Date(billedAt))),
-        gte(expenseTextsTable.expenseId, expenseId),
+      or(
+        lt(sql.identifier('chunk_count'), chunkCount),
+
+        and(
+          eq(sql.identifier('chunk_count'), chunkCount),
+          lt(sql.identifier('billed_at'), expenseTextsTable.expenseBilledAt.mapToDriverValue(new Date(billedAt))),
+        ),
+
+        and(
+          eq(sql.identifier('chunk_count'), chunkCount),
+          eq(sql.identifier('billed_at'), expenseTextsTable.expenseBilledAt.mapToDriverValue(new Date(billedAt))),
+          gt(expenseTextsTable.expenseId, expenseId),
+        ),
       ),
     );
   }
 
   matchCteQuery = matchCteQuery
     .orderBy(desc(sql.identifier('chunk_count')), desc(sql.identifier('billed_at')), expenseTextsTable.expenseId)
-    .limit(SEARCH_EXPENSE_CHUNK_SIZE + 1);
+    .limit(SEARCH_EXPENSE_PAGE_SIZE + 1);
 
   const matchCte = db.$with('match_cte').as(matchCteQuery);
 
@@ -477,9 +490,9 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
     .from(matchCte)
     .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id));
 
-  let nextCursor: SearchExpenseInput['cursor'] = undefined;
-  if (result.length > SEARCH_EXPENSE_CHUNK_SIZE) {
-    const { chunkCount, billedAt, expenseId } = result.pop()!;
+  if (result.length > SEARCH_EXPENSE_PAGE_SIZE) {
+    result.pop();
+    const { chunkCount, billedAt, expenseId } = result.at(-1)!;
     nextCursor = { chunkCount, billedAt: billedAt.toISOString(), expenseId };
   }
 
