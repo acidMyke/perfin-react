@@ -17,16 +17,16 @@ function RouteComponent() {
   if (!data || data.length === 0) {
     return (
       <div className='mx-auto flex max-w-md flex-col gap-4'>
+        <PageHeader title='Expense reindex'>
+          <PageHeader.LeftLink to='/settings' />
+        </PageHeader>
+        <button className='btn btn-block btn-xl btn-primary' onClick={() => reindexModelRef.current?.showModal()}>
+          Reindex expenses now
+        </button>
         <div className='flex flex-col items-center justify-center py-16 text-center text-gray-500'>
           <SearchX className='mb-4 h-10 w-10 text-gray-400' />
           <p className='text-xl font-medium'>No records found</p>
         </div>
-        <button
-          className='btn btn-block btn-xl btn-ghost bg-base-200/25'
-          onClick={() => reindexModelRef.current?.showModal()}
-        >
-          Reindex expense now
-        </button>
         <ReindexDialog reindexModelRef={reindexModelRef} />
       </div>
     );

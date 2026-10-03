@@ -2,10 +2,11 @@ import { useAppForm } from '#client/components/Form';
 import { PageHeader } from '#client/components/PageHeader';
 import { queryClient, trpc, type RouterOutputs } from '#client/trpc';
 import { dateFormat, formatCents } from '#client/utils';
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseInfiniteQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronRight, Search } from 'lucide-react';
 import { Fragment, type ReactNode } from 'react';
+import { useInView } from 'react-intersection-observer';
 import * as z from 'zod/mini';
 
 export const Route = createFileRoute('/_authenticated/expenses/search')({
@@ -19,7 +20,10 @@ export const Route = createFileRoute('/_authenticated/expenses/search')({
     return { query };
   },
   loader: async ({ deps: { query } }) => {
-    if (query.length >= 3) queryClient.fetchQuery(trpc.expense.search.queryOptions({ query }));
+    if (query.length >= 3)
+      queryClient.fetchInfiniteQuery(
+        trpc.expense.search.infiniteQueryOptions({ query }, { getNextPageParam: ({ nextCursor }) => nextCursor }),
+      );
   },
 });
 
@@ -106,64 +110,88 @@ function HighlightText({ text, query }: HighlightTextProps) {
 
 function ExpenseSearchResults() {
   const { query } = Route.useLoaderDeps();
-  const { data } = useSuspenseQuery(trpc.expense.search.queryOptions({ query }, { enabled: query.length >= 3 }));
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage } = useSuspenseInfiniteQuery(
+    trpc.expense.search.infiniteQueryOptions({ query }, { getNextPageParam: ({ nextCursor }) => nextCursor }),
+  );
+  const { ref } = useInView({
+    delay: 200,
+    onChange: inView => {
+      if (inView && hasNextPage) fetchNextPage();
+    },
+  });
 
-  if (!data || !data.searchResult || data.searchResult.length === 0) {
+  if (!data || !data.pages || data.pages.length === 0 || data.pages[0].result.length == 0) {
     return <div className='text-base-content/60 p-4 text-center text-sm'>No results found.</div>;
   }
 
   return (
-    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col pb-20'>
-      {data.searchResult.map(expense => {
-        const { expenseId, shopName, shopMall, sourceMatches, amountCents, billedAt } = expense;
+    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col'>
+      {data.pages.flatMap(({ result }) =>
+        result.map(expense => {
+          const { expenseId, shopName, shopMall, amountCents, billedAt, childrenTexts } = expense;
 
-        return (
-          <Link
-            key={expenseId}
-            to='/expenses/$expenseId/view'
-            params={{ expenseId }}
-            className='border-base-200 active:bg-base-200/60 flex flex-col border-b px-4 py-2 no-underline transition-colors'
-          >
-            <div className='flex items-start justify-between'>
-              <div>
-                <span className='text-base-content text-xs'>{dateFormat.format(new Date(billedAt))}</span>
-                <div className='mb-2 flex flex-row gap-2'>
-                  {shopName && (
-                    <span className='text-base-content text-base leading-tight font-semibold'>
-                      <HighlightText text={shopName} query={query} />
-                    </span>
-                  )}
-                  {shopMall && (
-                    <span className='text-base-content/60 mt-0.5 text-xs'>
-                      <HighlightText text={shopMall} query={query} />
-                    </span>
-                  )}
+          return (
+            <Link
+              key={expenseId}
+              to='/expenses/$expenseId/view'
+              params={{ expenseId }}
+              className='border-base-200 active:bg-base-200/60 flex flex-col border-b px-4 py-2 no-underline transition-colors'
+            >
+              <div className='flex items-start justify-between'>
+                <div>
+                  <span className='text-base-content text-xs'>{dateFormat.format(new Date(billedAt))}</span>
+                  <div className='mb-2 flex flex-row gap-2'>
+                    {shopName && (
+                      <span className='text-base-content text-base leading-tight font-semibold'>
+                        <HighlightText text={shopName} query={query} />
+                      </span>
+                    )}
+                    {shopMall && (
+                      <span className='text-base-content/60 mt-0.5 text-xs'>
+                        <HighlightText text={shopMall} query={query} />
+                      </span>
+                    )}
+                  </div>
+
+                  <div className='mt-1 flex flex-col gap-0.5'>
+                    {childrenTexts.map((match, index: number) => {
+                      const itemName = match.text;
+                      if (!itemName) return null;
+
+                      return (
+                        <div key={index} className='flex items-start justify-between text-sm'>
+                          <span className='text-base-content/80 flex-1 truncate pr-3'>
+                            <HighlightText text={itemName} query={query} />
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
 
-                <div className='mt-1 flex flex-col gap-0.5'>
-                  {sourceMatches.map((match, index: number) => {
-                    const itemName = match.matchItemName || match.matchAdjustmentName;
-                    if (!itemName) return null;
-
-                    return (
-                      <div key={index} className='flex items-start justify-between text-sm'>
-                        <span className='text-base-content/80 flex-1 truncate pr-3'>
-                          <HighlightText text={itemName} query={query} />
-                        </span>
-                      </div>
-                    );
-                  })}
+                <div className='flex flex-col items-end gap-0.5'>
+                  <ChevronRight />
+                  <span className='text-base-content text-2xl font-bold'>{formatCents(amountCents)}</span>
                 </div>
               </div>
+            </Link>
+          );
+        }),
+      )}
 
-              <div className='flex flex-col items-end gap-0.5'>
-                <ChevronRight />
-                <span className='text-base-content text-2xl font-bold'>{formatCents(amountCents)}</span>
-              </div>
+      <div className='py-4 text-center text-gray-500'>
+        {isFetchingNextPage ? (
+          Array.from({ length: 15 }).map((_, i) => (
+            <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col' key={i} ref={i == 15 ? ref : undefined}>
+              <ExpenseSkeleton />
             </div>
-          </Link>
-        );
-      })}
+          ))
+        ) : hasNextPage ? (
+          <p ref={ref}>Scroll down for more</p>
+        ) : (
+          'End of list reached'
+        )}
+      </div>
     </div>
   );
 }
@@ -182,7 +210,6 @@ function ExpenseSkeleton() {
 
           <div className='mt-1 flex flex-col gap-2'>
             <div className='skeleton h-4 w-48'></div>
-            <div className='skeleton h-4 w-36'></div>
           </div>
         </div>
 

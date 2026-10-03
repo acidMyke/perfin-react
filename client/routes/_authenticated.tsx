@@ -73,7 +73,9 @@ function RouteComponent() {
     <>
       <div className='h-8'></div>
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-        <Outlet />
+        <div className='pb-40 md:pb-20'>
+          <Outlet />
+        </div>
       </APIProvider>
       <FloatingButton />
       <NavDock />

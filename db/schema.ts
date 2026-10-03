@@ -1,5 +1,5 @@
 import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
-import { isNotNull, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import {
   sqliteTable,
   text,
@@ -207,6 +207,7 @@ export const expensesTable = sqliteTable(
     latitude: real(),
     longitude: real(),
     geoAccuracy: real(),
+    /** @deprecated save to geoCellsTable and join via textId system*/
     boxId: integer(),
     shopName: citext(),
     shopMall: citext(),
@@ -216,13 +217,7 @@ export const expensesTable = sqliteTable(
     isGstExcluded: boolean(),
     isDeleted: boolean().notNull().default(false),
   },
-  t => [
-    index('idx_expenses_partial_user_box_shop')
-      .on(t.userId, t.boxId, t.shopName, t.shopMall)
-      .where(isNotNull(t.shopName)), // Used by getShopDetailByLocationProcedure
-    index('idx_expenses_id_account_category').on(t.id, t.accountId, t.categoryId),
-    index('idx_expenses_user_billedAt').on(t.userId, t.billedAt),
-  ],
+  t => [index('idx_expenses_user_billedAt').on(t.userId, t.billedAt)],
 );
 
 export const expenseItemsTable = sqliteTable(
@@ -235,33 +230,9 @@ export const expenseItemsTable = sqliteTable(
     priceCents: centsColumn(),
     expenseId: idColumn(),
     categoryId: nullableIdColumn(),
-    /** @deprecated refund is deprecated */
-    expenseRefundId: nullableIdColumn(),
     isDeleted: boolean().notNull().default(false),
   },
   t => [index('idx_expense_items_expense_id').on(t.expenseId)],
-);
-
-/** @deprecated use expenseAdjustmentsTable instead*/
-export const expenseRefundsTable = sqliteTable(
-  'expense_refunds',
-  {
-    ...baseColumns(),
-    expenseId: idColumn(),
-    expenseItemId: nullableIdColumn(),
-    expectedAmountCents: centsColumn(),
-    actualAmountCents: integer(),
-    confirmedAt: integer({ mode: 'timestamp' }),
-    source: citext().notNull(),
-    note: text(),
-    sequence: integer().notNull(),
-    isDeleted: boolean().notNull().default(false),
-  },
-  t => [
-    index('idx_expense_refund_expense_id').on(t.expenseId),
-    index('idx_expense_refund_expense_item_id').on(t.expenseItemId),
-    index('idx_expense_refund_source').on(t.source),
-  ],
 );
 
 export const expenseAdjustmentsTable = sqliteTable(
@@ -326,100 +297,112 @@ export const expenseCategoryAllocationsTable = sqliteTable(
   ],
 );
 
-/** @deprecated replaced by v2_search */
-export const searchTable = sqliteTable(
-  'search',
-  {
-    chunk: text().notNull(),
-    text: citext().notNull(),
-    type: text().notNull(),
-    userId: idColumn(),
-    usageCount: integer().default(1),
-    context: citext().notNull().default(''),
-  },
-  t => [
-    primaryKey({ columns: [t.chunk, t.text, t.type, t.userId, t.context] }),
-    index('idx_search_chunk').on(t.userId, t.type, t.chunk),
-    index('idx_search_context').on(t.userId, t.type, t.context),
-  ],
-);
-
-export const searchIndexVersionTable = sqliteTable(
-  'search_index_versions',
+export const searchIndexGenerationsTable = sqliteTable(
+  'search_index_generations',
   {
     id: pkIdColumn(),
     userId: idColumn(),
-    version: integer().notNull(),
+    currentGen: integer().notNull(),
     createdAt: createdAtColumn(),
     completedAt: timestampColumn(),
     recordsProcessed: integer().notNull().default(0),
     totalDeletedCount: integer().notNull().default(0),
     deletedExpenseTextsCount: integer().notNull().default(0),
   },
-  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.version)],
+  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.currentGen)],
 );
 
 export const textsTable = sqliteTable(
   'texts',
   {
-    textHash: integer().primaryKey({ onConflict: 'ignore' }),
+    id: blob({ mode: 'buffer' }).primaryKey(),
     userId: idColumn(),
+    kind: text().notNull(),
     text: text().notNull(),
-    version: integer().notNull().default(0),
+    usageCount: integer().notNull(),
+    lastUsedAt: dateColumn().notNull(),
+    indexGen: integer().notNull().default(0),
   },
-  t => [unique('uq_texts_userId').on(t.userId, t.text)],
+  t => [unique('uq_texts_user_id_kind_text').on(t.userId, t.kind, t.text)],
 );
 
-const textHashColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
-  integer()
+const textIdColumn = ({ onDelete = 'cascade', onUpdate = 'cascade' }: ReferenceConfig['actions'] = {}) =>
+  blob({ mode: 'buffer' })
     .notNull()
-    .references(() => textsTable.textHash, { onDelete, onUpdate });
+    .references(() => textsTable.id, { onDelete, onUpdate });
 
 export const textChunksTable = sqliteTable(
   'texts_chunks',
   {
     userId: idColumn(),
+    kind: text().notNull(),
     /** Use getTrigrams() to create chunks for texts*/
     chunk: text().notNull(),
     /** Use getTextHash() to calculate this value */
-    textHash: textHashColumn(),
-    version: integer().notNull().default(0),
+    textId: textIdColumn(),
+    indexGen: integer().notNull().default(0),
   },
   t => [
     // textHash includes userId in hashing
-    primaryKey({ columns: [t.textHash, t.chunk] }),
-    // covering index to quickly lookup textHash with provided userId & chunk
-    index('idx_user_chunks').on(t.userId, t.chunk, t.textHash),
+    primaryKey({ columns: [t.textId, t.chunk] }),
+    // covering index to quickly lookup textHash with provided userId, kind & chunk
+    index('idx_user_chunks').on(t.userId, t.chunk, t.kind, t.textId),
   ],
 );
 
-/** @deprecated use expenseTextsTable.ctxTextHash instead */
-export const textsContextsTable = sqliteTable(
-  'texts_contexts',
+export const geoCellsTable = sqliteTable('geo_cells', {
+  id: integer().primaryKey(),
+  latIndex: integer().notNull(),
+  lonIndex: integer().notNull(),
+  indexGen: integer().notNull().default(0),
+});
+
+export const geoTextsTable = sqliteTable(
+  'geo_texts',
   {
-    textHash: textHashColumn(),
-    ctxTextHash: textHashColumn(),
+    textId: textIdColumn(),
+    userId: idColumn(),
+    kind: text().notNull(),
+    geoCellId: integer()
+      .notNull()
+      .references(() => geoCellsTable.id, { onDelete: 'cascade', onUpdate: 'cascade' }),
+    latitude: real().notNull(),
+    longitude: real().notNull(),
+    indexGen: integer().notNull().default(0),
   },
   t => [
-    primaryKey({ columns: [t.textHash, t.ctxTextHash] }),
-    index('idx_texts_contexts_ctxTextHash_textHash').on(t.ctxTextHash, t.textHash),
+    primaryKey({ columns: [t.userId, t.kind, t.geoCellId, t.textId] }),
+    index('idx_geo_texts').on(t.textId, t.geoCellId),
+    index('idx_geo_texts_text_id_user_kind_cell').on(t.textId, t.userId, t.kind, t.geoCellId),
   ],
+);
+
+export const ctxTextsTable = sqliteTable(
+  'ctx_texts',
+  {
+    textId: textIdColumn(),
+    ctxTextId: textIdColumn(),
+    usageCount: integer().notNull(),
+    lastUsedAt: dateColumn().notNull(),
+    indexGen: integer().notNull().default(0),
+  },
+  t => [primaryKey({ columns: [t.ctxTextId, t.textId] }), index('idx_ctx_texts').on(t.textId, t.ctxTextId)],
 );
 
 export const expenseTextsTable = sqliteTable(
   'expenses_texts',
   {
     expenseId: idColumn(),
+    // Duplicated from expense main table for quick filtering
+    expenseBilledAt: dateColumn(),
     /** Use getTextHash() to calculate this value */
-    textHash: textHashColumn(),
+    textId: textIdColumn(),
     /** Can be expensesTable.id, expenseItemsTable.id, expenseAdjustmentsTable.id */
     sourceId: idColumn(),
-    ctxTextHash: integer().references(() => textsTable.textHash, { onDelete: 'cascade', onUpdate: 'cascade' }),
-    version: integer().notNull().default(0),
+    indexGen: integer().notNull().default(0),
   },
   t => [
-    primaryKey({ columns: [t.textHash, t.sourceId] }),
-    index('idx_expenses_texts_sourceId').on(t.sourceId),
-    index('idx_textHash_expenseId').on(t.textHash, t.expenseId),
+    primaryKey({ columns: [t.textId, t.expenseBilledAt, t.expenseId, t.sourceId] }),
+    index('idx_expenses_texts_expense_id_text_id').on(t.expenseId, t.textId),
   ],
 );

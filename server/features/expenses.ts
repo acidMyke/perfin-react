@@ -8,21 +8,28 @@ import {
   expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
-  expenseTextsTable,
-  searchIndexVersionTable,
-  textChunksTable,
+  searchIndexGenerationsTable,
   uploadedFilesTable,
 } from '../../db/schema';
-import { and, asc, avg, countDistinct, desc, eq, gte } from 'drizzle-orm';
-import { inArray, isNotNull, isNull, lt, sql, SQL } from 'drizzle-orm';
+import { and, asc, countDistinct, desc, eq, gte } from 'drizzle-orm';
+import { lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '../lib/expenseHelper';
-import { caseWhen, coalesce, concat, jsonGroupArray, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getLocationBoxId, getTextHash, getTextsHashes, getTrigrams } from '../lib/utils';
+import { caseWhen, coalesce, concat, jsonGroupObjectArray, max } from '../lib/db';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
-import { getSuggestions, getSuggestionInputSchema } from './expenses/indexing';
+import {
+  getSuggestions,
+  getSuggestionInputSchema,
+  searchShopByLocation,
+  getShopDetail,
+  getItemDetail,
+  getItemDetailInputSchema,
+  getShopDetailInputSchema,
+  searchShopByLocationInputSchema,
+  searchExpenseInputSchema,
+  searchExpense,
+} from './expenses/indexUsage';
 import { filesColumns } from '#server/lib/fileUpload';
 
 export type Option = {
@@ -64,7 +71,6 @@ const loadExpenseDetailProcedure = protectedProcedure
           type: expensesTable.type,
           latitude: expensesTable.latitude,
           longitude: expensesTable.longitude,
-          geoAccuracy: expensesTable.geoAccuracy,
           shopName: expensesTable.shopName,
           shopMall: expensesTable.shopMall,
           version: expensesTable.version,
@@ -198,151 +204,19 @@ const listExpenseProcedure = protectedProcedure
 
 const getSuggestionsProcedure = protectedProcedure
   .input(getSuggestionInputSchema)
-  .mutation(({ ctx, input }) => getSuggestions(ctx, input));
-
-const suggestShopByLocationProcedure = protectedProcedure
-  .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const queryBoxIds = getLocationBoxId(input);
-    const data = await db
-      .select({
-        shopName: sql<string>`${expensesTable.shopName}`,
-        shopMalls: jsonGroupArray(expensesTable.shopMall, { distinct: true }),
-      })
-      .from(expensesTable)
-      .where(
-        and(
-          isNotNull(expensesTable.shopName),
-          eq(expensesTable.userId, userId),
-          inArray(expensesTable.boxId, queryBoxIds),
-        ),
-      )
-      .groupBy(expensesTable.shopName);
-
-    return data;
-  });
+  .query(({ ctx, input }) => getSuggestions(ctx, input));
 
 const searchShopByLocationProcedure = protectedProcedure
-  .input(z.object({ latitude: z.number(), longitude: z.number() }))
-  .query(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const queryBoxIds = getLocationBoxId(input);
-    const result = await db
-      .select({
-        shopName: sql<string>`${expensesTable.shopName}`,
-        shopMall: expensesTable.shopMall,
-        latitude: avg(expensesTable.latitude).mapWith(expensesTable.latitude),
-        longitude: avg(expensesTable.longitude).mapWith(expensesTable.longitude),
-      })
-      .from(expensesTable)
-      .where(
-        and(
-          isNotNull(expensesTable.shopName),
-          eq(expensesTable.userId, userId),
-          inArray(expensesTable.boxId, queryBoxIds),
-        ),
-      )
-      .groupBy(expensesTable.shopName, expensesTable.shopMall);
-
-    return {
-      result,
-    };
-  });
+  .input(searchShopByLocationInputSchema)
+  .query(({ input, ctx }) => searchShopByLocation(ctx, input));
 
 const getShopDetailProcedure = protectedProcedure
-  .input(z.object({ shopName: z.string() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-    const shopNameHash = await getTextHash(userId, input.shopName);
-    const expensesCte = db.$with('expense_id_cte').as(
-      db
-        .selectDistinct({ expenseId: expenseTextsTable.expenseId.as('expense_id') })
-        .from(expenseTextsTable)
-        .innerJoin(expensesTable, eq(expenseTextsTable.expenseId, expensesTable.id))
-        .where(eq(expenseTextsTable.textHash, shopNameHash))
-        .orderBy(desc(expensesTable.billedAt))
-        .limit(1),
-    );
+  .input(getShopDetailInputSchema)
+  .query(({ input, ctx }) => getShopDetail(ctx, input));
 
-    const adjustmentsCte = db.$with('adjustments_cte').as(
-      db
-        .select({
-          isGstExcluded: max(
-            caseWhen(eq(expenseAdjustmentsTable.name, GST_NAME), sql<number>`1`).else(sql<number>`0`),
-          ).as('is_gst'),
-          serviceChargeBps: max(
-            caseWhen<number>(eq(expenseAdjustmentsTable.name, SERVICE_CHARGE_NAME), expenseAdjustmentsTable.rateBps),
-          ).as('service_charge'),
-        })
-        .from(expensesCte)
-        .leftJoin(
-          expenseAdjustmentsTable,
-          and(
-            eq(expenseAdjustmentsTable.isInferable, true),
-            eq(expensesCte.expenseId, expenseAdjustmentsTable.expenseId),
-          ),
-        )
-        .groupBy(expenseAdjustmentsTable.expenseId),
-    );
-
-    const accountsCte = db.$with('accounts_cte').as(
-      db
-        .select({ accountIds: jsonGroupArray(expenseAccountAllocationsTable.accountId).as('accountIds') })
-        .from(expensesCte)
-        .leftJoin(expenseAccountAllocationsTable, eq(expensesCte.expenseId, expenseAccountAllocationsTable.expenseId))
-        .groupBy(expenseAccountAllocationsTable.expenseId),
-    );
-
-    const categoriesCte = db.$with('categories_cte').as(
-      db
-        .select({ categoryIds: jsonGroupArray(expenseCategoryAllocationsTable.categoryId).as('categoryIds') })
-        .from(expensesCte)
-        .leftJoin(expenseCategoryAllocationsTable, eq(expensesCte.expenseId, expenseCategoryAllocationsTable.expenseId))
-        .groupBy(expenseCategoryAllocationsTable.expenseId),
-    );
-
-    const data = await db
-      .with(expensesCte, adjustmentsCte, accountsCte, categoriesCte)
-      .select({
-        accountIds: accountsCte.accountIds,
-        categoryIds: categoriesCte.categoryIds,
-        isGstExcluded: adjustmentsCte.isGstExcluded,
-        serviceChargeBps: adjustmentsCte.serviceChargeBps,
-      })
-      .from(adjustmentsCte)
-      .crossJoin(accountsCte)
-      .crossJoin(categoriesCte);
-
-    return data;
-  });
-
-const inferItemDetailsProcedure = protectedProcedure
-  .input(z.object({ itemName: z.string(), shopName: z.string().nullish() }))
-  .mutation(async ({ input, ctx }) => {
-    const { db, userId } = ctx;
-
-    const texts = [input.itemName];
-    if (input.shopName) {
-      texts.push(input.shopName);
-    }
-
-    const hashes = await getTextsHashes(userId, texts);
-    const where: SQL[] = [eq(expenseTextsTable.textHash, hashes.get(input.itemName)!)];
-    if (input.shopName) {
-      where.push(eq(expenseTextsTable.ctxTextHash, hashes.get(input.shopName)!));
-    } else {
-      where.push(isNull(expenseTextsTable.ctxTextHash));
-    }
-    return db
-      .select({ priceCents: expenseItemsTable.priceCents, categoryId: expenseItemsTable.categoryId })
-      .from(expenseTextsTable)
-      .innerJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
-      .innerJoin(expensesTable, eq(expenseItemsTable.expenseId, expensesTable.id))
-      .where(and(...where))
-      .orderBy(desc(expensesTable.billedAt))
-      .limit(1);
-  });
+const getItemDetailProcedure = protectedProcedure
+  .input(getItemDetailInputSchema)
+  .query(({ input, ctx }) => getItemDetail(ctx, input));
 
 const setIsDeletedExpenseProcedure = protectedProcedure
   .input(z.object({ expenseId: z.string(), isDeleted: z.boolean(), version: z.number() }))
@@ -373,89 +247,36 @@ const setIsDeletedExpenseProcedure = protectedProcedure
   });
 
 const searchExpenseProcedure = protectedProcedure
-  .input(z.object({ query: z.string(), cursor: z.string().nullish() }))
-  .query(async ({ ctx, input }) => {
-    const { db, userId } = ctx;
-    const query = input.query.trim();
-    if (query.length < 3) return { searchResult: [] };
-
-    const trigrams = getTrigrams(query, { unlimited: true });
-
-    const chunkCte = db.$with('chunk_cte').as(
-      db
-        .select({
-          textHash: textChunksTable.textHash.as('text_hash'),
-          chunkCount: sql<number>`sum(length(${textChunksTable.chunk}) / 3.0)`.as('chunk_count'),
-        })
-        .from(textChunksTable)
-        .groupBy(textChunksTable.textHash)
-        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
-        .having(sql`chunk_count > 1`),
-    );
-
-    const matchCte = db.$with('match_cte').as(
-      db
-        .select({
-          expenseId: expenseTextsTable.expenseId.as('expense_id'),
-          totalChunkCount: sumAsNumber(chunkCte.chunkCount).as('total_chunk_count'),
-          sourceMatches: jsonGroupObjectArray({
-            chunkCount: chunkCte.chunkCount,
-            matchItemName: expenseItemsTable.name,
-            matchAdjustmentName: expenseAdjustmentsTable.name,
-          }).as('source_matches'),
-        })
-        .from(chunkCte)
-        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textHash))
-        .leftJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
-        .leftJoin(expenseAdjustmentsTable, eq(expenseTextsTable.sourceId, expenseAdjustmentsTable.id))
-        .groupBy(expenseTextsTable.expenseId),
-    );
-
-    const result = await db
-      .with(chunkCte, matchCte)
-      .select({
-        expenseId: matchCte.expenseId,
-        totalChunkCount: matchCte.totalChunkCount,
-        shopName: expensesTable.shopName,
-        shopMall: expensesTable.shopMall,
-        sourceMatches: matchCte.sourceMatches,
-        amountCents: expensesTable.amountCents,
-        billedAt: expensesTable.billedAt,
-      })
-      .from(matchCte)
-      .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
-      .orderBy(desc(matchCte.totalChunkCount), desc(expensesTable.billedAt));
-
-    return { searchResult: result };
-  });
+  .input(searchExpenseInputSchema)
+  .query(async ({ ctx, input }) => searchExpense(ctx, input));
 
 const listReindexHistoryProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
 
   return db
     .select({
-      version: searchIndexVersionTable.version,
-      createdAt: searchIndexVersionTable.createdAt,
-      completedAt: searchIndexVersionTable.completedAt,
-      recordsProcessed: searchIndexVersionTable.recordsProcessed,
-      totalDeletedCount: searchIndexVersionTable.totalDeletedCount,
-      deletedExpenseTextsCount: searchIndexVersionTable.deletedExpenseTextsCount,
+      version: searchIndexGenerationsTable.currentGen,
+      createdAt: searchIndexGenerationsTable.createdAt,
+      completedAt: searchIndexGenerationsTable.completedAt,
+      recordsProcessed: searchIndexGenerationsTable.recordsProcessed,
+      totalDeletedCount: searchIndexGenerationsTable.totalDeletedCount,
+      deletedExpenseTextsCount: searchIndexGenerationsTable.deletedExpenseTextsCount,
     })
-    .from(searchIndexVersionTable)
-    .where(eq(searchIndexVersionTable.userId, userId))
-    .orderBy(desc(searchIndexVersionTable.version));
+    .from(searchIndexGenerationsTable)
+    .where(eq(searchIndexGenerationsTable.userId, userId))
+    .orderBy(desc(searchIndexGenerationsTable.currentGen));
 });
 
 const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
   const { db, env, userId } = ctx;
 
-  const [{ version = 0, createdAt = new Date(0) } = {}] = await db
+  const [{ currentGen = 0, createdAt = new Date(0) } = {}] = await db
     .select({
-      version: max(searchIndexVersionTable.version),
-      createdAt: max(searchIndexVersionTable.createdAt).mapWith(searchIndexVersionTable.createdAt),
+      currentGen: max(searchIndexGenerationsTable.currentGen),
+      createdAt: max(searchIndexGenerationsTable.createdAt).mapWith(searchIndexGenerationsTable.createdAt),
     })
-    .from(searchIndexVersionTable)
-    .where(eq(searchIndexVersionTable.userId, userId));
+    .from(searchIndexGenerationsTable)
+    .where(eq(searchIndexGenerationsTable.userId, userId));
 
   if (differenceInDays(new Date(), createdAt) < 7) {
     throw new TRPCError({
@@ -464,12 +285,11 @@ const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
     });
   }
 
-  const newVersion = version + 1;
-  const payload = { userId, version: newVersion };
-  await db.insert(searchIndexVersionTable).values(payload);
-  await env.EXPENSE_REINDEXER.create({ params: payload });
+  const nextGeneration = currentGen + 1;
+  await db.insert(searchIndexGenerationsTable).values({ userId, currentGen: nextGeneration });
+  await env.EXPENSE_REINDEXER.create({ params: { userId, version: nextGeneration } });
 
-  return { newVersion };
+  return { nextGeneration };
 });
 
 export const expenseProcedures = {
@@ -478,10 +298,9 @@ export const expenseProcedures = {
   save: saveExpenseProcedure,
   list: listExpenseProcedure,
   getSuggestions: getSuggestionsProcedure,
-  suggestShopByLocation: suggestShopByLocationProcedure,
   searchShopByLocation: searchShopByLocationProcedure,
   getShopDetail: getShopDetailProcedure,
-  inferItemDetails: inferItemDetailsProcedure,
+  getItemDetail: getItemDetailProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,

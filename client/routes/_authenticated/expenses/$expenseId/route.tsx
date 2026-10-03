@@ -1,8 +1,8 @@
 import { createFileRoute, Link, Outlet } from '@tanstack/react-router';
 import { PageHeader } from '#components/PageHeader';
-import { useAppForm } from '#components/Form';
+import { useAppForm, withForm } from '#components/Form';
 import { queryClient, trpc, throwIfNotFound, handleFormMutateAsync } from '#client/trpc';
-import { useSuspenseQuery, useQuery, useMutation } from '@tanstack/react-query';
+import { useSuspenseQuery, useQuery, useMutation, skipToken } from '@tanstack/react-query';
 import { useCallback, useEffect } from 'react';
 import {
   SET_VAL_ONLY,
@@ -14,11 +14,15 @@ import {
   type ExpenseFormApi,
   type HistoryEntry,
   type TrackableFieldName,
+  useAdjustmentCallbacks,
+  SET_VAL_NO_TRACK,
 } from './-common';
-import type { DeepKeys } from '@tanstack/react-form';
+import { useSelector, type DeepKeys } from '@tanstack/react-form';
 import { DirtyFormBlockModel } from './-common/DirtyFormBlockModel';
 import { Redo, Undo } from 'lucide-react';
 import { isServerAttachment, useAttachmentUploadMutation } from '#client/lib/attachment';
+import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
+import { useDebounced } from '#client/hooks/useDebounced';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId')({
   component: RouteComponent,
@@ -70,6 +74,7 @@ function RouteComponent() {
   const attachmentUploadMutation = useAttachmentUploadMutation();
   const form = useAppForm({
     ...createEditExpenseFormOptions,
+    defaultValues: { ...createEditExpenseFormOptions.defaultValues, billedAt: new Date() },
     listeners: {
       onChangeDebounceMs: 700,
       onChange: ({ fieldApi }) => {
@@ -89,7 +94,7 @@ function RouteComponent() {
             ...otherValues,
             latitude: geolocation?.latitude ?? null,
             longitude: geolocation?.longitude ?? null,
-            geoAccuracy: geolocation?.accuracy ?? null,
+            geoAccuracy: null,
             billedAt: billedAt.toISOString(),
             attachmentFileIds: attachments.filter(isServerAttachment).map(({ fileId }) => fileId),
             fileUploadRequestId,
@@ -123,6 +128,7 @@ function RouteComponent() {
       <form.AppForm>
         <Outlet />
         <DirtyFormBlockModel mainRouteId={Route.id} />
+        <CompleteShopDetailFormSubscribe form={form} />
       </form.AppForm>
     </div>
   );
@@ -201,3 +207,47 @@ function UndoRedoButtons({ form }: { form: ExpenseFormApi }) {
     </PageHeader.RightSection>
   );
 }
+
+const CompleteShopDetailFormSubscribe = withForm({
+  ...createEditExpenseFormOptions,
+  render({ form }) {
+    const shopDetailSource = useSelector(form.store, ({ values }) => values.ui.shopDetailSource);
+    const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
+    const { createAdjustment } = useAdjustmentCallbacks(form);
+    const undebouncedShopName = useSelector(form.store, ({ values }) => values.shopName);
+    const shopName = useDebounced(undebouncedShopName, 800);
+    const queryInput = shopDetailSource != 'user' && shopName ? { shopName } : skipToken;
+    const getShopDetailQuery = useQuery(trpc.expense.getShopDetail.queryOptions(queryInput));
+
+    useEffect(() => {
+      if (!getShopDetailQuery.data || !getShopDetailQuery.data[0]) return;
+      const [shopDetail] = getShopDetailQuery.data;
+      const { accountOptions, categoryOptions } = optionsData;
+      const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
+      if (accountIds.length > 0) {
+        form.setFieldValue(
+          'accountAllocs',
+          accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
+          SET_VAL_NO_TRACK,
+        );
+      }
+      if (categoryIds.length > 0) {
+        form.setFieldValue(
+          'categoryAllocs',
+          categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
+          SET_VAL_NO_TRACK,
+        );
+      }
+      if (serviceChargeBps) {
+        createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...SET_VAL_NO_TRACK });
+      }
+      if (isGstExcluded) {
+        createAdjustment({ special: GST_NAME, ...SET_VAL_NO_TRACK });
+      }
+      form.setFieldValue('ui.shopDetailSource', 'autocomplete');
+      pushHistory(form, ['accountAllocs', 'categoryAllocs', 'adjustments']);
+    }, [form, getShopDetailQuery.data]);
+
+    return null;
+  },
+});

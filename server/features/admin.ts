@@ -1,7 +1,6 @@
 import { createIttyAppRouter, withZod, type IttyCfArgs } from '#server/lib/itty.ts';
 import { NotificationEventDataSchema } from '#server/lib/notification';
-import { CHECKPOINT_EVENT_TYPE, VersionTwoDataMigratorParamSchema } from '#server/workflows/VersionTwoDataMigrator';
-import { error, json, status, type IRequest, type RequestHandler } from 'itty-router';
+import { error, json, type IRequest, type RequestHandler } from 'itty-router';
 import z from 'zod';
 import { createDatabase } from '#server/lib/db';
 import { getWebPushSubscription, processWebPushResult, triggerWebPush } from '#server/lib/webpush';
@@ -26,38 +25,6 @@ const withAdminCheck: RequestHandler<IRequest, IttyCfArgs> = (request, env) => {
 };
 
 export const adminApiRouter = createIttyAppRouter({ base: '/admin', before: [withAdminCheck] });
-
-adminApiRouter.post(
-  '/invoke-v2-migrator',
-  withZod({
-    body: VersionTwoDataMigratorParamSchema,
-  }),
-  async (request, env) => {
-    const { body } = request.validated;
-    const instance = await env.V2_MIGRATOR.create({ params: body });
-
-    return json({ instanceId: instance.id });
-  },
-);
-
-adminApiRouter.post(
-  '/v2-migrator-checkpoint',
-  withZod({
-    body: z.object({
-      instanceId: z.guid(),
-      kill: z.boolean(),
-    }),
-  }),
-  async (request, env) => {
-    const { instanceId, kill } = request.validated.body;
-    const instance = await env.V2_MIGRATOR.get(instanceId);
-    if (!instance) {
-      return error(404, `instance ${instanceId} not found`);
-    }
-    await instance.sendEvent({ type: CHECKPOINT_EVENT_TYPE, payload: { kill } });
-    return status(204);
-  },
-);
 
 adminApiRouter.post(
   '/web-push-test',
