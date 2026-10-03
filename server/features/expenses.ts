@@ -8,18 +8,15 @@ import {
   expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
-  expenseTextsTable,
   searchIndexGenerationsTable,
-  textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
 import { and, asc, countDistinct, desc, eq, gte } from 'drizzle-orm';
-import { inArray, lt, sql, SQL } from 'drizzle-orm';
+import { lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
-import { caseWhen, coalesce, concat, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getTrigrams } from '../lib/utils';
+import { caseWhen, coalesce, concat, jsonGroupObjectArray, max } from '../lib/db';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
 import {
   getSuggestions,

@@ -16,7 +16,6 @@ import {
 } from '#schema';
 import { and, eq, inArray, notInArray, or } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
-import { getLocationBoxId } from '#server/lib/utils';
 import {
   calculateExpense,
   calculateExpenseCategoryAllocations,
@@ -298,11 +297,6 @@ export function queueMainExpenseRecord(
   calculateExpenseResult: ExpenseCalculationResult,
   deps: PickRepos<'upsertMainExpense' | 'generateId'> = saveExpenseRepo,
 ) {
-  const [boxId] =
-    input.latitude && input.longitude
-      ? getLocationBoxId({ latitude: input.latitude, longitude: input.longitude })
-      : [null];
-
   collector.push(
     deps.upsertMainExpense(db, {
       id: expenseId,
@@ -313,8 +307,8 @@ export function queueMainExpenseRecord(
       updatedBy: userId,
       latitude: input.latitude,
       longitude: input.longitude,
-      geoAccuracy: input.geoAccuracy,
-      boxId,
+      geoAccuracy: null,
+      boxId: null,
       shopName: input.shopName,
       shopMall: input.shopMall,
       specifiedAmountCents: input.specifiedAmountCents,
