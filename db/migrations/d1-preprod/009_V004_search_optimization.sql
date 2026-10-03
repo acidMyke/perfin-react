@@ -92,6 +92,6 @@ CREATE TABLE `geo_texts` (
 ) WITHOUT ROWID;
 
 CREATE INDEX `idx_expenses_texts_expense_id_text_id` ON `expenses_texts` (`expense_id`,`text_id`);
-CREATE INDEX `idx_user_chunks` ON `texts_chunks` (`user_id`,`kind`,`chunk`,`text_id`);
+CREATE INDEX `idx_user_chunks` ON `texts_chunks` (`user_id`,`chunk`,`kind`,`text_id`);
 CREATE INDEX `idx_ctx_texts` ON `ctx_texts` (`text_id`,`ctx_text_id`);
 CREATE INDEX `idx_geo_texts` ON `geo_texts` (`text_id`,`geo_cell_id`);

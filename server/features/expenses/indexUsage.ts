@@ -1,6 +1,21 @@
 import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray } from '#server/lib/db';
-import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
-import { avg, count, type SQLWrapper } from 'drizzle-orm';
+import {
+  and,
+  eq,
+  desc,
+  inArray,
+  countDistinct,
+  gte,
+  isNull,
+  or,
+  isNotNull,
+  notExists,
+  lte,
+  avg,
+  sql,
+  SQL,
+  type SQLWrapper,
+} from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
   textsTable,
@@ -397,28 +412,29 @@ export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailI
     .limit(1);
 }
 
-export const searchExpenseInputSchema = z.object({ query: z.string(), cursor: z.string().nullish() });
+export const searchExpenseInputSchema = z.object({
+  query: z.string(),
+  cursor: z.object({ chunkCount: z.number(), billedAt: z.iso.datetime(), expenseId: z.string() }).nullish(),
+});
 type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
-
+const SEARCH_EXPENSE_CHUNK_SIZE = 23;
 export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
   const { db, userId } = ctx;
   const query = input.query.trim();
   if (query.length < 3) return { result: [] };
 
   const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
-
-  const result = await db
+  let matchCteQuery = db
     .select({
-      expenseId: expenseTextsTable.expenseId,
-      shopName: expensesTable.shopName,
-      shopMall: expensesTable.shopMall,
-      childrens: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }),
-      amountCents: expensesTable.amountCents,
-      billedAt: expensesTable.billedAt,
       chunkCount: countDistinct(textChunksTable.chunk).as('chunk_count'),
-      recencyScore: max(getRecencyScore(expenseTextsTable.expenseBilledAt)).as('recency_score'),
+      billedAt: max(expenseTextsTable.expenseBilledAt).as('billed_at'),
+      expenseId: expenseTextsTable.expenseId.as('expense_id'),
+      childrenTexts: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }).as(
+        'children_texts',
+      ),
     })
     .from(textChunksTable)
+    .innerJoin(expenseTextsTable, eq(textChunksTable.textId, expenseTextsTable.textId))
     .leftJoin(
       textsTable,
       and(
@@ -426,11 +442,46 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
         eq(textChunksTable.textId, textsTable.id),
       ),
     )
-    .innerJoin(expenseTextsTable, and(eq(textChunksTable.textId, expenseTextsTable.textId)))
-    .innerJoin(expensesTable, and(eq(expensesTable.userId, userId), eq(expenseTextsTable.expenseId, expensesTable.id)))
     .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
     .groupBy(expenseTextsTable.expenseId)
-    .orderBy(desc(sql`recency_score + chunk_count`));
+    .$dynamic();
 
-  return result;
+  if (input.cursor) {
+    const { chunkCount, billedAt, expenseId } = input.cursor;
+    matchCteQuery = matchCteQuery.having(
+      and(
+        lte(sql.identifier('chunk_count'), chunkCount),
+        lte(sql.identifier('billed_at'), expenseTextsTable.expenseBilledAt.mapToDriverValue(new Date(billedAt))),
+        gte(expenseTextsTable.expenseId, expenseId),
+      ),
+    );
+  }
+
+  matchCteQuery = matchCteQuery
+    .orderBy(desc(sql.identifier('chunk_count')), desc(sql.identifier('billed_at')), expenseTextsTable.expenseId)
+    .limit(SEARCH_EXPENSE_CHUNK_SIZE + 1);
+
+  const matchCte = db.$with('match_cte').as(matchCteQuery);
+
+  const result = await db
+    .with(matchCte)
+    .select({
+      chunkCount: matchCte.chunkCount,
+      billedAt: sql`${matchCte}.${matchCte.billedAt}`.mapWith(expenseTextsTable.expenseBilledAt),
+      expenseId: matchCte.expenseId,
+      amountCents: expensesTable.amountCents,
+      shopName: expensesTable.shopName,
+      shopMall: expensesTable.shopMall,
+      childrenTexts: matchCte.childrenTexts,
+    })
+    .from(matchCte)
+    .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id));
+
+  let nextCursor: SearchExpenseInput['cursor'] = undefined;
+  if (result.length > SEARCH_EXPENSE_CHUNK_SIZE) {
+    const { chunkCount, billedAt, expenseId } = result.pop()!;
+    nextCursor = { chunkCount, billedAt: billedAt.toISOString(), expenseId };
+  }
+
+  return { result, nextCursor };
 }
