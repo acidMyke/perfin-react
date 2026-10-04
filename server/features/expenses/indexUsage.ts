@@ -17,6 +17,7 @@ import {
   type SQLWrapper,
   lt,
   gt,
+  count,
 } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
 import {
@@ -419,7 +420,7 @@ export const searchExpenseInputSchema = z.object({
   cursor: z.object({ chunkCount: z.number(), billedAt: z.iso.datetime(), expenseId: z.string() }).nullish(),
 });
 type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
-const SEARCH_EXPENSE_PAGE_SIZE = 15;
+const SEARCH_EXPENSE_PAGE_SIZE = 100;
 export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
   const { db, userId } = ctx;
   const query = input.query.trim();
@@ -428,25 +429,38 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
   if (query.length < 3) return { result: [], nextCursor };
 
   const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
+
+  const chunkCte = db.$with('chunk_cte').as(
+    db
+      .select({
+        textId: textChunksTable.textId.as('text_id'),
+        chunkCount: count(textChunksTable.chunk).as('chunk_count'),
+      })
+      .from(textChunksTable)
+      .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
+      .groupBy(textChunksTable.textId)
+      .orderBy(desc(sql.identifier('chunk_count'))),
+  );
+
   let matchCteQuery = db
     .select({
-      chunkCount: countDistinct(textChunksTable.chunk).as('chunk_count'),
+      chunkCount: sumAsNumber(chunkCte.chunkCount).as('chunk_count'),
       billedAt: max(expenseTextsTable.expenseBilledAt).as('billed_at'),
       expenseId: expenseTextsTable.expenseId.as('expense_id'),
-      childrenTexts: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }).as(
-        'children_texts',
-      ),
+      childrenTexts: jsonGroupObjectArray(
+        {
+          kind: textsTable.kind,
+          text: textsTable.text,
+        },
+        { distinct: true },
+      ).as('children_texts'),
     })
-    .from(textChunksTable)
-    .innerJoin(expenseTextsTable, eq(textChunksTable.textId, expenseTextsTable.textId))
+    .from(chunkCte)
+    .innerJoin(expenseTextsTable, eq(chunkCte.textId, expenseTextsTable.textId))
     .leftJoin(
       textsTable,
-      and(
-        inArray(textChunksTable.kind, [TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
-        eq(textChunksTable.textId, textsTable.id),
-      ),
+      and(eq(chunkCte.textId, textsTable.id), inArray(textsTable.kind, [TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME])),
     )
-    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
     .groupBy(expenseTextsTable.expenseId)
     .$dynamic();
 
@@ -477,7 +491,7 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
   const matchCte = db.$with('match_cte').as(matchCteQuery);
 
   const result = await db
-    .with(matchCte)
+    .with(chunkCte, matchCte)
     .select({
       chunkCount: matchCte.chunkCount,
       billedAt: sql`${matchCte}.${matchCte.billedAt}`.mapWith(expenseTextsTable.expenseBilledAt),
