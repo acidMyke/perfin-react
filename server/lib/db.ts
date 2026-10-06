@@ -2,6 +2,7 @@ import { getColumns, SQL, sql, Table, type AnyColumn, type SQLWrapper } from 'dr
 import { drizzle } from 'drizzle-orm/d1';
 import { defineRelations } from 'drizzle-orm';
 import * as schema from '../../db/schema';
+import type { SQLiteSelect } from 'drizzle-orm/sqlite-core';
 
 export const sankeCaseFromCamelCase = (camelCase: string) =>
   camelCase.replace(/([a-z])([A-Z])/g, '$1_$2').toLowerCase();
@@ -27,11 +28,7 @@ export function excludedAll<T extends Table>(
 }
 
 type ChunkValue<TReturn> =
-  | TReturn
-  | SQL<TReturn>
-  | SQL.Aliased<TReturn>
-  | SQLWrapper<TReturn>
-  | AnyColumn<{ data: TReturn }>;
+  TReturn | SQL<TReturn> | SQL.Aliased<TReturn> | SQLWrapper<TReturn> | AnyColumn<{ data: TReturn }>;
 
 class CaseBuilder<TReturn> implements SQLWrapper<TReturn | null> {
   private chunks: SQL[] = [];
@@ -241,3 +238,22 @@ export function createDatabase(env: Env) {
 
 export type AppSchema = typeof schema;
 export type AppDatabase = ReturnType<typeof createDatabase>;
+
+export async function explainQueryPlan(db: AppDatabase, query: any) {
+  const { sql: querySql, params } = (query as SQLiteSelect).toSQL();
+
+  const parts = querySql.split('?');
+
+  const explainSql = sql.join(
+    parts.flatMap((part, i) => (i === 0 ? [sql.raw(part)] : [sql.param(params[i - 1]), sql.raw(part)])),
+    sql.raw(''),
+  );
+
+  explainSql.queryChunks.unshift(sql.raw('EXPLAIN QUERY PLAN '));
+
+  const plan = await db.all(explainSql);
+  console.log(
+    'query plan:',
+    plan.map(step => step && typeof step == 'object' && 'detail' in step && step.detail),
+  );
+}

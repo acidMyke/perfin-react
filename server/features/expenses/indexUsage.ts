@@ -1,4 +1,4 @@
-import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray, explainQueryPlan } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
 import { avg, count, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -44,13 +44,15 @@ function getRecencyScore<T>(dateValue: SQLWrapper<T>) {
     .else(-9);
 }
 
+const textKindSchema = z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]);
+
 const locationSchema = z.union([
   z.object({ isOnline: z.literal(true), latitude: z.number().optional(), longitude: z.number().optional() }),
   z.object({ isOnline: z.literal(false).optional(), latitude: z.number(), longitude: z.number() }),
 ]);
 
 export const getSuggestionInputSchema = z.object({
-  kind: z.enum([TEXT_KIND.SHOP_NAME, TEXT_KIND.MALL_NAME, TEXT_KIND.ITEM_NAME, TEXT_KIND.ADJ_NAME]),
+  kind: textKindSchema,
   search: z.string().optional(),
   context: z
     .object({
@@ -397,7 +399,12 @@ export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailI
     .limit(1);
 }
 
-export const searchExpenseInputSchema = z.object({ query: z.string(), cursor: z.string().nullish() });
+export const searchExpenseInputSchema = z.object({
+  query: z.string(),
+  kind: textKindSchema,
+  cursor: z.string().nullish(),
+});
+
 type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
 
 export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
@@ -407,7 +414,7 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
 
   const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
 
-  const result = await db
+  const selectQuery = db
     .select({
       expenseId: expenseTextsTable.expenseId,
       shopName: expensesTable.shopName,
@@ -415,8 +422,8 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
       childrens: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }),
       amountCents: expensesTable.amountCents,
       billedAt: expensesTable.billedAt,
-      chunkCount: countDistinct(textChunksTable.chunk).as('chunk_count'),
-      recencyScore: max(getRecencyScore(expenseTextsTable.expenseBilledAt)).as('recency_score'),
+      chunkCount: count(textChunksTable.chunk).as('chunk_count'),
+      recencyScore: getRecencyScore(expensesTable.billedAt).as('recency_score'),
     })
     .from(textChunksTable)
     .leftJoin(
@@ -428,9 +435,16 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
     )
     .innerJoin(expenseTextsTable, and(eq(textChunksTable.textId, expenseTextsTable.textId)))
     .innerJoin(expensesTable, and(eq(expensesTable.userId, userId), eq(expenseTextsTable.expenseId, expensesTable.id)))
-    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
+    .where(
+      and(
+        eq(textChunksTable.userId, userId),
+        eq(textChunksTable.kind, input.kind),
+        inArray(textChunksTable.chunk, searchChunks),
+      ),
+    )
     .groupBy(expenseTextsTable.expenseId)
     .orderBy(desc(sql`recency_score + chunk_count`));
 
-  return result;
+  await explainQueryPlan(db, selectQuery);
+  return await selectQuery;
 }
