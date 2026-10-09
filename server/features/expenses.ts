@@ -8,18 +8,15 @@ import {
   expenseCategoryAllocationsTable,
   expenseItemsTable,
   expensesTable,
-  expenseTextsTable,
   searchIndexGenerationsTable,
-  textChunksTable,
   uploadedFilesTable,
 } from '../../db/schema';
 import { and, asc, countDistinct, desc, eq, gte } from 'drizzle-orm';
-import { inArray, lt, sql, SQL } from 'drizzle-orm';
+import { lt, sql, SQL } from 'drizzle-orm';
 import { TRPCError } from '@trpc/server';
 import z from 'zod';
 import { differenceInDays, endOfMonth } from 'date-fns';
-import { caseWhen, coalesce, concat, jsonGroupObjectArray, max, sumAsNumber } from '../lib/db';
-import { getTrigrams } from '../lib/utils';
+import { caseWhen, coalesce, concat, jsonGroupObjectArray, max } from '../lib/db';
 import { processSaveExpense, saveExpenseInputSchema } from './expenses/saveExpense';
 import {
   getSuggestions,
@@ -250,61 +247,8 @@ const setIsDeletedExpenseProcedure = protectedProcedure
   });
 
 const searchExpenseProcedure = protectedProcedure
-  .input(z.object({ query: z.string(), cursor: z.string().nullish() }))
-  .query(async ({ ctx, input }) => {
-    const { db, userId } = ctx;
-    const query = input.query.trim();
-    if (query.length < 3) return { searchResult: [] };
-
-    const trigrams = getTrigrams(query, { unlimited: true });
-
-    const chunkCte = db.$with('chunk_cte').as(
-      db
-        .select({
-          textHash: textChunksTable.textId.as('text_hash'),
-          chunkCount: sql<number>`sum(length(${textChunksTable.chunk}) / 3.0)`.as('chunk_count'),
-        })
-        .from(textChunksTable)
-        .groupBy(textChunksTable.textId)
-        .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, trigrams)))
-        .having(sql`chunk_count > 1`),
-    );
-
-    const matchCte = db.$with('match_cte').as(
-      db
-        .select({
-          expenseId: expenseTextsTable.expenseId.as('expense_id'),
-          totalChunkCount: sumAsNumber(chunkCte.chunkCount).as('total_chunk_count'),
-          sourceMatches: jsonGroupObjectArray({
-            chunkCount: chunkCte.chunkCount,
-            matchItemName: expenseItemsTable.name,
-            matchAdjustmentName: expenseAdjustmentsTable.name,
-          }).as('source_matches'),
-        })
-        .from(chunkCte)
-        .innerJoin(expenseTextsTable, eq(chunkCte.textHash, expenseTextsTable.textId))
-        .leftJoin(expenseItemsTable, eq(expenseTextsTable.sourceId, expenseItemsTable.id))
-        .leftJoin(expenseAdjustmentsTable, eq(expenseTextsTable.sourceId, expenseAdjustmentsTable.id))
-        .groupBy(expenseTextsTable.expenseId),
-    );
-
-    const result = await db
-      .with(chunkCte, matchCte)
-      .select({
-        expenseId: matchCte.expenseId,
-        totalChunkCount: matchCte.totalChunkCount,
-        shopName: expensesTable.shopName,
-        shopMall: expensesTable.shopMall,
-        sourceMatches: matchCte.sourceMatches,
-        amountCents: expensesTable.amountCents,
-        billedAt: expensesTable.billedAt,
-      })
-      .from(matchCte)
-      .innerJoin(expensesTable, eq(matchCte.expenseId, expensesTable.id))
-      .orderBy(desc(matchCte.totalChunkCount), desc(expensesTable.billedAt));
-
-    return { searchResult: result };
-  });
+  .input(searchExpenseInputSchema)
+  .query(async ({ ctx, input }) => searchExpense(ctx, input));
 
 const listReindexHistoryProcedure = protectedProcedure.query(async ({ ctx }) => {
   const { db, userId } = ctx;
@@ -361,7 +305,4 @@ export const expenseProcedures = {
   search: searchExpenseProcedure,
   reindex: reindexExpenseProcedure,
   reindexList: listReindexHistoryProcedure,
-  testSearch: protectedProcedure
-    .input(searchExpenseInputSchema)
-    .query(async ({ ctx, input }) => searchExpense(ctx, input)),
 };
