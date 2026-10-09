@@ -2,6 +2,6 @@
 // From here call trpc when request hit /trpc
 import router from './router';
 
-export { UserExpenseReindexer } from './workflows/UserExpenseReindexer';
+export { ExpenseReindexer } from './workflows/ExpenseReindexer';
 
 export default { ...router } satisfies ExportedHandler<Env>;

@@ -250,48 +250,6 @@ const searchExpenseProcedure = protectedProcedure
   .input(searchExpenseInputSchema)
   .query(async ({ ctx, input }) => searchExpense(ctx, input));
 
-const listReindexHistoryProcedure = protectedProcedure.query(async ({ ctx }) => {
-  const { db, userId } = ctx;
-
-  return db
-    .select({
-      version: searchIndexGenerationsTable.currentGen,
-      createdAt: searchIndexGenerationsTable.createdAt,
-      completedAt: searchIndexGenerationsTable.completedAt,
-      recordsProcessed: searchIndexGenerationsTable.recordsProcessed,
-      totalDeletedCount: searchIndexGenerationsTable.totalDeletedCount,
-      deletedExpenseTextsCount: searchIndexGenerationsTable.deletedExpenseTextsCount,
-    })
-    .from(searchIndexGenerationsTable)
-    .where(eq(searchIndexGenerationsTable.userId, userId))
-    .orderBy(desc(searchIndexGenerationsTable.currentGen));
-});
-
-const reindexExpenseProcedure = protectedProcedure.mutation(async ({ ctx }) => {
-  const { db, env, userId } = ctx;
-
-  const [{ currentGen = 0, createdAt = new Date(0) } = {}] = await db
-    .select({
-      currentGen: max(searchIndexGenerationsTable.currentGen),
-      createdAt: max(searchIndexGenerationsTable.createdAt).mapWith(searchIndexGenerationsTable.createdAt),
-    })
-    .from(searchIndexGenerationsTable)
-    .where(eq(searchIndexGenerationsTable.userId, userId));
-
-  if (differenceInDays(new Date(), createdAt) < 7) {
-    throw new TRPCError({
-      code: 'BAD_REQUEST',
-      message: 'Cannot reindex within 7 days of last reindex',
-    });
-  }
-
-  const nextGeneration = currentGen + 1;
-  await db.insert(searchIndexGenerationsTable).values({ userId, currentGen: nextGeneration });
-  await env.EXPENSE_REINDEXER.create({ params: { userId, version: nextGeneration } });
-
-  return { nextGeneration };
-});
-
 export const expenseProcedures = {
   loadOptions: loadExpenseOptionsProcedure,
   loadDetail: loadExpenseDetailProcedure,
@@ -303,6 +261,4 @@ export const expenseProcedures = {
   getItemDetail: getItemDetailProcedure,
   setDelete: setIsDeletedExpenseProcedure,
   search: searchExpenseProcedure,
-  reindex: reindexExpenseProcedure,
-  reindexList: listReindexHistoryProcedure,
 };

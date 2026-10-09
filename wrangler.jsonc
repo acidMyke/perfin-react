@@ -56,7 +56,7 @@
     {
       "name": "perfin-staging-expense-reindexer",
       "binding": "EXPENSE_REINDEXER",
-      "class_name": "UserExpenseReindexer",
+      "class_name": "ExpenseReindexer",
     },
   ],
   "env": {
@@ -108,7 +108,7 @@
         {
           "name": "perfin-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
-          "class_name": "UserExpenseReindexer",
+          "class_name": "ExpenseReindexer",
         },
       ],
     },
@@ -159,7 +159,7 @@
         {
           "name": "perfin-staging-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
-          "class_name": "UserExpenseReindexer",
+          "class_name": "ExpenseReindexer",
         },
       ],
     },

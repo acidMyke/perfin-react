@@ -297,20 +297,14 @@ export const expenseCategoryAllocationsTable = sqliteTable(
   ],
 );
 
-export const searchIndexGenerationsTable = sqliteTable(
-  'search_index_generations',
-  {
-    id: pkIdColumn(),
-    userId: idColumn(),
-    currentGen: integer().notNull(),
-    createdAt: createdAtColumn(),
-    completedAt: timestampColumn(),
-    recordsProcessed: integer().notNull().default(0),
-    totalDeletedCount: integer().notNull().default(0),
-    deletedExpenseTextsCount: integer().notNull().default(0),
-  },
-  t => [unique('uq_search_index_versions_user_id_version').on(t.userId, t.currentGen)],
-);
+export const searchIndexGenerationsTable = sqliteTable('search_index_generations', {
+  id: pkIdColumn(),
+  currentGen: integer().notNull().unique(),
+  createdAt: createdAtColumn(),
+  completedAt: timestampColumn(),
+  recordsProcessed: integer().notNull().default(0),
+  totalChanges: integer().notNull().default(0),
+});
 
 export const textsTable = sqliteTable(
   'texts',

@@ -293,11 +293,10 @@ function queueSaveSearchables(
   );
 }
 
-async function getLatestUserIndexVersion(db: AppDatabase, userId: string) {
+export async function getLatestIndexGen(db: AppDatabase) {
   const [{ version = 0 } = {}] = await db
     .select({ version: searchIndexGenerationsTable.currentGen })
     .from(searchIndexGenerationsTable)
-    .where(eq(searchIndexGenerationsTable.userId, userId))
     .orderBy(desc(searchIndexGenerationsTable.currentGen))
     .limit(1);
 
@@ -311,7 +310,7 @@ export async function processSaveExpenseSearchIndexing(
 ) {
   const searchables = gatherExpenseSearchables(expense);
   if (searchables.length <= 0) return;
-  const version = await getLatestUserIndexVersion(db, expense.userId);
+  const version = await getLatestIndexGen(db);
   const records = await prepareSearchables(searchables, version);
   queueDeleteExpenseTextsByExpenseId(collector, db, expense.id);
   queueSaveSearchables(collector, db, records);
@@ -329,24 +328,23 @@ export async function processReindexing(
   queueSaveSearchables(collector, db, records);
 }
 
-export async function cleanupOldIndex(db: AppDatabase, userId: string, currentVersion: number) {
-  const textsTableCond = and(eq(textsTable.userId, userId), lt(textsTable.indexGen, currentVersion));
-  const textsTableSq = db.select({ hash: textsTable.id }).from(textsTable).where(textsTableCond);
-
-  const [[{ deletedExpenseTextsCount }], { meta: deleteMeta }] = await db.batch([
-    db
-      .select({ deletedExpenseTextsCount: count() })
-      .from(expenseTextsTable)
-      .where(inArray(expenseTextsTable.textId, textsTableSq)),
-    db.delete(textsTable).where(textsTableCond),
+export async function cleanupOldIndex(db: AppDatabase, currentGen: number) {
+  const results = await db.batch([
+    db.delete(textsTable).where(lt(textsTable.indexGen, currentGen)),
+    db.delete(geoTextsTable).where(lt(geoTextsTable.indexGen, currentGen)),
+    db.delete(ctxTextsTable).where(lt(ctxTextsTable.indexGen, currentGen)),
+    db.delete(expenseTextsTable).where(lt(expenseTextsTable.indexGen, currentGen)),
   ]);
+
+  let totalChanges = 0;
+  for (const res of results) {
+    totalChanges += res.meta.changes;
+  }
 
   await db
     .update(searchIndexGenerationsTable)
-    .set({ deletedExpenseTextsCount, totalDeletedCount: deleteMeta.changes, completedAt: new Date() })
-    .where(
-      and(eq(searchIndexGenerationsTable.userId, userId), eq(searchIndexGenerationsTable.currentGen, currentVersion)),
-    );
+    .set({ completedAt: new Date(), totalChanges })
+    .where(and(eq(searchIndexGenerationsTable.currentGen, currentGen)));
 }
 
 export async function processReindexingFinalStage(db: AppDatabase, userId: string) {
