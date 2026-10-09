@@ -401,7 +401,6 @@ export async function getItemDetail(ctx: ProtectedContext, input: GetItemDetailI
 
 export const searchExpenseInputSchema = z.object({
   query: z.string(),
-  kind: textKindSchema,
   cursor: z.string().nullish(),
 });
 
@@ -435,13 +434,7 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
     )
     .innerJoin(expenseTextsTable, and(eq(textChunksTable.textId, expenseTextsTable.textId)))
     .innerJoin(expensesTable, and(eq(expensesTable.userId, userId), eq(expenseTextsTable.expenseId, expensesTable.id)))
-    .where(
-      and(
-        eq(textChunksTable.userId, userId),
-        eq(textChunksTable.kind, input.kind),
-        inArray(textChunksTable.chunk, searchChunks),
-      ),
-    )
+    .where(and(eq(textChunksTable.userId, userId), inArray(textChunksTable.chunk, searchChunks)))
     .groupBy(expenseTextsTable.expenseId)
     .orderBy(desc(sql`recency_score + chunk_count`));
 

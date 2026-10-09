@@ -2577,11 +2577,11 @@
           "isExpression": false
         },
         {
-          "value": "kind",
+          "value": "chunk",
           "isExpression": false
         },
         {
-          "value": "chunk",
+          "value": "kind",
           "isExpression": false
         },
         {
@@ -2592,7 +2592,7 @@
       "isUnique": false,
       "where": null,
       "origin": "manual",
-      "name": "idx_user_chunks",
+      "name": "idx_user_id_chunk_kind_text_id",
       "entityType": "indexes",
       "table": "texts_chunks"
     },

@@ -346,7 +346,7 @@ export const textChunksTable = sqliteTable(
     // textHash includes userId in hashing
     primaryKey({ columns: [t.textId, t.chunk] }),
     // covering index to quickly lookup textHash with provided userId, kind & chunk
-    index('idx_user_chunks').on(t.userId, t.kind, t.chunk, t.textId),
+    index('idx_user_id_chunk_kind_text_id').on(t.userId, t.chunk, t.kind, t.textId),
   ],
 );
 
