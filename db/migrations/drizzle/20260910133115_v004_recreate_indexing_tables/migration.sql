@@ -1,13 +1,10 @@
 CREATE TABLE `search_index_generations` (
 	`id` text(21) PRIMARY KEY,
-	`user_id` text(21) NOT NULL,
-	`current_gen` integer NOT NULL,
+	`current_gen` integer NOT NULL UNIQUE,
 	`created_at` integer NOT NULL,
 	`completed_at` integer,
 	`records_processed` integer DEFAULT 0 NOT NULL,
-	`total_deleted_count` integer DEFAULT 0 NOT NULL,
-	`deleted_expense_texts_count` integer DEFAULT 0 NOT NULL,
-	CONSTRAINT `uq_search_index_versions_user_id_version` UNIQUE(`user_id`,`current_gen`)
+	`total_changes` integer DEFAULT 0 NOT NULL
 );
 
 CREATE TABLE `texts` (
@@ -74,7 +71,6 @@ CREATE TABLE `geo_texts` (
 
 DROP INDEX IF EXISTS `idx_expenses_partial_user_box_shop`;
 DROP INDEX IF EXISTS `idx_expenses_id_account_category`;
-DROP INDEX IF EXISTS `idx_user_chunks`;
 CREATE INDEX `idx_user_id_chunk_kind_text_id` ON `texts_chunks` (`user_id`,`chunk`,`kind`,`text_id`);
 CREATE INDEX `idx_expenses_texts_expense_id_text_id` ON `expenses_texts` (`expense_id`,`text_id`);
 CREATE INDEX `idx_ctx_texts` ON `ctx_texts` (`text_id`,`ctx_text_id`);

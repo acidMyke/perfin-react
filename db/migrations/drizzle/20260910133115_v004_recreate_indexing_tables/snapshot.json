@@ -1355,16 +1355,6 @@
       "table": "search_index_generations"
     },
     {
-      "type": "text(21)",
-      "notNull": true,
-      "autoincrement": false,
-      "default": null,
-      "generated": null,
-      "name": "user_id",
-      "entityType": "columns",
-      "table": "search_index_generations"
-    },
-    {
       "type": "integer",
       "notNull": true,
       "autoincrement": false,
@@ -1410,17 +1400,7 @@
       "autoincrement": false,
       "default": "0",
       "generated": null,
-      "name": "total_deleted_count",
-      "entityType": "columns",
-      "table": "search_index_generations"
-    },
-    {
-      "type": "integer",
-      "notNull": true,
-      "autoincrement": false,
-      "default": "0",
-      "generated": null,
-      "name": "deleted_expense_texts_count",
+      "name": "total_changes",
       "entityType": "columns",
       "table": "search_index_generations"
     },
@@ -2617,16 +2597,6 @@
     {
       "columns": [
         "user_id",
-        "current_gen"
-      ],
-      "nameExplicit": true,
-      "name": "uq_search_index_versions_user_id_version",
-      "entityType": "uniques",
-      "table": "search_index_generations"
-    },
-    {
-      "columns": [
-        "user_id",
         "kind",
         "text"
       ],
@@ -2634,6 +2604,15 @@
       "name": "uq_texts_user_id_kind_text",
       "entityType": "uniques",
       "table": "texts"
+    },
+    {
+      "columns": [
+        "current_gen"
+      ],
+      "nameExplicit": false,
+      "name": "search_index_generations_current_gen_unique",
+      "entityType": "uniques",
+      "table": "search_index_generations"
     },
     {
       "columns": [
