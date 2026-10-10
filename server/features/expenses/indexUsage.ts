@@ -424,7 +424,7 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
       shopMall: expensesTable.shopMall,
       childrens: jsonGroupObjectArray(
         { kind: sql<ChildrenTextKind>`${textsTable.kind}`, text: textsTable.text },
-        { distinct: true },
+        { distinct: true, filterNull: true },
       ),
       amountCents: expensesTable.amountCents,
       billedAt: expensesTable.billedAt,

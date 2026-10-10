@@ -100,7 +100,7 @@ export function jsonGroupArray<T extends ExtractableData>(
 
 export function jsonGroupObjectArray<T extends Record<string, ExtractableData>>(
   shape: T,
-  options: { distinct?: boolean } = {},
+  options: { distinct?: boolean; filterNull?: boolean } = {},
 ) {
   const { distinct } = options;
 
@@ -114,7 +114,9 @@ export function jsonGroupObjectArray<T extends Record<string, ExtractableData>>(
     mapFromDriverValue: v => {
       if (typeof v !== 'string') return [] as { [K in keyof T]: ExtractType<T[K]> }[];
       try {
-        return JSON.parse(v) as { [K in keyof T]: ExtractType<T[K]> }[];
+        const vJson = JSON.parse(v) as { [K in keyof T]: ExtractType<T[K]> }[];
+        if (options.filterNull) return vJson.filter(v => Object.values(v).some(v => v !== null));
+        return vJson;
       } catch {
         return [] as { [K in keyof T]: ExtractType<T[K]> }[];
       }
