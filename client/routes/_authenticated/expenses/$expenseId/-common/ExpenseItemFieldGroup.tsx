@@ -41,7 +41,7 @@ export const ItemDetailFieldGroup = withFieldGroup({
   },
   render({ group, itemIndex, shopName, mallName, categoryOptions, onRemoveClick, onPricingChange, createAdjustment }) {
     const { pushIntoOptions } = usePushIntoOptions();
-    const itemId = useSelector(group.store, state => state.values.id);
+    const itemId = useSelector(group.store, state => state.values?.id);
     const [itemDetailInput, setItemDetailInput] = useState<GetItemDetailInput>();
     const getItemDetailQuery = useQuery(trpc.expense.getItemDetail.queryOptions(itemDetailInput ?? skipToken));
 
