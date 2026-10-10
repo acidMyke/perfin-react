@@ -9,32 +9,36 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as VerifyRouteImport } from './routes/verify'
-import { Route as SigninRouteImport } from './routes/signin'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
-import { Route as SignupRouteRouteImport } from './routes/signup/route'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as SignupIndexRouteImport } from './routes/signup/index'
-import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as SigninRouteImport } from './routes/signin'
+import { Route as SignupRouteRouteImport } from './routes/signup/route'
+import { Route as VerifyRouteImport } from './routes/verify'
 import { Route as AuthenticatedDashboardRouteImport } from './routes/_authenticated/dashboard'
 import { Route as AuthenticatedExpensesRouteRouteImport } from './routes/_authenticated/expenses/route'
-import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as SignupIndexRouteImport } from './routes/signup/index'
+import { Route as SignupVerifyRouteImport } from './routes/signup/verify'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
-import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
-import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
-import { Route as AuthenticatedSettingsElevatedRouteImport } from './routes/_authenticated/settings/_elevated'
-import { Route as AuthenticatedExpensesSearchRouteImport } from './routes/_authenticated/expenses/search'
 import { Route as AuthenticatedExpensesExpenseIdRouteRouteImport } from './routes/_authenticated/expenses/$expenseId/route'
+import { Route as AuthenticatedExpensesSearchRouteImport } from './routes/_authenticated/expenses/search'
+import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
+import { Route as AuthenticatedSettingsElevatedRouteImport } from './routes/_authenticated/settings/_elevated'
+import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
+import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedExpensesExpenseIdIndexRouteImport } from './routes/_authenticated/expenses/$expenseId/index'
-import { Route as AuthenticatedSettingsElevatedPasskeyRouteImport } from './routes/_authenticated/settings/_elevated/passkey'
-import { Route as AuthenticatedExpensesExpenseIdViewRouteImport } from './routes/_authenticated/expenses/$expenseId/view'
-import { Route as AuthenticatedExpensesExpenseIdStartRouteImport } from './routes/_authenticated/expenses/$expenseId/start'
 import { Route as AuthenticatedExpensesExpenseIdGeolocationRouteImport } from './routes/_authenticated/expenses/$expenseId/geolocation'
+import { Route as AuthenticatedExpensesExpenseIdStartRouteImport } from './routes/_authenticated/expenses/$expenseId/start'
+import { Route as AuthenticatedExpensesExpenseIdViewRouteImport } from './routes/_authenticated/expenses/$expenseId/view'
+import { Route as AuthenticatedSettingsElevatedPasskeyRouteImport } from './routes/_authenticated/settings/_elevated/passkey'
 import { Route as AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport } from './routes/_authenticated/expenses/$expenseId/items.$indexStr'
 
-const VerifyRoute = VerifyRouteImport.update({
-  id: '/verify',
-  path: '/verify',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AuthenticatedRoute = AuthenticatedRouteImport.update({
+  id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SigninRoute = SigninRouteImport.update({
@@ -42,29 +46,15 @@ const SigninRoute = SigninRouteImport.update({
   path: '/signin',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedRoute = AuthenticatedRouteImport.update({
-  id: '/_authenticated',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const SignupRouteRoute = SignupRouteRouteImport.update({
   id: '/signup',
   path: '/signup',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const SignupIndexRoute = SignupIndexRouteImport.update({
-  id: '/',
-  path: '/',
-  getParentRoute: () => SignupRouteRoute,
-} as any)
-const SignupVerifyRoute = SignupVerifyRouteImport.update({
+const VerifyRoute = VerifyRouteImport.update({
   id: '/verify',
   path: '/verify',
-  getParentRoute: () => SignupRouteRoute,
+  getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedDashboardRoute = AuthenticatedDashboardRouteImport.update({
   id: '/dashboard',
@@ -77,40 +67,20 @@ const AuthenticatedExpensesRouteRoute =
     path: '/expenses',
     getParentRoute: () => AuthenticatedRoute,
   } as any)
-const AuthenticatedSettingsIndexRoute =
-  AuthenticatedSettingsIndexRouteImport.update({
-    id: '/settings/',
-    path: '/settings/',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
+const SignupIndexRoute = SignupIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => SignupRouteRoute,
+} as any)
+const SignupVerifyRoute = SignupVerifyRouteImport.update({
+  id: '/verify',
+  path: '/verify',
+  getParentRoute: () => SignupRouteRoute,
+} as any)
 const AuthenticatedExpensesIndexRoute =
   AuthenticatedExpensesIndexRouteImport.update({
     id: '/',
     path: '/',
-    getParentRoute: () => AuthenticatedExpensesRouteRoute,
-  } as any)
-const AuthenticatedSettingsNotificationsRoute =
-  AuthenticatedSettingsNotificationsRouteImport.update({
-    id: '/settings/notifications',
-    path: '/settings/notifications',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSettingsManageSubjectsRoute =
-  AuthenticatedSettingsManageSubjectsRouteImport.update({
-    id: '/settings/manage-subjects',
-    path: '/settings/manage-subjects',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedSettingsElevatedRoute =
-  AuthenticatedSettingsElevatedRouteImport.update({
-    id: '/settings/_elevated',
-    path: '/settings',
-    getParentRoute: () => AuthenticatedRoute,
-  } as any)
-const AuthenticatedExpensesSearchRoute =
-  AuthenticatedExpensesSearchRouteImport.update({
-    id: '/search',
-    path: '/search',
     getParentRoute: () => AuthenticatedExpensesRouteRoute,
   } as any)
 const AuthenticatedExpensesExpenseIdRouteRoute =
@@ -119,22 +89,46 @@ const AuthenticatedExpensesExpenseIdRouteRoute =
     path: '/$expenseId',
     getParentRoute: () => AuthenticatedExpensesRouteRoute,
   } as any)
+const AuthenticatedExpensesSearchRoute =
+  AuthenticatedExpensesSearchRouteImport.update({
+    id: '/search',
+    path: '/search',
+    getParentRoute: () => AuthenticatedExpensesRouteRoute,
+  } as any)
+const AuthenticatedSettingsIndexRoute =
+  AuthenticatedSettingsIndexRouteImport.update({
+    id: '/settings/',
+    path: '/settings/',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsElevatedRoute =
+  AuthenticatedSettingsElevatedRouteImport.update({
+    id: '/settings/_elevated',
+    path: '/settings',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsManageSubjectsRoute =
+  AuthenticatedSettingsManageSubjectsRouteImport.update({
+    id: '/settings/manage-subjects',
+    path: '/settings/manage-subjects',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
+const AuthenticatedSettingsNotificationsRoute =
+  AuthenticatedSettingsNotificationsRouteImport.update({
+    id: '/settings/notifications',
+    path: '/settings/notifications',
+    getParentRoute: () => AuthenticatedRoute,
+  } as any)
 const AuthenticatedExpensesExpenseIdIndexRoute =
   AuthenticatedExpensesExpenseIdIndexRouteImport.update({
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
-const AuthenticatedSettingsElevatedPasskeyRoute =
-  AuthenticatedSettingsElevatedPasskeyRouteImport.update({
-    id: '/passkey',
-    path: '/passkey',
-    getParentRoute: () => AuthenticatedSettingsElevatedRoute,
-  } as any)
-const AuthenticatedExpensesExpenseIdViewRoute =
-  AuthenticatedExpensesExpenseIdViewRouteImport.update({
-    id: '/view',
-    path: '/view',
+const AuthenticatedExpensesExpenseIdGeolocationRoute =
+  AuthenticatedExpensesExpenseIdGeolocationRouteImport.update({
+    id: '/geolocation',
+    path: '/geolocation',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
 const AuthenticatedExpensesExpenseIdStartRoute =
@@ -143,11 +137,17 @@ const AuthenticatedExpensesExpenseIdStartRoute =
     path: '/start',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
   } as any)
-const AuthenticatedExpensesExpenseIdGeolocationRoute =
-  AuthenticatedExpensesExpenseIdGeolocationRouteImport.update({
-    id: '/geolocation',
-    path: '/geolocation',
+const AuthenticatedExpensesExpenseIdViewRoute =
+  AuthenticatedExpensesExpenseIdViewRouteImport.update({
+    id: '/view',
+    path: '/view',
     getParentRoute: () => AuthenticatedExpensesExpenseIdRouteRoute,
+  } as any)
+const AuthenticatedSettingsElevatedPasskeyRoute =
+  AuthenticatedSettingsElevatedPasskeyRouteImport.update({
+    id: '/passkey',
+    path: '/passkey',
+    getParentRoute: () => AuthenticatedSettingsElevatedRoute,
   } as any)
 const AuthenticatedExpensesExpenseIdItemsIndexStrRoute =
   AuthenticatedExpensesExpenseIdItemsIndexStrRouteImport.update({
@@ -302,18 +302,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/verify': {
-      id: '/verify'
-      path: '/verify'
-      fullPath: '/verify'
-      preLoaderRoute: typeof VerifyRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signin': {
-      id: '/signin'
-      path: '/signin'
-      fullPath: '/signin'
-      preLoaderRoute: typeof SigninRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -323,6 +316,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/signin': {
+      id: '/signin'
+      path: '/signin'
+      fullPath: '/signin'
+      preLoaderRoute: typeof SigninRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/signup': {
       id: '/signup'
       path: '/signup'
@@ -330,26 +330,12 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SignupRouteRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/signup/': {
-      id: '/signup/'
-      path: '/'
-      fullPath: '/signup/'
-      preLoaderRoute: typeof SignupIndexRouteImport
-      parentRoute: typeof SignupRouteRoute
-    }
-    '/signup/verify': {
-      id: '/signup/verify'
+    '/verify': {
+      id: '/verify'
       path: '/verify'
-      fullPath: '/signup/verify'
-      preLoaderRoute: typeof SignupVerifyRouteImport
-      parentRoute: typeof SignupRouteRoute
+      fullPath: '/verify'
+      preLoaderRoute: typeof VerifyRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/_authenticated/dashboard': {
       id: '/_authenticated/dashboard'
@@ -365,46 +351,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesRouteRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/settings/': {
-      id: '/_authenticated/settings/'
-      path: '/settings'
-      fullPath: '/settings/'
-      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
-      parentRoute: typeof AuthenticatedRoute
+    '/signup/': {
+      id: '/signup/'
+      path: '/'
+      fullPath: '/signup/'
+      preLoaderRoute: typeof SignupIndexRouteImport
+      parentRoute: typeof SignupRouteRoute
+    }
+    '/signup/verify': {
+      id: '/signup/verify'
+      path: '/verify'
+      fullPath: '/signup/verify'
+      preLoaderRoute: typeof SignupVerifyRouteImport
+      parentRoute: typeof SignupRouteRoute
     }
     '/_authenticated/expenses/': {
       id: '/_authenticated/expenses/'
       path: '/'
       fullPath: '/expenses/'
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
-      parentRoute: typeof AuthenticatedExpensesRouteRoute
-    }
-    '/_authenticated/settings/notifications': {
-      id: '/_authenticated/settings/notifications'
-      path: '/settings/notifications'
-      fullPath: '/settings/notifications'
-      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings/manage-subjects': {
-      id: '/_authenticated/settings/manage-subjects'
-      path: '/settings/manage-subjects'
-      fullPath: '/settings/manage-subjects'
-      preLoaderRoute: typeof AuthenticatedSettingsManageSubjectsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/settings/_elevated': {
-      id: '/_authenticated/settings/_elevated'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsElevatedRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/expenses/search': {
-      id: '/_authenticated/expenses/search'
-      path: '/search'
-      fullPath: '/expenses/search'
-      preLoaderRoute: typeof AuthenticatedExpensesSearchRouteImport
       parentRoute: typeof AuthenticatedExpensesRouteRoute
     }
     '/_authenticated/expenses/$expenseId': {
@@ -414,6 +379,41 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdRouteRouteImport
       parentRoute: typeof AuthenticatedExpensesRouteRoute
     }
+    '/_authenticated/expenses/search': {
+      id: '/_authenticated/expenses/search'
+      path: '/search'
+      fullPath: '/expenses/search'
+      preLoaderRoute: typeof AuthenticatedExpensesSearchRouteImport
+      parentRoute: typeof AuthenticatedExpensesRouteRoute
+    }
+    '/_authenticated/settings/': {
+      id: '/_authenticated/settings/'
+      path: '/settings'
+      fullPath: '/settings/'
+      preLoaderRoute: typeof AuthenticatedSettingsIndexRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/_elevated': {
+      id: '/_authenticated/settings/_elevated'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsElevatedRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/manage-subjects': {
+      id: '/_authenticated/settings/manage-subjects'
+      path: '/settings/manage-subjects'
+      fullPath: '/settings/manage-subjects'
+      preLoaderRoute: typeof AuthenticatedSettingsManageSubjectsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings/notifications': {
+      id: '/_authenticated/settings/notifications'
+      path: '/settings/notifications'
+      fullPath: '/settings/notifications'
+      preLoaderRoute: typeof AuthenticatedSettingsNotificationsRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
     '/_authenticated/expenses/$expenseId/': {
       id: '/_authenticated/expenses/$expenseId/'
       path: '/'
@@ -421,18 +421,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdIndexRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
-    '/_authenticated/settings/_elevated/passkey': {
-      id: '/_authenticated/settings/_elevated/passkey'
-      path: '/passkey'
-      fullPath: '/settings/passkey'
-      preLoaderRoute: typeof AuthenticatedSettingsElevatedPasskeyRouteImport
-      parentRoute: typeof AuthenticatedSettingsElevatedRoute
-    }
-    '/_authenticated/expenses/$expenseId/view': {
-      id: '/_authenticated/expenses/$expenseId/view'
-      path: '/view'
-      fullPath: '/expenses/$expenseId/view'
-      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdViewRouteImport
+    '/_authenticated/expenses/$expenseId/geolocation': {
+      id: '/_authenticated/expenses/$expenseId/geolocation'
+      path: '/geolocation'
+      fullPath: '/expenses/$expenseId/geolocation'
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdGeolocationRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
     '/_authenticated/expenses/$expenseId/start': {
@@ -442,12 +435,19 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedExpensesExpenseIdStartRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
     }
-    '/_authenticated/expenses/$expenseId/geolocation': {
-      id: '/_authenticated/expenses/$expenseId/geolocation'
-      path: '/geolocation'
-      fullPath: '/expenses/$expenseId/geolocation'
-      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdGeolocationRouteImport
+    '/_authenticated/expenses/$expenseId/view': {
+      id: '/_authenticated/expenses/$expenseId/view'
+      path: '/view'
+      fullPath: '/expenses/$expenseId/view'
+      preLoaderRoute: typeof AuthenticatedExpensesExpenseIdViewRouteImport
       parentRoute: typeof AuthenticatedExpensesExpenseIdRouteRoute
+    }
+    '/_authenticated/settings/_elevated/passkey': {
+      id: '/_authenticated/settings/_elevated/passkey'
+      path: '/passkey'
+      fullPath: '/settings/passkey'
+      preLoaderRoute: typeof AuthenticatedSettingsElevatedPasskeyRouteImport
+      parentRoute: typeof AuthenticatedSettingsElevatedRoute
     }
     '/_authenticated/expenses/$expenseId/items/$indexStr': {
       id: '/_authenticated/expenses/$expenseId/items/$indexStr'
