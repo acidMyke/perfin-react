@@ -1,4 +1,4 @@
-import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray, explainQueryPlan } from '#server/lib/db';
+import { caseWhen, jsonGroupArray, sumAsNumber, max, jsonGroupObjectArray } from '#server/lib/db';
 import { and, eq, desc, inArray, sql, countDistinct, gte, isNull, or, isNotNull, SQL, notExists } from 'drizzle-orm';
 import { avg, count, type SQLWrapper } from 'drizzle-orm';
 import { alias } from 'drizzle-orm/sqlite-core';
@@ -23,6 +23,9 @@ import {
   getSingleTextId,
   TEXT_KIND,
   type TextIdParamter,
+  type ADJ_NAME_TEXT_KIND,
+  type ITEM_NAME_TEXT_KIND,
+  createHighlightMap,
 } from '#server/lib/indexing';
 import { subDays, subWeeks } from 'date-fns';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
@@ -409,16 +412,20 @@ type SearchExpenseInput = z.infer<typeof searchExpenseInputSchema>;
 export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseInput) {
   const { db, userId } = ctx;
   const query = input.query.trim();
-  if (query.length < 3) return { result: [] };
+  if (query.length < 3) return { results: [], highlightMap: [] };
 
   const searchChunks = generateSearchChunks(query, { unlimited: true, skipShortChunks: true });
+  type ChildrenTextKind = typeof ITEM_NAME_TEXT_KIND | typeof ADJ_NAME_TEXT_KIND;
 
   const selectQuery = db
     .select({
       expenseId: expenseTextsTable.expenseId,
       shopName: expensesTable.shopName,
       shopMall: expensesTable.shopMall,
-      childrens: jsonGroupObjectArray({ kind: textsTable.kind, text: textsTable.text }, { distinct: true }),
+      childrens: jsonGroupObjectArray(
+        { kind: sql<ChildrenTextKind>`${textsTable.kind}`, text: textsTable.text },
+        { distinct: true },
+      ),
       amountCents: expensesTable.amountCents,
       billedAt: expensesTable.billedAt,
       chunkCount: count(textChunksTable.chunk).as('chunk_count'),
@@ -438,6 +445,16 @@ export async function searchExpense(ctx: ProtectedContext, input: SearchExpenseI
     .groupBy(expenseTextsTable.expenseId)
     .orderBy(desc(sql`recency_score + chunk_count`));
 
-  await explainQueryPlan(db, selectQuery);
-  return await selectQuery;
+  const results = await selectQuery;
+
+  const texts = new Set<string>();
+
+  for (const res of results) {
+    if (res.shopMall) texts.add(res.shopMall);
+    if (res.shopName) texts.add(res.shopName);
+    for (const { text } of res.childrens) texts.add(text);
+  }
+
+  const highlightMap = [...createHighlightMap([...texts], searchChunks)];
+  return { results, highlightMap };
 }

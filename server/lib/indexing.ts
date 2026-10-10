@@ -146,7 +146,7 @@ export async function createGetTextId(...params: TextIdParamter[]) {
   return (param: TextIdParamter) => textIdMap.get(getTextParamKey(param));
 }
 
-const WORD_REGEX = /[^a-zA-Z0-9'-]+/g;
+const WORD_REGEX = /[^a-zA-Z0-9'-]+/;
 
 export function generateSearchChunks(text: string, { unlimited = false, skipShortChunks = false } = {}) {
   const phrases = text.trim().toLowerCase().split(WORD_REGEX);
@@ -165,40 +165,64 @@ export function generateSearchChunks(text: string, { unlimited = false, skipShor
 }
 
 type HighlightInterval = { start: number; end: number };
+const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
-export function getHighlightMap(texts: string[], chunks: string[]): Record<string, HighlightInterval[]> {
-  const highlightMap: Record<string, HighlightInterval[]> = {};
+export function createHighlightMap(texts: string[], chunks: string[]): Map<string, HighlightInterval[]> {
+  const highlightMap = new Map<string, HighlightInterval[]>();
 
-  if (!chunks || chunks.length === 0) {
-    texts.forEach(text => (highlightMap[text] = []));
-    return highlightMap;
-  }
+  if (!chunks || chunks.length === 0) return highlightMap;
+
+  // 1. Clean, deduplicate, and sort chunks by length descending
+  // Sorting longest-to-shortest ensures the regex prefers matching "meat" over "mea" if both exist
+  const validChunks = Array.from(new Set(chunks.filter(Boolean)));
+  if (validChunks.length === 0) return highlightMap;
+
+  validChunks.sort((a, b) => b.length - a.length);
+
+  // 2. Build a single lookahead regex: /(?=(mea|eat|veg|2|1))/gi
+  // The lookahead (?=...) is the magic trick that allows overlapping matches
+  const pattern = validChunks.map(escapeRegExp).join('|');
+  const regex = new RegExp(`(?=(${pattern}))`, 'gi');
 
   for (const text of texts) {
-    if (!text) {
-      highlightMap[text] = [];
+    if (!text || highlightMap.has(text)) continue;
+
+    const intervals: HighlightInterval[] = [];
+    regex.lastIndex = 0; // Reset regex state for the new string
+    let match;
+
+    // 3. Single pass over the text
+    while ((match = regex.exec(text)) !== null) {
+      const matchedChunk = match[1]; // The actual text that matched
+
+      intervals.push({
+        start: match.index,
+        end: match.index + matchedChunk.length,
+      });
+
+      // Advance by exactly 1 character to catch overlaps (e.g., catching "eat" right after "mea")
+      regex.lastIndex = match.index + 1;
+    }
+
+    if (intervals.length === 0) {
+      highlightMap.set(text, []);
       continue;
     }
 
-    const lowerText = text.toLowerCase();
-    const intervals: HighlightInterval[] = [];
+    // 4. Merge intervals (No sorting needed! Regex naturally outputs them left-to-right)
+    const merged: HighlightInterval[] = [intervals[0]];
+    for (let i = 1; i < intervals.length; i++) {
+      const current = intervals[i];
+      const last = merged[merged.length - 1];
 
-    let match;
-
-    while ((match = WORD_REGEX.exec(lowerText)) !== null) {
-      const currentWord = match[0];
-
-      const hasMatch = chunks.some(chunk => currentWord.includes(chunk));
-
-      if (hasMatch) {
-        intervals.push({
-          start: match.index,
-          end: match.index + currentWord.length,
-        });
+      if (current.start <= last.end) {
+        last.end = Math.max(last.end, current.end); // Merge overlap
+      } else {
+        merged.push(current);
       }
     }
 
-    highlightMap[text] = intervals;
+    highlightMap.set(text, merged);
   }
 
   return highlightMap;
