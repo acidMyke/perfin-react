@@ -455,3 +455,6 @@ export function usePushIntoOptions() {
     pushIntoOptions: (allocOption: PushIntoOptionsValueArg) => pushIntoOptionsMutation.mutateAsync(allocOption),
   };
 }
+
+export const formatAdjustmentName = (name: string | null | undefined) =>
+  !name ? 'Nameless adjustment' : name === GST_NAME ? 'GST' : name === SERVICE_CHARGE_NAME ? 'Service charge' : name;

@@ -1,12 +1,11 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
+import { formatAdjustmentName, invalidateAndRedirectBackToList, useExpenseForm } from './-common';
 import { useSelector } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat, formatBps } from '#client/utils';
 import { useMutation } from '@tanstack/react-query';
 import { Fragment, useRef } from 'react';
 import { trpc } from '#client/trpc';
 import { BillTotal } from './-common/BillTotal';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -77,16 +76,9 @@ function RouteComponent() {
                 if (!adjustmentResult) {
                   return undefined;
                 }
-                const displayName = !name
-                  ? 'Nameless adjustment'
-                  : name === GST_NAME
-                    ? 'GST'
-                    : name === SERVICE_CHARGE_NAME
-                      ? 'Service charge'
-                      : name;
                 return (
                   <Fragment key={itemId + adjId}>
-                    <span className='col-start-1 indent-4 text-sm'>{displayName}</span>
+                    <span className='col-start-1 indent-4 text-sm'>{formatAdjustmentName(name)}</span>
                     <span className='text-sm'>{rateBps && formatBps(rateBps)}</span>
                     <span className='col-start-4 text-right text-sm'>
                       {adjustmentResult && formatCents(adjustmentResult?.amountCents)}
