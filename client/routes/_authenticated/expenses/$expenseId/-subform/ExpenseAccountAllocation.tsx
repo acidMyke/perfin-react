@@ -75,7 +75,13 @@ export const ExpenseAccountAllocationSubForm = withForm({
                           <Plus />
                         </button>
 
-                        <button className='btn-ghost btn btn-sm px-0' onClick={() => arrayField.removeValue(idx)}>
+                        <button
+                          className='btn-ghost btn btn-sm px-0'
+                          onClick={() => {
+                            if (length !== 1) arrayField.removeValue(idx);
+                            else form.setFieldValue(`accountAllocs[${idx}].account`, undefined);
+                          }}
+                        >
                           <X />
                         </button>
 
