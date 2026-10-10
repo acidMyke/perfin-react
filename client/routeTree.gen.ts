@@ -20,7 +20,6 @@ import { Route as AuthenticatedDashboardRouteImport } from './routes/_authentica
 import { Route as AuthenticatedExpensesRouteRouteImport } from './routes/_authenticated/expenses/route'
 import { Route as AuthenticatedSettingsIndexRouteImport } from './routes/_authenticated/settings/index'
 import { Route as AuthenticatedExpensesIndexRouteImport } from './routes/_authenticated/expenses/index'
-import { Route as AuthenticatedSettingsReindexRouteImport } from './routes/_authenticated/settings/reindex'
 import { Route as AuthenticatedSettingsNotificationsRouteImport } from './routes/_authenticated/settings/notifications'
 import { Route as AuthenticatedSettingsManageSubjectsRouteImport } from './routes/_authenticated/settings/manage-subjects'
 import { Route as AuthenticatedSettingsElevatedRouteImport } from './routes/_authenticated/settings/_elevated'
@@ -89,12 +88,6 @@ const AuthenticatedExpensesIndexRoute =
     id: '/',
     path: '/',
     getParentRoute: () => AuthenticatedExpensesRouteRoute,
-  } as any)
-const AuthenticatedSettingsReindexRoute =
-  AuthenticatedSettingsReindexRouteImport.update({
-    id: '/settings/reindex',
-    path: '/settings/reindex',
-    getParentRoute: () => AuthenticatedRoute,
   } as any)
 const AuthenticatedSettingsNotificationsRoute =
   AuthenticatedSettingsNotificationsRouteImport.update({
@@ -177,7 +170,6 @@ export interface FileRoutesByFullPath {
   '/settings': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
-  '/settings/reindex': typeof AuthenticatedSettingsReindexRoute
   '/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/settings/': typeof AuthenticatedSettingsIndexRoute
   '/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
@@ -198,7 +190,6 @@ export interface FileRoutesByTo {
   '/settings': typeof AuthenticatedSettingsIndexRoute
   '/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
-  '/settings/reindex': typeof AuthenticatedSettingsReindexRoute
   '/expenses': typeof AuthenticatedExpensesIndexRoute
   '/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
   '/expenses/$expenseId/start': typeof AuthenticatedExpensesExpenseIdStartRoute
@@ -223,7 +214,6 @@ export interface FileRoutesById {
   '/_authenticated/settings/_elevated': typeof AuthenticatedSettingsElevatedRouteWithChildren
   '/_authenticated/settings/manage-subjects': typeof AuthenticatedSettingsManageSubjectsRoute
   '/_authenticated/settings/notifications': typeof AuthenticatedSettingsNotificationsRoute
-  '/_authenticated/settings/reindex': typeof AuthenticatedSettingsReindexRoute
   '/_authenticated/expenses/': typeof AuthenticatedExpensesIndexRoute
   '/_authenticated/settings/': typeof AuthenticatedSettingsIndexRoute
   '/_authenticated/expenses/$expenseId/geolocation': typeof AuthenticatedExpensesExpenseIdGeolocationRoute
@@ -249,7 +239,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/manage-subjects'
     | '/settings/notifications'
-    | '/settings/reindex'
     | '/expenses/'
     | '/settings/'
     | '/expenses/$expenseId/geolocation'
@@ -270,7 +259,6 @@ export interface FileRouteTypes {
     | '/settings'
     | '/settings/manage-subjects'
     | '/settings/notifications'
-    | '/settings/reindex'
     | '/expenses'
     | '/expenses/$expenseId/geolocation'
     | '/expenses/$expenseId/start'
@@ -294,7 +282,6 @@ export interface FileRouteTypes {
     | '/_authenticated/settings/_elevated'
     | '/_authenticated/settings/manage-subjects'
     | '/_authenticated/settings/notifications'
-    | '/_authenticated/settings/reindex'
     | '/_authenticated/expenses/'
     | '/_authenticated/settings/'
     | '/_authenticated/expenses/$expenseId/geolocation'
@@ -391,13 +378,6 @@ declare module '@tanstack/react-router' {
       fullPath: '/expenses/'
       preLoaderRoute: typeof AuthenticatedExpensesIndexRouteImport
       parentRoute: typeof AuthenticatedExpensesRouteRoute
-    }
-    '/_authenticated/settings/reindex': {
-      id: '/_authenticated/settings/reindex'
-      path: '/settings/reindex'
-      fullPath: '/settings/reindex'
-      preLoaderRoute: typeof AuthenticatedSettingsReindexRouteImport
-      parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/settings/notifications': {
       id: '/_authenticated/settings/notifications'
@@ -560,7 +540,6 @@ interface AuthenticatedRouteChildren {
   AuthenticatedSettingsElevatedRoute: typeof AuthenticatedSettingsElevatedRouteWithChildren
   AuthenticatedSettingsManageSubjectsRoute: typeof AuthenticatedSettingsManageSubjectsRoute
   AuthenticatedSettingsNotificationsRoute: typeof AuthenticatedSettingsNotificationsRoute
-  AuthenticatedSettingsReindexRoute: typeof AuthenticatedSettingsReindexRoute
   AuthenticatedSettingsIndexRoute: typeof AuthenticatedSettingsIndexRoute
 }
 
@@ -573,7 +552,6 @@ const AuthenticatedRouteChildren: AuthenticatedRouteChildren = {
     AuthenticatedSettingsManageSubjectsRoute,
   AuthenticatedSettingsNotificationsRoute:
     AuthenticatedSettingsNotificationsRoute,
-  AuthenticatedSettingsReindexRoute: AuthenticatedSettingsReindexRoute,
   AuthenticatedSettingsIndexRoute: AuthenticatedSettingsIndexRoute,
 }
 
