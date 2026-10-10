@@ -3,7 +3,7 @@ import { defaultExpenseAdjustment, useExpenseForm } from '.';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
 import { ChevronDown, ChevronUp, Unlink, X } from 'lucide-react';
 import { currencyNumberFormat, formatBps, formatCents, percentageNumberFormat } from '#client/utils';
-import { useStore } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { ExpenseSuggestableField } from './ExpenseSuggestableField';
 
 const AdjustmnetResult = ({ adjIndex, type }: { adjIndex: number; type: 'amountCents' | 'rateBps' }) => {
@@ -28,12 +28,11 @@ export const AdjustmentDetailFieldGroup = withFieldGroup({
     onSwapClick: (_: number) => {},
   },
   render({ group, adjIndex, shopName, onRemoveClick, onPricingChange, toggleAdjustmentType, onSwapClick }) {
-    const [isGst, isServiceCharge, isRateAdjustment, expenseItemId] = useStore(group.store, state => [
-      state.values?.name === GST_NAME,
-      state.values?.name === SERVICE_CHARGE_NAME,
-      state.values?.rateBps == null,
-      state.values?.expenseItemId,
-    ]);
+    const isGst = useSelector(group.store, state => state.values?.name === GST_NAME);
+    const isServiceCharge = useSelector(group.store, state => state.values?.name === SERVICE_CHARGE_NAME);
+    const isRateAdjustment = useSelector(group.store, state => state.values?.rateBps == null);
+    const expenseItemId = useSelector(group.store, state => state.values?.expenseItemId);
+
     const isItemBounded = !!expenseItemId;
 
     return (
