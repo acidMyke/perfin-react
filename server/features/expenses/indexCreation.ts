@@ -303,6 +303,24 @@ export async function getLatestIndexGen(db: AppDatabase) {
   return version;
 }
 
+function countUpserts({
+  textsUpserts,
+  textChunkUpserts,
+  expenseTextsUpserts,
+  geoCellsUpserts,
+  ctxTextsUpserts,
+  geoTextsUpserts,
+}: Awaited<ReturnType<typeof prepareSearchables>>) {
+  return {
+    textsCount: textsUpserts.length,
+    textChunkCount: textChunkUpserts.length,
+    expenseTextsCount: expenseTextsUpserts.length,
+    geoCellsCount: geoCellsUpserts.length,
+    ctxTextsCount: ctxTextsUpserts.length,
+    geoTextsCount: geoTextsUpserts.length,
+  };
+}
+
 export async function processSaveExpenseSearchIndexing(
   collector: BatchCollector,
   db: AppDatabase,
@@ -314,6 +332,7 @@ export async function processSaveExpenseSearchIndexing(
   const records = await prepareSearchables(searchables, version);
   queueDeleteExpenseTextsByExpenseId(collector, db, expense.id);
   queueSaveSearchables(collector, db, records);
+  return countUpserts(records);
 }
 
 export async function processReindexing(
@@ -326,6 +345,7 @@ export async function processReindexing(
   if (searchables.length <= 0) return;
   const records = await prepareSearchables(searchables, currentVersion);
   queueSaveSearchables(collector, db, records);
+  return countUpserts(records);
 }
 
 export async function cleanupOldIndex(db: AppDatabase, currentGen: number) {

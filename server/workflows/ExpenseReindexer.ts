@@ -35,7 +35,7 @@ export class ExpenseReindexer extends WorkflowEntrypoint<Env, undefined> {
         const expenses = await this.retrieveExpensesWithChilds(db, cursorId);
         if (expenses.length == 0) return { cursorId, hasMore: false };
         const collector = new BatchCollector();
-        await processReindexing(collector, db, expenses, generation);
+        const counts = await processReindexing(collector, db, expenses, generation);
         collector.push(
           db
             .update(searchIndexGenerationsTable)
@@ -47,6 +47,7 @@ export class ExpenseReindexer extends WorkflowEntrypoint<Env, undefined> {
         return {
           hasMore: expenses.length === ExpenseReindexer.limit,
           cursorId: expenses.length > 0 ? expenses[expenses.length - 1].id : undefined,
+          counts,
         };
       });
 
