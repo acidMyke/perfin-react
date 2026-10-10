@@ -146,21 +146,60 @@ export async function createGetTextId(...params: TextIdParamter[]) {
   return (param: TextIdParamter) => textIdMap.get(getTextParamKey(param));
 }
 
-export function generateSearchChunks(text: string, { unlimited = false, skipShortChunks = false } = {}) {
-  const phrases = text
-    .trim()
-    .toLowerCase()
-    .split(/[^a-zA-Z0-9'-]+/);
+const WORD_REGEX = /[^a-zA-Z0-9'-]+/g;
 
-  const chunks: string[] = [];
+export function generateSearchChunks(text: string, { unlimited = false, skipShortChunks = false } = {}) {
+  const phrases = text.trim().toLowerCase().split(WORD_REGEX);
+
+  const chunks = new Set<string>();
   for (const phrase of phrases) {
     if (!phrase) continue;
     const numChunk = unlimited ? phrase.length : Math.min(phrase.length, 10);
     let idx = skipShortChunks ? Math.min(phrase.length - 1, 2) : 0;
     for (; idx < numChunk; idx++) {
-      chunks.push(phrase.slice(Math.max(idx - 2, 0), idx + 1));
+      chunks.add(phrase.slice(Math.max(idx - 2, 0), idx + 1));
     }
   }
 
-  return chunks;
+  return [...chunks];
+}
+
+type HighlightInterval = { start: number; end: number };
+
+export function getHighlightMap(texts: string[], chunks: string[]): Record<string, HighlightInterval[]> {
+  const highlightMap: Record<string, HighlightInterval[]> = {};
+
+  if (!chunks || chunks.length === 0) {
+    texts.forEach(text => (highlightMap[text] = []));
+    return highlightMap;
+  }
+
+  for (const text of texts) {
+    if (!text) {
+      highlightMap[text] = [];
+      continue;
+    }
+
+    const lowerText = text.toLowerCase();
+    const intervals: HighlightInterval[] = [];
+
+    let match;
+
+    while ((match = WORD_REGEX.exec(lowerText)) !== null) {
+      const currentWord = match[0];
+
+      const hasMatch = chunks.some(chunk => currentWord.includes(chunk));
+
+      if (hasMatch) {
+        intervals.push({
+          start: match.index,
+          end: match.index + currentWord.length,
+        });
+      }
+    }
+
+    highlightMap[text] = intervals;
+  }
+
+  return highlightMap;
 }
