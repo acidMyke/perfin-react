@@ -1,4 +1,4 @@
-import type { AuthenticatorTransportFuture, CredentialDeviceType } from '@simplewebauthn/server';
+import type { CredentialDeviceType } from '@simplewebauthn/server';
 import { sql } from 'drizzle-orm';
 import {
   sqliteTable,
@@ -105,7 +105,7 @@ export const passkeysTable = sqliteTable(
     counter: integer().notNull(),
     deviceType: text().notNull().$type<CredentialDeviceType>(),
     backedUp: boolean().notNull(),
-    transports: text({ mode: 'json' }).notNull().$type<AuthenticatorTransportFuture[]>().default([]),
+    transports: text({ mode: 'json' }).notNull().$type<string[]>().default([]),
     nickname: text(),
   },
   t => [index('idx_passkeys_user_id').on(t.userId)],
