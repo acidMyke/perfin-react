@@ -1,7 +1,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "perfin-local",
-  "compatibility_date": "2026-07-01",
+  "compatibility_date": "2026-10-10",
   "workers_dev": false,
   "preview_urls": false,
   "compatibility_flags": ["nodejs_compat"],
@@ -11,6 +11,7 @@
   },
   "main": "./server/index.ts",
   "vars": {
+    "DB_PROXY_LOGGING": true,
     "TOKEN_EXPIRE_DAYS": 30,
     "TOKEN_COOKIE_NAME": "token",
     "EMAIL_SENDER_NAME": "PreProd-Perfin",
@@ -53,14 +54,9 @@
   ],
   "workflows": [
     {
-      "name": "perfin-staging-v2-data-migrator",
-      "binding": "V2_MIGRATOR",
-      "class_name": "VersionTwoDataMigrator",
-    },
-    {
       "name": "perfin-staging-expense-reindexer",
       "binding": "EXPENSE_REINDEXER",
-      "class_name": "UserExpenseReindexer",
+      "class_name": "ExpenseReindexer",
     },
   ],
   "env": {
@@ -110,14 +106,9 @@
       ],
       "workflows": [
         {
-          "name": "perfin-v2-data-migrator",
-          "binding": "V2_MIGRATOR",
-          "class_name": "VersionTwoDataMigrator",
-        },
-        {
           "name": "perfin-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
-          "class_name": "UserExpenseReindexer",
+          "class_name": "ExpenseReindexer",
         },
       ],
     },
@@ -166,14 +157,9 @@
       ],
       "workflows": [
         {
-          "name": "perfin-staging-v2-data-migrator",
-          "binding": "V2_MIGRATOR",
-          "class_name": "VersionTwoDataMigrator",
-        },
-        {
           "name": "perfin-staging-expense-reindexer",
           "binding": "EXPENSE_REINDEXER",
-          "class_name": "UserExpenseReindexer",
+          "class_name": "ExpenseReindexer",
         },
       ],
     },

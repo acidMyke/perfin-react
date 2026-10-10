@@ -1,19 +1,21 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
+import { pushHistory, SET_VAL_NO_TRACK, useExpenseForm } from './-common';
+import { useEffect, useMemo, useRef, useState, type Dispatch, type SetStateAction } from 'react';
+import { trpc, type RouterInputs, type RouterOutputs } from '#client/trpc';
+import { skipToken, useQuery } from '@tanstack/react-query';
 import {
-  pushHistory,
-  useCompleteShopDetailMutation,
-  useExpenseForm,
-  type ExpenseFormApi,
-  type TrackableFieldName,
-} from './-common';
-import { useCallback, useEffect, useMemo, useState, type Dispatch, type SetStateAction } from 'react';
-import { trpc, type RouterOutputs } from '#client/trpc';
-import { skipToken, useQuery, useSuspenseQuery } from '@tanstack/react-query';
-import { distanceBetween, formatDistance, SG_CENTER, toLatLng, type Coordinate } from '#client/utils';
-import { ArrowRight, Building, Store } from 'lucide-react';
+  distanceBetween,
+  formatDistance,
+  isLocationExceedBoundaries,
+  SG_CENTER,
+  toLatLng,
+  type Coordinate,
+} from '#client/utils';
+import { ArrowRight } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
-import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
+import { ShopNameSubForm } from './-subform/ExpenseShopName';
+import { MallNameSubForm } from './-subform/ExpenseMallName';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start')({
   component: RouteComponent,
@@ -26,245 +28,203 @@ export const Route = createFileRoute('/_authenticated/expenses/$expenseId/start'
 
 type Shop = RouterOutputs['expense']['searchShopByLocation']['result'][number];
 
-type ShopResult = Shop & { distance: number };
-type MallResult = { mallName: string; latitude: number; longitude: number; distance: number; shopCount: number };
+type ResultScoreFactors = { distance: number };
+type ShopResult = Shop & ResultScoreFactors;
 
-function formatCoordinate(coord: { latitude: number; longitude: number; accuracy?: number }) {
-  const { latitude, longitude, accuracy } = coord;
-  let coordString = `${latitude.toPrecision(8)}, ${longitude.toPrecision(8)}`;
-  if (accuracy) {
-    coordString += ' ' + formatDistance(accuracy);
-  }
-  return coordString;
+function formatCoordinate(coord: { latitude: number; longitude: number }) {
+  const { latitude, longitude } = coord;
+  return `${latitude.toPrecision(6)}, ${longitude.toPrecision(6)}`;
 }
 
 function RouteComponent() {
-  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
-  const navigate = Route.useNavigate();
   const form = useExpenseForm();
   const [showMap, setShowMap] = useState(false);
-  const [customCoordinate, setCustomCoordinate] = useState<Coordinate>();
-  const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 100 });
-  const coordinateOrSkip = customCoordinate ?? currentLocationQuery.data ?? skipToken;
-  const shopSuggestionsMutation = useQuery(trpc.expense.searchShopByLocation.queryOptions(coordinateOrSkip));
-  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
+  const currentLocationQuery = useGeolocationWatcher({ distanceThreshold: 40, timeThreshold: 5000 });
+  const [customCoordinate, setCustomCoordinate] = useState(() => {
+    const { latitude, longitude } = form.getFieldValue('geolocation');
+    if (latitude && longitude) return { latitude, longitude };
+    return undefined;
+  });
+  const coordinate =
+    customCoordinate ??
+    (currentLocationQuery.data
+      ? { latitude: currentLocationQuery.data.latitude, longitude: currentLocationQuery.data.longitude }
+      : undefined);
 
-  const continueToMainForm = useCallback(
-    (args?: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => {
-      navigate({ to: '/expenses/$expenseId' });
-      if (args && 'isOnline' in args) {
-        form.setFieldValue('type', 'online');
-      } else {
-        const { shopMall, shopName } = args ?? {};
-        const fields: TrackableFieldName[] = [];
-        if (currentLocationQuery.data) {
-          fields.push('geolocation');
-          const { latitude, longitude, accuracy } = currentLocationQuery.data;
-          form.setFieldValue(
-            'geolocation',
-            { isError: false, latitude, longitude, accuracy },
-            { dontValidate: true, dontRunListeners: true },
-          );
-        }
-        form.setFieldValue('type', 'physical', { dontValidate: true, dontRunListeners: true });
-        if (shopName) {
-          completeShopDetailMutation.mutateAsync({ shopName });
-          fields.push('shopName');
-          form.setFieldValue('shopName', shopName, { dontValidate: true, dontRunListeners: true });
-        }
-        if (shopMall) {
-          fields.push('shopMall');
-          form.setFieldValue('shopMall', shopMall, { dontValidate: true, dontRunListeners: true });
-        }
-        pushHistory(form, fields);
-      }
-    },
-    [form],
-  );
-
-  const normalizedResult = useMemo(() => {
-    if (coordinateOrSkip === skipToken || !shopSuggestionsMutation.data) return;
-    const { latitude: userLat, longitude: userLng } = coordinateOrSkip;
-    const shops: ShopResult[] = [];
-    const mallMap = new Map<string, { latSum: number; lngSum: number; count: number }>();
-    for (const shop of shopSuggestionsMutation.data.result) {
-      if (!shop.shopName) continue;
-      const distance = distanceBetween(userLat, userLng, shop.latitude, shop.longitude);
-      shops.push({ ...shop, distance });
-
-      if (!shop.shopMall) continue;
-
-      const mall = mallMap.get(shop.shopMall) ?? { latSum: 0, lngSum: 0, count: 0 };
-      if (!mallMap.has(shop.shopMall)) mallMap.set(shop.shopMall, mall);
-      mall.latSum += shop.latitude;
-      mall.lngSum += shop.longitude;
-      mall.count++;
-    }
-
-    const malls = Array.from(mallMap, ([mallName, m]) => {
-      const latitude = m.latSum / m.count;
-      const longitude = m.lngSum / m.count;
-      const distance = distanceBetween(userLat, userLng, latitude, longitude);
-      return { mallName, latitude, longitude, shopCount: m.count, distance } satisfies MallResult;
-    });
-
-    shops.sort((a, b) => a.distance - b.distance);
-    malls.sort((a, b) => a.distance - b.distance);
-
-    return { shops, malls };
-  }, [shopSuggestionsMutation.data, currentLocationQuery.data]);
+  const coordinateRef = useRef(coordinate);
+  coordinateRef.current = coordinate;
 
   useEffect(() => {
-    form.setFieldValue('billedAt', new Date(), { dontUpdateMeta: true, dontRunListeners: true });
+    return () => {
+      const coordinate = coordinateRef.current;
+      if (coordinate) {
+        form.setFieldValue('geolocation', { ...coordinate!, isError: false });
+      } else {
+        form.setFieldValue('geolocation', {
+          latitude: null,
+          longitude: null,
+          isError: currentLocationQuery.error !== null,
+        });
+      }
+    };
   }, []);
 
   return (
-    <div className='mb-20'>
-      {customCoordinate ? (
-        <p className='mb-2'>Custom coordinate: {formatCoordinate(customCoordinate)}</p>
-      ) : (
-        <p className='mb-2'>
-          Current coordinate:{' '}
-          {currentLocationQuery.isPending && <span className='skeleton skeleton-text'>Retriving location...</span>}
-          {currentLocationQuery.isError && <span>Error: {currentLocationQuery.error?.getFormmatedError()}</span>}
-          {currentLocationQuery.data && <span className=''>{formatCoordinate(currentLocationQuery.data)}</span>}
-        </p>
-      )}
-      <div className='mb-6 flex gap-x-4'>
-        <button className='btn btn-primary w-5/12 grow' onClick={() => setShowMap(v => !v)}>
-          {showMap ? 'Hide map' : 'Change coordinate'}
-        </button>
-        <button className='btn btn-secondary w-5/12 grow' onClick={() => continueToMainForm({ isOnline: true })}>
-          Online
-        </button>
+    <div className='px-2'>
+      <form.Field
+        name='type'
+        children={field => (
+          <div className='join mb-4 w-full'>
+            <button
+              className='join-item btn btn-primary btn-soft data-[active=true]:btn-active grow'
+              aria-label='Physical'
+              onClick={() => field.setValue('physical')}
+              data-active={field.state.value === 'physical'}
+            >
+              Physical
+            </button>
+            <button
+              className='join-item btn btn-primary btn-soft data-[active=true]:btn-active grow'
+              aria-label='Online'
+              onClick={() => field.setValue('online')}
+              data-active={field.state.value === 'online'}
+            >
+              Online
+            </button>
+          </div>
+        )}
+      />
+
+      <form.Subscribe
+        selector={state => [state.values.type === 'physical']}
+        children={([isPhysical]) => (
+          <>
+            {!isPhysical ? (
+              <p className='mb-2' />
+            ) : customCoordinate ? (
+              <p className='mb-2 h-8'>
+                Custom coordinate: {formatCoordinate(customCoordinate)}
+                <button className='btn btn-link btn-xs inline' onClick={() => setShowMap(!showMap)}>
+                  {showMap ? 'Hide map' : 'Change'}
+                </button>
+                {!showMap && (
+                  <button className='btn btn-link btn-xs inline' onClick={() => setCustomCoordinate(undefined)}>
+                    Revert
+                  </button>
+                )}
+              </p>
+            ) : (
+              <p className='mb-2 h-8'>
+                Current coordinate:{' '}
+                {currentLocationQuery.isPending && (
+                  <span className='skeleton skeleton-text'>Retriving location...</span>
+                )}
+                {currentLocationQuery.isError && <span>Error: {currentLocationQuery.error?.getFormmatedError()}</span>}
+                {currentLocationQuery.data && <span className=''>{formatCoordinate(currentLocationQuery.data)}</span>}
+                <button className='btn btn-link btn-xs inline' onClick={() => setShowMap(!showMap)}>
+                  {showMap ? 'Hide map' : 'Change'}
+                </button>
+              </p>
+            )}
+
+            {isPhysical && showMap && (
+              <CoordinatePicker
+                currentLocationQuery={currentLocationQuery}
+                customCoordinate={customCoordinate}
+                setCustomCoordinate={setCustomCoordinate}
+              />
+            )}
+            <NearbyResultList
+              isOnline={!isPhysical}
+              coordinate={coordinate}
+              onShopClick={({ shopName, mallName }) => {
+                form.setFieldValue('shopName', shopName, SET_VAL_NO_TRACK);
+                form.setFieldValue('shopMall', mallName, SET_VAL_NO_TRACK);
+                pushHistory(form, ['shopName', 'shopMall']);
+              }}
+            />
+
+            <div className='my-2 flex gap-4'>
+              {isPhysical && <MallNameSubForm form={form} coordinate={coordinate} containerCn='grow w-1/3' />}
+              <ShopNameSubForm form={form} coordinate={coordinate} containerCn='grow w-1/3' />
+            </div>
+          </>
+        )}
+      />
+
+      <div className='my-2 flex justify-around gap-4'>
+        <Link className='btn w-1/3 grow' to='/expenses'>
+          Cancel
+        </Link>
+        <Link className='btn btn-primary w-1/3 grow' to='/expenses/$expenseId' params={{ expenseId: 'create' }}>
+          Continue <ArrowRight />
+        </Link>
       </div>
-
-      {showMap && (
-        <CoordinatePicker
-          currentLocationQuery={currentLocationQuery}
-          customCoordinate={customCoordinate}
-          setCustomCoordinate={setCustomCoordinate}
-        />
-      )}
-
-      <p>Manual entry</p>
-      <ManualEntryFields
-        form={form}
-        onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
-      />
-
-      <p className='mt-6'>Pick from existing</p>
-      <NearbyResultList normalizedResult={normalizedResult} continueToMainForm={continueToMainForm} />
-
-      <Link className='btn mt-6 w-full' to='/expenses'>
-        Cancel
-      </Link>
-    </div>
-  );
-}
-
-type ManualEntryFieldsOptions = {
-  form: ExpenseFormApi;
-  onShopNameSelect: (shopName: string) => {};
-};
-
-function ManualEntryFields({ form, onShopNameSelect }: ManualEntryFieldsOptions) {
-  return (
-    <div className='mt-2 mb-2 flex gap-x-4'>
-      <ExpenseSuggestableField
-        form={form}
-        fields={{ text: 'shopName' }}
-        scope='shopName'
-        getContext={() => form.getFieldValue('shopMall')}
-        label='Shop name'
-        triggerChangeOnFocus
-        hideError
-        onSuggestionSelected={onShopNameSelect}
-      />
-      <ExpenseSuggestableField
-        form={form}
-        fields={{ text: 'shopMall' }}
-        scope='shopMall'
-        label='Mall'
-        triggerChangeOnFocus
-        hideError
-      />
-      <Link className='btn btn-primary' to='/expenses/$expenseId' params={{ expenseId: 'create' }}>
-        <ArrowRight />
-      </Link>
     </div>
   );
 }
 
 type NearbyResultListProps = {
-  normalizedResult: { shops: ShopResult[]; malls: MallResult[] } | undefined;
-  continueToMainForm: (args: { isOnline: true } | { shopName?: string | null; shopMall?: string | null }) => any;
+  isOnline: boolean;
+  coordinate: ReturnType<typeof useGeolocationWatcher>['data'] | Coordinate | undefined;
+  onShopClick: (shopDetail: { shopName: string | null; mallName: string | null }) => any;
 };
 
-function NearbyResultList({ normalizedResult, continueToMainForm }: NearbyResultListProps) {
+type Location = RouterInputs['expense']['searchShopByLocation'];
+
+function NearbyResultList({ isOnline, coordinate, onShopClick }: NearbyResultListProps) {
+  const [cachedLocation, setCachedLocation] = useState<Location | typeof skipToken>(skipToken);
+  const shopByLocationQuery = useQuery(trpc.expense.searchShopByLocation.queryOptions(cachedLocation));
+
+  useEffect(() => {
+    const location = coordinate ? { isOnline, ...coordinate } : isOnline ? { isOnline: true as const } : undefined;
+    if (isLocationExceedBoundaries(location, shopByLocationQuery.data?.locationBounds)) {
+      setCachedLocation(location ?? skipToken);
+    }
+  }, [shopByLocationQuery.data?.locationBounds, isOnline, coordinate?.latitude, coordinate?.longitude]);
+
+  const shops = useMemo(() => {
+    if (!coordinate || !shopByLocationQuery.data) return;
+    const { latitude: userLat, longitude: userLng } = coordinate;
+    const shops: ShopResult[] = [];
+    for (const shop of shopByLocationQuery.data.result) {
+      if (!shop.shopName) continue;
+      const distance = isOnline ? 0 : distanceBetween(userLat, userLng, shop.latitude, shop.longitude);
+      shops.push({ ...shop, distance });
+    }
+
+    shops.sort((a, b) => a.distance + a.recencyScore * -4 - (b.distance + b.recencyScore * -4));
+
+    return shops;
+  }, [shopByLocationQuery.data, coordinate?.latitude, coordinate?.longitude]);
+
   return (
-    <div className='flex w-full flex-row gap-x-1'>
-      <div className='w-lg border-r pr-1'>
-        <h3 className='menu-title text-primary text-center text-2xl'>
-          <Store size={30} className='inline' /> Shops
-        </h3>
+    <ul className={`menu rounded-box ${isOnline ? 'h-72' : 'h-64'} w-full flex-nowrap overflow-y-auto p-0`}>
+      {shops?.map(shop => (
+        <li key={`${shop.mallName}-${shop.shopName}`}>
+          <button onClick={() => onShopClick(shop)} className='flex justify-between pl-4'>
+            <div className='text-left'>
+              <div className='max-w-full font-medium text-ellipsis'>{shop.shopName}</div>
+              {!isOnline && <div className='text-xs opacity-60'>🏬 {shop.mallName ?? '<Unspecified>'}</div>}
+            </div>
 
-        <ul className='menu rounded-box w-full p-0'>
-          {normalizedResult?.shops.map(shop => (
-            <li key={`${shop.shopMall}-${shop.shopName}`}>
-              <button onClick={() => continueToMainForm(shop)} className='flex justify-between'>
-                <div className='text-left'>
-                  <div className='max-w-full font-medium text-ellipsis'>{shop.shopName}</div>
-                  <div className='text-xs opacity-60'>🏬 {shop.shopMall ?? '<Unspecified>'}</div>
-                </div>
+            {!isOnline && <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>}
+          </button>
+        </li>
+      )) ??
+        [...Array(5)].map((_, i) => (
+          <li key={i}>
+            <div className='flex justify-between'>
+              <div className='space-y-2'>
+                <div className='skeleton h-4 w-32' />
+                <div className='skeleton h-3 w-24' />
+              </div>
 
-                <span className='badge badge-outline'>{formatDistance(shop.distance)}</span>
-              </button>
-            </li>
-          )) ??
-            [...Array(4)].map((_, i) => (
-              <li key={i}>
-                <div className='flex justify-between'>
-                  <div className='space-y-2'>
-                    <div className='skeleton h-4 w-32' />
-                    <div className='skeleton h-3 w-24' />
-                  </div>
-
-                  <div className='skeleton h-5 w-12' />
-                </div>
-              </li>
-            ))}
-        </ul>
-
-        <div className='space-y-2'>{}</div>
-      </div>
-
-      <div className='min-w-32'>
-        <h3 className='menu-title text-secondary text-center text-2xl'>
-          <Building size={30} className='inline' /> Malls
-        </h3>
-
-        <ul className='menu rounded-box w-full p-0'>
-          {normalizedResult?.malls.map(mall => (
-            <li key={mall.mallName}>
-              <button
-                onClick={() => continueToMainForm({ shopMall: mall.mallName })}
-                className='flex h-12 justify-between'
-              >
-                <div className='font-medium'>{mall.mallName}</div>
-              </button>
-            </li>
-          )) ??
-            [...Array(3)].map((_, i) => (
-              <li key={i}>
-                <div className='flex h-12 justify-between'>
-                  <div className='skeleton h-4 w-36' />
-                </div>
-              </li>
-            ))}
-        </ul>
-      </div>
-    </div>
+              <div className='skeleton h-5 w-12' />
+            </div>
+          </li>
+        ))}
+    </ul>
   );
 }
 

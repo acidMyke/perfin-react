@@ -339,6 +339,8 @@ export type ComboBoxProps = {
   triggerChangeOnFocus?: boolean;
   hideError?: boolean;
   onSuggestionSelected?: (suggestion: string) => void;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 function ComboBox({
@@ -353,6 +355,8 @@ function ComboBox({
   triggerChangeOnFocus = false,
   hideError,
   onSuggestionSelected,
+  onBlur,
+  onFocus,
 }: ComboBoxProps) {
   const [query, setQuery] = useState('');
   const field = useFieldContext<Option | string | undefined>();
@@ -429,12 +433,14 @@ function ComboBox({
                 setQuery('');
               }
               field.handleBlur();
+              onBlur?.();
             }}
             onFocus={e => {
               if (suggestionMode && triggerChangeOnFocus) {
                 const val = e.target.value;
                 if (e.target.value === '') field.handleChange(val);
               }
+              onFocus?.();
             }}
           />
 

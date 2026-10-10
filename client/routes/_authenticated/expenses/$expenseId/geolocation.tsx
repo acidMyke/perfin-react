@@ -21,7 +21,7 @@ function RouteComponent() {
   const form = useExpenseForm();
 
   return (
-    <div className='mb-20 grid grid-cols-2 gap-x-2'>
+    <div className='grid grid-cols-2 gap-x-2'>
       <form.AppField name='geolocation.latitude'>
         {({ NumericInput }) => (
           <NumericInput label='Latitude' containerCn='mt-2' numberFormat={coordinateFormat} readOnly={readOnly} />
@@ -39,9 +39,7 @@ function RouteComponent() {
           </button>
           <button
             className='btn-warning btn'
-            onClick={() =>
-              form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false })
-            }
+            onClick={() => form.setFieldValue('geolocation', { latitude: null, longitude: null, isError: false })}
           >
             Clear
           </button>
@@ -68,7 +66,6 @@ function RouteComponent() {
           const latLng = e.detail.latLng;
           if (!latLng || readOnly) return;
           form.setFieldValue('geolocation', {
-            accuracy: null,
             latitude: latLng.lat,
             longitude: latLng.lng,
             isError: false,
@@ -92,7 +89,6 @@ function RouteComponent() {
                   if (!lat || !lng) return;
 
                   field.handleChange({
-                    accuracy: null,
                     latitude: lat,
                     longitude: lng,
                     isError: false,

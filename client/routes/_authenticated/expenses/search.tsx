@@ -5,7 +5,7 @@ import { dateFormat, formatCents } from '#client/utils';
 import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute, Link } from '@tanstack/react-router';
 import { ChevronRight, Search } from 'lucide-react';
-import { Fragment, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import * as z from 'zod/mini';
 
 export const Route = createFileRoute('/_authenticated/expenses/search')({
@@ -79,43 +79,50 @@ export interface ExpenseSearchResultsProps {
 
 interface HighlightTextProps {
   text?: string | null;
-  query?: string;
+  intervals?: RouterOutputs['expense']['search']['highlightMap'][number][1];
 }
 
-function HighlightText({ text, query }: HighlightTextProps) {
-  if (!query || !text) return <>{text}</>;
+export function HighlightText({ text, intervals }: HighlightTextProps) {
+  if (!text) return null;
+  if (!intervals || intervals.length == 0) return <span>{text}</span>;
 
-  const lettersToHighlight = new Set(query.toLowerCase().replace(/\s/g, ''));
+  const elements: React.ReactNode[] = [];
+  let lastEndIndex = 0;
 
-  return (
-    <>
-      {text.split('').map((char, index) => {
-        if (lettersToHighlight.has(char.toLowerCase())) {
-          return (
-            <span key={index} className='text-primary font-bold'>
-              {char}
-            </span>
-          );
-        }
+  intervals.forEach(({ start, end }, index) => {
+    if (start > lastEndIndex) {
+      elements.push(<span key={`text-${index}`}>{text.slice(lastEndIndex, start)}</span>);
+    }
 
-        return <Fragment key={index}>{char}</Fragment>;
-      })}
-    </>
-  );
+    elements.push(
+      <span key={`highlight-${index}`} className='text-primary font-bold'>
+        {text.slice(start, end)}
+      </span>,
+    );
+
+    lastEndIndex = end;
+  });
+
+  if (lastEndIndex < text.length) {
+    elements.push(<span key='text-end'>{text.slice(lastEndIndex)}</span>);
+  }
+
+  return <span>{elements}</span>;
 }
 
 function ExpenseSearchResults() {
   const { query } = Route.useLoaderDeps();
   const { data } = useSuspenseQuery(trpc.expense.search.queryOptions({ query }, { enabled: query.length >= 3 }));
+  const hightlightMap = useMemo(() => new Map(data.highlightMap), [data]);
 
-  if (!data || !data.searchResult || data.searchResult.length === 0) {
+  if (!data || !data.results || data.results.length === 0) {
     return <div className='text-base-content/60 p-4 text-center text-sm'>No results found.</div>;
   }
 
   return (
-    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col pb-20'>
-      {data.searchResult.map(expense => {
-        const { expenseId, shopName, shopMall, sourceMatches, amountCents, billedAt } = expense;
+    <div className='bg-base-100 mx-auto flex w-full max-w-lg flex-col'>
+      {data.results.map(expense => {
+        const { expenseId, shopName, shopMall, amountCents, billedAt, childrens } = expense;
 
         return (
           <Link
@@ -130,25 +137,23 @@ function ExpenseSearchResults() {
                 <div className='mb-2 flex flex-row gap-2'>
                   {shopName && (
                     <span className='text-base-content text-base leading-tight font-semibold'>
-                      <HighlightText text={shopName} query={query} />
+                      <HighlightText text={shopName} intervals={hightlightMap.get(shopName)} />
                     </span>
                   )}
                   {shopMall && (
                     <span className='text-base-content/60 mt-0.5 text-xs'>
-                      <HighlightText text={shopMall} query={query} />
+                      <HighlightText text={shopMall} intervals={hightlightMap.get(shopMall)} />
                     </span>
                   )}
                 </div>
 
                 <div className='mt-1 flex flex-col gap-0.5'>
-                  {sourceMatches.map((match, index: number) => {
-                    const itemName = match.matchItemName || match.matchAdjustmentName;
-                    if (!itemName) return null;
-
+                  {childrens.map(({ text, kind }, index: number) => {
                     return (
                       <div key={index} className='flex items-start justify-between text-sm'>
                         <span className='text-base-content/80 flex-1 truncate pr-3'>
-                          <HighlightText text={itemName} query={query} />
+                          {kind === 'adjName' ? 'Adjustment: ' : 'Item: '}
+                          <HighlightText text={text} intervals={hightlightMap.get(text)} />
                         </span>
                       </div>
                     );

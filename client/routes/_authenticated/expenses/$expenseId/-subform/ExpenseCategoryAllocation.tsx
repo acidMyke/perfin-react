@@ -97,7 +97,13 @@ export const ExpenseCategoryAllocationSubForm = withForm({
                             <Plus />
                           </button>
 
-                          <button className='btn-ghost btn btn-sm px-0' onClick={() => arrayField.removeValue(idx)}>
+                          <button
+                            className='btn-ghost btn btn-sm px-0'
+                            onClick={() => {
+                              if (length !== 1) arrayField.removeValue(idx);
+                              else form.setFieldValue(`categoryAllocs[${idx}].category`, undefined);
+                            }}
+                          >
                             <X />
                           </button>
 

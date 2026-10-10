@@ -56,7 +56,10 @@ function RouteComponent() {
   const passkeyAuthOptionsMutation = useMutation(
     trpc.passkey.authentication.generateOptions.mutationOptions({
       onSuccess: (optionsJSON, variables) =>
-        startPasskeyAuthMutation.mutate({ optionsJSON, withoutUsername: !variables!.username }),
+        startPasskeyAuthMutation.mutate({
+          optionsJSON: optionsJSON as PublicKeyCredentialRequestOptionsJSON,
+          withoutUsername: !variables!.username,
+        }),
     }),
   );
   const startPasskeyAuthMutation = useMutation({
