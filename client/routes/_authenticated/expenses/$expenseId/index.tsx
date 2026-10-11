@@ -9,23 +9,23 @@ import {
   useAdjustmentCallbacks,
   useExpenseForm,
   setCurrentLocation,
-  useCompleteShopDetailMutation,
 } from './-common';
 import { format } from 'date-fns/format';
 import { parse } from 'date-fns/parse';
 import { FieldError } from '#components/FieldError';
 import { withForm } from '#components/Form';
-import { useStore } from '@tanstack/react-form';
+import { useSelector } from '@tanstack/react-form';
 import { Plus, X } from 'lucide-react';
 import { ItemDetailFieldGroup } from './-common/ExpenseItemFieldGroup';
 import { BillTotal } from './-common/BillTotal';
 import { currencyNumberFormat, formatCents } from '#client/utils';
 import { AdjustmentDetailFieldGroup } from './-common/ExpenseAdjFieldGroup';
 import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { ExpenseSuggestableField } from './-common/ExpenseSuggestableField';
 import { Fragment, useState } from 'react';
 import { ExpenseAccountAllocationSubForm } from './-subform/ExpenseAccountAllocation';
 import { ExpenseCategoryAllocationSubForm } from './-subform/ExpenseCategoryAllocation';
+import { ShopNameSubForm } from './-subform/ExpenseShopName';
+import { MallNameSubForm } from './-subform/ExpenseMallName';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/')({
   component: RouteComponent,
@@ -36,15 +36,11 @@ function RouteComponent() {
   const { expenseId } = Route.useParams();
   const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
   const { accountOptions, categoryOptions } = optionsData;
-  const completeShopDetailMutation = useCompleteShopDetailMutation(form, optionsData);
 
   return (
-    <div className='mb-20 grid grid-cols-8 gap-x-2'>
+    <div className='grid grid-cols-8 gap-x-2'>
       <ItemsDetailsSubForm form={form} />
-      <ShopDetailSubForm
-        form={form}
-        onShopNameSelect={shopName => completeShopDetailMutation.mutateAsync({ shopName })}
-      />
+      <ShopDetailSubForm form={form} />
       <form.Field name='billedAt'>
         {field => (
           <label htmlFor={field.name} className='floating-label col-span-8 mt-4'>
@@ -113,6 +109,8 @@ const ItemsDetailsSubForm = withForm({
     const navigate = Route.useNavigate();
     const { createItem, removeItem } = useItemCallbacks(form, expenseId, navigate);
     const { createAdjustment } = useAdjustmentCallbacks(form);
+    const shopName = useSelector(form.store, state => state.values.shopName);
+    const mallName = useSelector(form.store, state => state.values.shopMall);
 
     return (
       <form.Field name='items' mode='array'>
@@ -208,9 +206,10 @@ const ItemsDetailsSubForm = withForm({
                     key={id}
                     form={form}
                     fields={`items[${itemIndex}]`}
-                    onRemoveClick={() => removeItem(itemIndex, field.state.value.length)}
                     itemIndex={itemIndex}
-                    getFormField={form.getFieldValue.bind(form)}
+                    shopName={shopName}
+                    mallName={mallName}
+                    onRemoveClick={() => removeItem(itemIndex, field.state.value.length)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     createAdjustment={expenseItemId => createAdjustment({ expenseItemId })}
                     categoryOptions={categoryOptions}
@@ -236,10 +235,9 @@ const ItemsDetailsSubForm = withForm({
 
 const ShopDetailSubForm = withForm({
   ...createEditExpenseFormOptions,
-  props: { onShopNameSelect: (_shopName: string) => {} },
-  render({ form, onShopNameSelect }) {
-    const isPhysical = useStore(form.store, state => state.values.type === 'physical');
-    const isCreate = useStore(form.store, state => state.values.ui.isCreate);
+  render({ form }) {
+    const isPhysical = useSelector(form.store, state => state.values.type === 'physical');
+    const isCreate = useSelector(form.store, state => state.values.ui.isCreate);
     const { expenseId } = Route.useParams();
 
     if (!isPhysical) {
@@ -254,17 +252,7 @@ const ShopDetailSubForm = withForm({
           >
             Convert to physical
           </button>
-          <ExpenseSuggestableField
-            form={form}
-            fields={{ text: 'shopName' }}
-            scope='shopName'
-            getContext={() => form.getFieldValue('shopMall')}
-            label='Shop name'
-            containerCn='col-span-8 mt-4'
-            triggerChangeOnFocus
-            hideError
-            onSuggestionSelected={onShopNameSelect}
-          />
+          <ShopNameSubForm form={form} containerCn='col-span-8 mt-4' />
         </>
       );
     }
@@ -290,7 +278,7 @@ const ShopDetailSubForm = withForm({
           className='btn btn-link btn-secondary mt-4 mb-2'
           onClick={() => {
             form.setFieldValue('type', 'online');
-            form.setFieldValue('geolocation', { latitude: null, longitude: null, accuracy: null, isError: false });
+            form.setFieldValue('geolocation', { latitude: null, longitude: null, isError: false });
           }}
         >
           Online
@@ -302,26 +290,8 @@ const ShopDetailSubForm = withForm({
         >
           View / Edit
         </Link>
-        <ExpenseSuggestableField
-          form={form}
-          fields={{ text: 'shopName' }}
-          scope='shopName'
-          getContext={() => form.getFieldValue('shopMall')}
-          label='Shop name'
-          containerCn='col-span-4 mt-2'
-          triggerChangeOnFocus
-          hideError
-          onSuggestionSelected={onShopNameSelect}
-        />
-        <ExpenseSuggestableField
-          form={form}
-          fields={{ text: 'shopMall' }}
-          scope='shopMall'
-          label='Mall'
-          containerCn='col-span-4 mt-2'
-          triggerChangeOnFocus
-          hideError
-        />
+        <ShopNameSubForm form={form} containerCn='col-span-4 mt-2' />
+        <MallNameSubForm form={form} containerCn='col-span-4 mt-2' />
       </>
     );
   },
@@ -330,6 +300,7 @@ const ShopDetailSubForm = withForm({
 const AdjustmentsDetailsSubForm = withForm({
   ...createEditExpenseFormOptions,
   render({ form }) {
+    const shopName = useSelector(form.store, state => state.values.shopName);
     const { removeAdjustment, createAdjustment, toggleAdjustmentType } = useAdjustmentCallbacks(form);
     return (
       <form.Field name='adjustments' mode='array'>
@@ -346,9 +317,9 @@ const AdjustmentsDetailsSubForm = withForm({
                     key={id}
                     form={form}
                     adjIndex={adjIndex}
+                    shopName={shopName}
                     fields={`adjustments[${adjIndex}]`}
                     onRemoveClick={adjIndex => removeAdjustment(adjIndex)}
-                    getFormField={form.getFieldValue.bind(form)}
                     onPricingChange={() => calculateExpenseForm(form)}
                     toggleAdjustmentType={(adjIndex, itemId) => toggleAdjustmentType(adjIndex, itemId)}
                     onSwapClick={adjIndex => {

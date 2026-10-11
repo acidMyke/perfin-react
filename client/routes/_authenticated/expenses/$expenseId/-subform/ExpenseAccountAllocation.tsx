@@ -23,7 +23,7 @@ export const ExpenseAccountAllocationSubForm = withForm({
               {arrayField.state.value.map((_, idx, { length }) => {
                 const isLast = idx === length - 1;
                 return (
-                  <li className='flex w-full flex-row items-center gap-2'>
+                  <li key={idx} className='flex w-full flex-row items-center gap-2'>
                     <form.AppField
                       name={`accountAllocs[${idx}].account`}
                       listeners={{
@@ -75,7 +75,13 @@ export const ExpenseAccountAllocationSubForm = withForm({
                           <Plus />
                         </button>
 
-                        <button className='btn-ghost btn btn-sm px-0' onClick={() => arrayField.removeValue(idx)}>
+                        <button
+                          className='btn-ghost btn btn-sm px-0'
+                          onClick={() => {
+                            if (length !== 1) arrayField.removeValue(idx);
+                            else form.setFieldValue(`accountAllocs[${idx}].account`, undefined);
+                          }}
+                        >
                           <X />
                         </button>
 

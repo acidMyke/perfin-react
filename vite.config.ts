@@ -23,10 +23,10 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '#server': path.resolve(__dirname, './server'),
-      '#client': path.resolve(__dirname, './client'),
-      '#components': path.resolve(__dirname, './client/components'),
-      '#schema': path.resolve(__dirname, './db/schema'),
+      '#server': path.resolve(import.meta.dirname, './server'),
+      '#client': path.resolve(import.meta.dirname, './client'),
+      '#components': path.resolve(import.meta.dirname, './client/components'),
+      '#schema': path.resolve(import.meta.dirname, './db/schema'),
     },
   },
 });

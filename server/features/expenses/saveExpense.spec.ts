@@ -32,7 +32,6 @@ import {
 } from '#server/lib/expenseHelper';
 import BatchCollector from '#server/lib/BatchCollector';
 import type { Mock } from 'vitest';
-import { getLocationBoxId } from '../../lib/utils';
 import { zocker } from 'zocker';
 import { getFileIdsByRequestId } from '#server/lib/fileUpload';
 
@@ -48,9 +47,8 @@ vi.mock(import('../../lib/expenseHelper'), () => ({
   calculateExpense: vi.fn(),
   calculateExpenseCategoryAllocations: vi.fn(),
 }));
-vi.mock(import('../../lib/utils'), () => ({ getLocationBoxId: vi.fn() }));
 vi.mock(import('../../lib/fileUpload'), () => ({ getFileIdsByRequestId: vi.fn() }));
-vi.mock(import('./indexing'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
+vi.mock(import('./indexCreation'), () => ({ processSaveExpenseSearchIndexing: vi.fn() }));
 
 describe('helpers', async () => {
   const [schema] = await Promise.all([import('#schema')]);
@@ -129,7 +127,6 @@ describe('helpers', async () => {
       const netTotalCents = 60_00;
       const expectedBoxId = 2903487923848;
       const mockResult = { netTotalCents } as ExpenseCalculationResult;
-      const mockedGetLocationBoxId = vi.mocked(getLocationBoxId).mockReturnValue([expectedBoxId]);
       const batchItem0 = 'Main Expense Upserted';
       deps.insertSubject.mockThrow('Should not be called');
       deps.upsertMainExpense.mockReturnValue(batchItem0);
@@ -173,10 +170,6 @@ describe('helpers', async () => {
 
       queueMainExpenseRecord(collector, db, userId, expenseId, input, mockResult, deps);
 
-      expect(mockedGetLocationBoxId).toHaveBeenCalledExactlyOnceWith(
-        expect.objectContaining({ latitude: input.latitude, longitude: input.longitude }),
-      );
-
       expect(deps.upsertMainExpense).toHaveBeenCalledExactlyOnceWith(
         expectMockDatabase(),
         expect.objectContaining({
@@ -186,7 +179,7 @@ describe('helpers', async () => {
           shopMall,
           shopName,
           amountCents: netTotalCents,
-          boxId: expectedBoxId,
+          boxId: null,
           type: input.type,
           specifiedAmountCents: input.specifiedAmountCents,
           billedAt: input.billedAt,
@@ -931,7 +924,7 @@ describe('helpers', async () => {
 describe(processSaveExpense, async () => {
   let deps = createDynamicMock<SaveExpenseHelpers & SaveExpenseRepo>('deps');
   const expectDeps = () => expectDynamicMock('deps');
-  const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexing')]);
+  const [{ processSaveExpenseSearchIndexing }] = await Promise.all([import('./indexCreation')]);
   const netTotalCents = 60_00;
   const expectedCalculateExpenseResult: ExpenseCalculationResult = {
     netTotalCents,

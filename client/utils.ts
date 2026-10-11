@@ -53,3 +53,39 @@ export function formatFileSize(bytes: number) {
 
   return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
 }
+
+type CurrentLocation =
+  | {
+      isOnline: true;
+      latitude?: number | undefined;
+      longitude?: number | undefined;
+    }
+  | {
+      isOnline?: false | undefined;
+      latitude: number;
+      longitude: number;
+    };
+
+type LocationBoundaries = {
+  minLat: number;
+  minLng: number;
+  maxLat: number;
+  maxLng: number;
+  wasOnline: boolean;
+};
+
+export function isLocationExceedBoundaries(
+  location: CurrentLocation | undefined,
+  boundaries: LocationBoundaries | undefined,
+) {
+  if (!location !== !boundaries) return true;
+  if (!location || !boundaries) return false;
+
+  const { isOnline, latitude, longitude } = location;
+  const { wasOnline, minLat, maxLat, minLng, maxLng } = boundaries;
+
+  if ((isOnline ?? false) !== boundaries.wasOnline) return true;
+  if (isOnline || wasOnline) return false;
+
+  return latitude < minLat || latitude > maxLat || longitude < minLng || longitude > maxLng;
+}

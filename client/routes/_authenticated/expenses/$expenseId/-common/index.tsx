@@ -55,7 +55,7 @@ export const MAX_ITEMS_IN_MAIN = 2;
 
 function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseOptions, param?: { isCopy: boolean }) {
   const { accountOptions, categoryOptions } = options;
-  const { billedAt, latitude, longitude, geoAccuracy, attachmentDetails, ...rest } = detail;
+  const { billedAt, latitude, longitude, attachmentDetails, ...rest } = detail;
   const idOptionMapping = new Map([
     ...accountOptions.map(option => [option.value, option] as [string, Option]),
     ...categoryOptions.map(option => [option.value, option] as [string, Option]),
@@ -77,7 +77,7 @@ function processApiResponse(detail: LoadExpenseDetailResponse, options: ExpenseO
 
   return {
     billedAt: param?.isCopy ? new Date() : new Date(billedAt),
-    geolocation: { latitude, longitude, accuracy: geoAccuracy, isError: false },
+    geolocation: { latitude, longitude, isError: false },
     attachments: attachmentDetails.map(createAttachmentFromServerDetail),
     ...rest,
     items: rest.items.map(({ categoryId, ...item }) => ({
@@ -100,8 +100,8 @@ function createNewExpenseForm() {
     version: 0,
     amountCents: 0,
     billedAt: new Date(),
-    type: 'online',
-    geolocation: { latitude: null, longitude: null, accuracy: null, isError: false },
+    type: 'physical',
+    geolocation: { latitude: null, longitude: null, isError: false },
     shopName: null,
     shopMall: null,
     isDeleted: false,
@@ -141,8 +141,6 @@ export function mapExpenseDetailToForm(
     ui: {
       // copying is also creating
       isCreate: isEmptyCreate || param?.isCopy,
-      shouldInferShopDetail: isEmptyCreate,
-      shouldFetchShopSuggestion: isEmptyCreate,
       shopDetailSource: isEmptyCreate ? null : ('user' as InputSource),
       calculateResult,
       categoryAllocation,
@@ -404,7 +402,8 @@ export const useAdjustmentCallbacks = (form: ExpenseFormApi) =>
     [form],
   );
 
-export const SET_VAL_ONLY: UpdateMetaOptions = { dontValidate: true, dontRunListeners: true, dontUpdateMeta: true };
+export const SET_VAL_NO_TRACK: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
+export const SET_VAL_ONLY: UpdateMetaOptions = { ...SET_VAL_NO_TRACK, dontValidate: true };
 export type TrackableFieldName = Exclude<
   DeepKeys<ExpenseFormData>,
   'ui' | 'history' | `ui${string}` | `history${string}`
@@ -426,50 +425,6 @@ export function pushHistory(form: ExpenseFormApi, fieldNames: TrackableFieldName
   if (actions.length > 0) {
     form.setFieldValue('history', { past: [...past, actions], future: [], lastValues: currentValues }, SET_VAL_ONLY);
   }
-}
-
-export function useCompleteShopDetailMutation(form: ExpenseFormApi, optionsData: ExpenseOptions) {
-  const { createAdjustment } = useAdjustmentCallbacks(form);
-  const shopDetailMutation = useMutation(
-    trpc.expense.getShopDetail.mutationOptions({
-      onSuccess([shopDetail]) {
-        if (!shopDetail) return;
-        const { accountOptions, categoryOptions } = optionsData;
-        const { accountIds, categoryIds, isGstExcluded, serviceChargeBps } = shopDetail;
-        const updateMetaOpts: UpdateMetaOptions = { dontUpdateMeta: true, dontRunListeners: true };
-        if (accountIds.length > 0) {
-          form.setFieldValue(
-            'accountAllocs',
-            accountIds.map(id => ({ account: accountOptions.find(({ value }) => value == id), amountCents: 0 })),
-            updateMetaOpts,
-          );
-        }
-        if (categoryIds.length > 0) {
-          form.setFieldValue(
-            'categoryAllocs',
-            categoryIds.map(id => ({ category: categoryOptions.find(({ value }) => value == id), amountCents: 0 })),
-            updateMetaOpts,
-          );
-        }
-        if (serviceChargeBps) {
-          createAdjustment({ special: SERVICE_CHARGE_NAME, rateBps: serviceChargeBps, ...updateMetaOpts });
-        }
-        if (isGstExcluded) {
-          createAdjustment({ special: GST_NAME, ...updateMetaOpts });
-        }
-        form.setFieldValue('ui.shopDetailSource', 'autocomplete');
-        pushHistory(form, ['accountAllocs', 'categoryAllocs', 'adjustments']);
-      },
-    }),
-  );
-
-  return {
-    async mutateAsync(args?: { shopName: string }) {
-      const shopName = args?.shopName ?? form.getFieldValue('shopName');
-      if (!shopName) return;
-      await shopDetailMutation.mutateAsync({ shopName });
-    },
-  };
 }
 
 type PushIntoOptionsValueArg = {
@@ -500,3 +455,6 @@ export function usePushIntoOptions() {
     pushIntoOptions: (allocOption: PushIntoOptionsValueArg) => pushIntoOptionsMutation.mutateAsync(allocOption),
   };
 }
+
+export const formatAdjustmentName = (name: string | null | undefined) =>
+  !name ? 'Nameless adjustment' : name === GST_NAME ? 'GST' : name === SERVICE_CHARGE_NAME ? 'Service charge' : name;

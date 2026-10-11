@@ -19,7 +19,7 @@ function RouteComponent() {
   } = useSuspenseQuery(trpc.passkey.list.queryOptions());
   const generateOptionsMutation = useMutation(
     trpc.passkey.registration.generateOptions.mutationOptions({
-      onSuccess: data => startRegistrationMutation.mutateAsync(data),
+      onSuccess: data => startRegistrationMutation.mutateAsync(data as PublicKeyCredentialCreationOptionsJSON),
     }),
   );
   const startRegistrationMutation = useMutation({

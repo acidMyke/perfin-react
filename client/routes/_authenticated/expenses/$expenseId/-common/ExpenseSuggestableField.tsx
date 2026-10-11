@@ -1,38 +1,50 @@
 import { withFieldGroup, type ComboBoxProps } from '#client/components/Form';
-import { queryClient, trpc, type RouterInputs } from '#client/trpc';
-import { useMutation } from '@tanstack/react-query';
+import { useDebounced } from '#client/hooks/useDebounced';
+import { trpc, type RouterInputs } from '#client/trpc';
+import { isLocationExceedBoundaries } from '#client/utils';
+import { skipToken, useQuery } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 
 type SuggestionInput = RouterInputs['expense']['getSuggestions'];
-type SuggestionScope = SuggestionInput['scope'];
+type SuggestionKind = SuggestionInput['kind'];
+type SuggestionContext = SuggestionInput['context'];
+type SuggestionLocation = SuggestionInput['location'];
 
-type SuggestionFieldProps = {
-  scope: SuggestionScope;
-  getContext?: () => string | null;
+export type SuggestionFieldProps = {
+  kind: SuggestionKind;
+  context?: SuggestionContext;
+  location?: SuggestionLocation;
   fetchDebouncing?: number;
-} & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly'>;
+} & Omit<ComboBoxProps, 'options' | 'suggestionMode' | 'readOnly' | 'onBlur' | 'onFocus'>;
 
 export const ExpenseSuggestableField = withFieldGroup({
   defaultValues: { text: '' as string | null },
   props: {} as unknown as SuggestionFieldProps,
-  render({ group, scope, getContext, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
-    const { mutate, data } = useMutation(trpc.expense.getSuggestions.mutationOptions());
+  render({ group, kind, context, location, fetchDebouncing = 500, onSuggestionSelected, ...rest }) {
+    const [isFocused, setIsFocused] = useState(false);
+    const [search, setSearch] = useState('' as null | undefined | string);
+    const [cachedLocation, setCachedLocation] = useState(() => location);
+    const cachedContext = useDebounced(context, fetchDebouncing);
+    let queryInput: SuggestionInput | typeof skipToken = skipToken;
+    if (isFocused && (search || cachedContext || cachedLocation)) {
+      queryInput = { kind, search: search ?? '', context: cachedContext, location: cachedLocation };
+    }
+    const { data } = useQuery(trpc.expense.getSuggestions.queryOptions(queryInput));
+
+    useEffect(() => {
+      if (isLocationExceedBoundaries(location, data?.locationBounds)) {
+        setCachedLocation(location);
+      }
+    }, [data?.locationBounds, location?.isOnline, location?.latitude, location?.longitude]);
 
     return (
       <group.AppField
         name='text'
         validators={{
-          onChangeAsyncDebounceMs: 500,
-          onChangeAsync: ({ value, signal, fieldApi }) => {
+          onChangeAsyncDebounceMs: fetchDebouncing,
+          onChangeAsync: ({ value, fieldApi }) => {
             if (fieldApi.form.state.isSubmitting) return;
-            signal.onabort = () => queryClient.cancelQueries({ queryKey: trpc.expense.getSuggestions.mutationKey() });
-            const context = getContext?.()?.trim();
-            if (value || context) {
-              mutate({
-                scope,
-                search: value ?? '',
-                context: context && context.length > 0 ? context : undefined,
-              });
-            }
+            setSearch(value);
           },
         }}
       >
@@ -40,11 +52,14 @@ export const ExpenseSuggestableField = withFieldGroup({
           <field.ComboBox
             suggestionMode
             {...rest}
-            options={data?.suggestions ?? []}
+            options={(data?.suggestions ?? []).map(({ text }) => text)}
             onSuggestionSelected={suggestion => {
               group.setFieldValue('text', suggestion, { dontValidate: true });
               onSuggestionSelected?.(suggestion);
             }}
+
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
           />
         )}
       </group.AppField>

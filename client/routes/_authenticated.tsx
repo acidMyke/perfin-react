@@ -73,7 +73,9 @@ function RouteComponent() {
     <>
       <div className='h-8'></div>
       <APIProvider apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY}>
-        <Outlet />
+        <div className='pb-40 md:pb-20'>
+          <Outlet />
+        </div>
       </APIProvider>
       <FloatingButton />
       <NavDock />
@@ -90,11 +92,18 @@ function ErrorComponent({ error }: ErrorComponentProps) {
     queryErrorResetBoundary.reset();
   }, [queryErrorResetBoundary]);
 
+  const errorMessage =
+    typeof error === 'string'
+      ? error
+      : error && typeof error === 'object' && 'message' in error && typeof error.message === 'string'
+        ? error.message
+        : 'Unknown error';
+
   return (
     <div className='mx-auto max-w-md'>
       <div className='h-8'></div>
       <PageHeader title='Oops...' />
-      {error.message}
+      {errorMessage}
       <button
         className='btn btn-primary btn-lg btn-block mt-8'
         onClick={() => {

@@ -1,14 +1,11 @@
 import { createFileRoute, Link, redirect } from '@tanstack/react-router';
-import { invalidateAndRedirectBackToList, useExpenseForm } from './-common';
-import { useStore } from '@tanstack/react-form';
+import { formatAdjustmentName, invalidateAndRedirectBackToList, useExpenseForm } from './-common';
+import { useSelector } from '@tanstack/react-form';
 import { currencyNumberFormat, dateFormat, formatBps } from '#client/utils';
-import { useMutation, useSuspenseQuery } from '@tanstack/react-query';
+import { useMutation } from '@tanstack/react-query';
 import { Fragment, useRef } from 'react';
 import { trpc } from '#client/trpc';
 import { BillTotal } from './-common/BillTotal';
-import { GST_NAME, SERVICE_CHARGE_NAME } from '#server/lib/expenseHelper';
-import { ExpenseAccountAllocationSubForm } from './-subform/ExpenseAccountAllocation';
-import { ExpenseCategoryAllocationSubForm } from './-subform/ExpenseCategoryAllocation';
 
 export const Route = createFileRoute('/_authenticated/expenses/$expenseId/view')({
   component: RouteComponent,
@@ -27,15 +24,14 @@ function RouteComponent() {
   const form = useExpenseForm();
   const { expenseId } = Route.useParams();
 
-  const expense = useStore(form.store, state => state.values);
-  const { data: optionsData } = useSuspenseQuery(trpc.expense.loadOptions.queryOptions());
-  const { accountOptions, categoryOptions } = optionsData;
+  const expense = useSelector(form.store, state => state.values);
   const { geolocation, items, adjustments, isDeleted, billedAt } = expense;
+  const { accountAllocs, categoryAllocs } = expense;
   const shopName = expense.shopName ? expense.shopName : 'Unknown Shop';
   const { itemResults, adjustmentResults } = expense.ui.calculateResult;
 
   return (
-    <div className='mx-auto mb-20 max-w-md grid-cols-1 gap-1 p-4'>
+    <div className='mx-auto max-w-md grid-cols-1 gap-1 p-4'>
       <h1 className='col-span-2 text-lg font-bold'>
         {geolocation ? (
           <Link
@@ -80,16 +76,9 @@ function RouteComponent() {
                 if (!adjustmentResult) {
                   return undefined;
                 }
-                const displayName = !name
-                  ? 'Nameless adjustment'
-                  : name === GST_NAME
-                    ? 'GST'
-                    : name === SERVICE_CHARGE_NAME
-                      ? 'Service charge'
-                      : name;
                 return (
                   <Fragment key={itemId + adjId}>
-                    <span className='col-start-1 indent-4 text-sm'>{displayName}</span>
+                    <span className='col-start-1 indent-4 text-sm'>{formatAdjustmentName(name)}</span>
                     <span className='text-sm'>{rateBps && formatBps(rateBps)}</span>
                     <span className='col-start-4 text-right text-sm'>
                       {adjustmentResult && formatCents(adjustmentResult?.amountCents)}
@@ -107,8 +96,30 @@ function RouteComponent() {
       </div>
 
       <BillTotal className='col-span-2' isView />
-      <ExpenseAccountAllocationSubForm form={form} accountOptions={accountOptions} readOnly={true} />
-      <ExpenseCategoryAllocationSubForm form={form} categoryOptions={categoryOptions} readOnly={true} />
+
+      <label className='label mt-2 p-0'>
+        <span className='label-text font-medium'>Category allocations</span>
+      </label>
+      <ul className='col-span-full flex auto-rows-auto flex-col flex-nowrap items-start gap-2 pb-2 pl-2'>
+        {(items.length > 0 ? expense.ui.categoryAllocation : categoryAllocs).map(({ category, amountCents }, idx) => (
+          <li key={idx} className='flex w-full flex-row items-center gap-2'>
+            <p className='grow'>{category?.label ?? 'Unspecified'}</p>
+            <p>{formatCents(amountCents)}</p>
+          </li>
+        ))}
+      </ul>
+      <label className='label mt-2 p-0'>
+        <span className='label-text font-medium'>Account allocations</span>
+      </label>
+      <ul className='col-span-full flex auto-rows-auto flex-col flex-nowrap items-start gap-2 pb-2 pl-2'>
+        {accountAllocs.map(({ account, amountCents }, idx) => (
+          <li key={idx} className='flex w-full flex-row items-center gap-2'>
+            <p className='grow'>{account?.label ?? 'Unspecified'}</p>
+            <p>{formatCents(amountCents)}</p>
+          </li>
+        ))}
+      </ul>
+
       <form.AppField name='attachments'>
         {({ AttachmentBox }) => (
           <AttachmentBox
