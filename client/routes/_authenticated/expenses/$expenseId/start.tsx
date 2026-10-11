@@ -11,7 +11,7 @@ import {
   toLatLng,
   type Coordinate,
 } from '#client/utils';
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, MapPinX } from 'lucide-react';
 import { useGeolocationWatcher } from '#client/hooks/useGeolocationWatcher';
 import { AdvancedMarker, ControlPosition, Map as EmbeddedGoogleMap, Pin } from '@vis.gl/react-google-maps';
 import { ShopNameSubForm } from './-subform/ExpenseShopName';
@@ -115,11 +115,12 @@ function RouteComponent() {
               </p>
             ) : (
               <p className='mb-2 h-8'>
-                Current coordinate:{' '}
+                {currentLocationQuery.isError
+                  ? 'Error: ' + currentLocationQuery.error?.getFormmatedError()
+                  : 'Current coordinate: '}
                 {currentLocationQuery.isPending && (
                   <span className='skeleton skeleton-text'>Retriving location...</span>
                 )}
-                {currentLocationQuery.isError && <span>Error: {currentLocationQuery.error?.getFormmatedError()}</span>}
                 {currentLocationQuery.data && <span className=''>{formatCoordinate(currentLocationQuery.data)}</span>}
                 <button className='btn btn-link btn-xs inline' onClick={() => setShowMap(!showMap)}>
                   {showMap ? 'Hide map' : 'Change'}
@@ -137,6 +138,7 @@ function RouteComponent() {
             <NearbyResultList
               isOnline={!isPhysical}
               coordinate={coordinate}
+              currentLocationIsError={currentLocationQuery.isError}
               onShopClick={({ shopName, mallName }) => {
                 form.setFieldValue('shopName', shopName, SET_VAL_NO_TRACK);
                 form.setFieldValue('shopMall', mallName, SET_VAL_NO_TRACK);
@@ -167,12 +169,13 @@ function RouteComponent() {
 type NearbyResultListProps = {
   isOnline: boolean;
   coordinate: ReturnType<typeof useGeolocationWatcher>['data'] | Coordinate | undefined;
+  currentLocationIsError: boolean;
   onShopClick: (shopDetail: { shopName: string | null; mallName: string | null }) => any;
 };
 
 type Location = RouterInputs['expense']['searchShopByLocation'];
 
-function NearbyResultList({ isOnline, coordinate, onShopClick }: NearbyResultListProps) {
+function NearbyResultList({ isOnline, coordinate, currentLocationIsError, onShopClick }: NearbyResultListProps) {
   const [cachedLocation, setCachedLocation] = useState<Location | typeof skipToken>(skipToken);
   const shopByLocationQuery = useQuery(trpc.expense.searchShopByLocation.queryOptions(cachedLocation));
 
@@ -197,6 +200,16 @@ function NearbyResultList({ isOnline, coordinate, onShopClick }: NearbyResultLis
 
     return shops;
   }, [shopByLocationQuery.data, coordinate?.latitude, coordinate?.longitude]);
+
+  if (!coordinate && currentLocationIsError) {
+    return (
+      <div className='flex flex-col items-center justify-center py-16 text-center text-gray-500'>
+        <MapPinX className='mb-4 h-10 w-10 text-gray-400' />
+        <p className='text-xl font-medium'>Current location error</p>
+        <p className='text-md mt-1 text-gray-400'>Pick a custom location</p>
+      </div>
+    );
+  }
 
   return (
     <ul className={`menu rounded-box ${isOnline ? 'h-72' : 'h-64'} w-full flex-nowrap overflow-y-auto p-0`}>
