@@ -23,7 +23,7 @@ export const ExpenseAccountAllocationSubForm = withForm({
               {arrayField.state.value.map((_, idx, { length }) => {
                 const isLast = idx === length - 1;
                 return (
-                  <li className='flex w-full flex-row items-center gap-2'>
+                  <li key={idx} className='flex w-full flex-row items-center gap-2'>
                     <form.AppField
                       name={`accountAllocs[${idx}].account`}
                       listeners={{

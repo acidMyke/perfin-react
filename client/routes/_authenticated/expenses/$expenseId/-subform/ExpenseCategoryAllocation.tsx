@@ -24,7 +24,7 @@ export const ExpenseCategoryAllocationSubForm = withForm({
             isItemizedExpense && (
               <ul className='col-span-full flex auto-rows-auto flex-col flex-nowrap items-start gap-2 pb-2 pl-2'>
                 {arrayField.state.value.map((_, idx) => (
-                  <form.Field name={`ui.categoryAllocation[${idx}]`}>
+                  <form.Field key={idx} name={`ui.categoryAllocation[${idx}]`}>
                     {field => (
                       <li key={idx} className='flex w-full flex-row items-center gap-2'>
                         <p className='grow'>{field.state.value.category?.label ?? 'Unspecified'}</p>
