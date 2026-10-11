@@ -291,35 +291,41 @@ function ExpensesList({ listOptions }: { listOptions: ExpenseListOptions }) {
               <span className='ml-3 text-2xl font-bold'>{currencyNumberFormat.format(subtotal)}</span>
             </div>
 
-            {expenses.map(expense => (
-              <Link
-                key={expense.id}
-                to='/expenses/$expenseId/view'
-                params={{ expenseId: expense.id }}
-                className='bg-base-200/25 border-b-base-300 grid grid-flow-row auto-rows-auto grid-cols-[min] data-[deleted=true]:line-through'
-                data-deleted={expense.isDeleted}
-              >
-                {!expense.itemCount ? (
-                  <p className='overflow-visible text-2xl'>{expense.shopDetail ?? 'Unspecified'}</p>
-                ) : (
-                  <>
-                    <p className='overflow-visible text-2xl'>{expense.description}</p>
-                    <p className='text-base-content/80 col-span-2 text-sm'>At: {expense.shopDetail ?? 'Unspecified'}</p>
-                  </>
-                )}
-                <ChevronRight className='col-start-2 row-start-1 self-start justify-self-end' size={40} />
+            {expenses.map(expense => {
+              const accounts = expense.accounts.map(({ name }) => name).join(', ');
+              const categories = expense.categories.map(({ name }) => name).join(', ');
+              return (
+                <Link
+                  key={expense.id}
+                  to='/expenses/$expenseId/view'
+                  params={{ expenseId: expense.id }}
+                  className='bg-base-200/25 border-b-base-300 grid grid-flow-row auto-rows-auto grid-cols-[min] data-[deleted=true]:line-through'
+                  data-deleted={expense.isDeleted}
+                >
+                  {!expense.itemCount ? (
+                    <p className='overflow-visible text-2xl'>{expense.shopDetail ?? 'Unspecified'}</p>
+                  ) : (
+                    <>
+                      <p className='overflow-visible text-2xl'>{expense.description}</p>
+                      <p className='text-base-content/80 col-span-2 text-sm'>
+                        At: {expense.shopDetail ?? 'Unspecified'}
+                      </p>
+                    </>
+                  )}
+                  <ChevronRight className='col-start-2 row-start-1 self-start justify-self-end' size={40} />
 
-                <p className='text-base-content/80 col-start-1 text-sm'>
-                  Accounts: {expense.accounts.map(({ name }) => name).join(', ')}
-                </p>
-                <p className='col-start-2 row-span-2 self-end pr-2 pb-2 text-right text-xl'>
-                  ${expense.amount.toFixed(2)}
-                </p>
-                <p className='text-base-content/80 col-start-1 text-sm'>
-                  Categories: {expense.categories.map(({ name }) => name).join(', ')}
-                </p>
-              </Link>
-            ))}
+                  <p className='text-base-content/80 col-start-1 text-sm'>
+                    Accounts: {accounts.length > 0 ? accounts : unspecifiedOption.label}
+                  </p>
+                  <p className='col-start-2 row-span-2 self-end pr-2 pb-2 text-right text-xl'>
+                    ${expense.amount.toFixed(2)}
+                  </p>
+                  <p className='text-base-content/80 col-start-1 text-sm'>
+                    Categories: {categories.length > 0 ? categories : unspecifiedOption.label}
+                  </p>
+                </Link>
+              );
+            })}
           </Fragment>
         );
       })}
