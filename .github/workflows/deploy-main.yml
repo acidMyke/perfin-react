@@ -24,7 +24,7 @@ jobs:
       - id: tag
         uses: mathieudutour/github-tag-action@v6.2
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}    
+          github_token: ${{ secrets.GITHUB_TOKEN }}
 
   # 2. Deploy & Tag Staging
   deploy-staging:
@@ -34,14 +34,15 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      
+
       - name: Setup & Build
         uses: ./.github/actions/build
-        with: 
+        with:
           CLOUDFLARE_ENV: staging
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          GOOGLE_MAPS_MAP_ID: ${{ secrets.GOOGLE_MAPS_MAP_ID }}
           VAPID_PUBLIC_KEY: ${{ secrets.VAPID_PUBLIC_KEY }}
-      
+
       - name: Run D1 Migrations (Staging)
         uses: cloudflare/wrangler-action@v3
         env:
@@ -50,7 +51,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: d1 migrations apply perfin-staging --env staging --remote
           environment: staging
-      
+
       - name: Deploy to Staging
         uses: cloudflare/wrangler-action@v3
         env:
@@ -59,7 +60,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --env staging --tag ${{ needs.tag-version.outputs.new_version }}
           environment: staging
-      
+
       - name: Tag Staging Release
         run: |
           git config user.name "github-actions"
@@ -75,10 +76,10 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with: { fetch-depth: 0 }
-      
+
       - name: Setup & Build
         uses: ./.github/actions/build
-        with: 
+        with:
           CLOUDFLARE_ENV: production
           GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
           GOOGLE_MAPS_MAP_ID: ${{ secrets.GOOGLE_MAPS_MAP_ID }}
@@ -92,7 +93,7 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: d1 migrations apply perfin --env production --remote
           environment: production
-      
+
       - name: Deploy to Production
         uses: cloudflare/wrangler-action@v3
         env:
@@ -101,13 +102,13 @@ jobs:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           command: deploy --env production --tag ${{ needs.tag-version.outputs.new_version }}
           environment: production
-      
+
       - name: Tag Production Release
         run: |
           git config user.name "github-actions"
           git config user.email "github-actions@github.com"
           git tag -f prod-latest
           git push origin prod-latest --force
-      
+
       - name: Update production branch
         run: git push origin main:production
