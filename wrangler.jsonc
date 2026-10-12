@@ -63,6 +63,7 @@
     "production": {
       "name": "perfin",
       "vars": {
+        "DB_PROXY_LOGGING": false,
         "TOKEN_EXPIRE_DAYS": 4,
         "TOKEN_COOKIE_NAME": "__Host-Http-token",
         "EMAIL_SENDER_NAME": "Perfin",
@@ -71,7 +72,7 @@
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin.acidmyke.link",
         "ALLOW_SIGNUP": "false",
-        "REINDEXER_SLEEP": "8 hours",
+        "REINDEXER_SLEEP": "2 minutes",
         "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
       "observability": {
@@ -115,6 +116,7 @@
     "staging": {
       "name": "perfin-staging",
       "vars": {
+        "DB_PROXY_LOGGING": false,
         "TOKEN_EXPIRE_DAYS": 4,
         "TOKEN_COOKIE_NAME": "__Host-token",
         "EMAIL_SENDER_NAME": "Perfin-Staging",
@@ -123,7 +125,7 @@
         "PASSKEYS_RP_NAME": "Perfin",
         "PASSKEYS_RP_ID": "perfin-staging.acidmyke.link",
         "ALLOW_SIGNUP": "true",
-        "REINDEXER_SLEEP": "8 hours",
+        "REINDEXER_SLEEP": "2 minutes",
         "VAPID_SUBJECT": "mailto:perfin-owner@acidmyke.link",
       },
       "observability": {
